@@ -7,7 +7,7 @@ import {
   Menu, X, CalendarCheck, CheckCircle, Clock, PieChart as PieChartIcon,
   ChevronLeft, ChevronRight, BarChart3, List, Wallet, Settings, Calculator,
   UserCheck, PlusCircle, TrendingUp, Info, ChevronUp, ChevronDown, Filter, Loader2,
-  Building2, Globe
+  Building2, Globe, CalendarRange
 } from 'lucide-react';
 
 // --- CONFIGURATION FIREBASE EXACTE ---
@@ -26,7 +26,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = 'immogerer-prod-final';
 
-// Palette de couleurs pour les graphiques
+// Palette de couleurs pour les graphiques et l'agenda
 const CHART_COLORS = [
   '#3B82F6', // Blue 500
   '#8B5CF6', // Violet 500
@@ -123,7 +123,7 @@ const App = () => {
   // --- ETATS ---
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('planning');
+  const [activeTab, setActiveTab] = useState('reservations');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   const [properties, setProperties] = useState([]);
@@ -133,8 +133,8 @@ const App = () => {
   const [availableServiceTypes, setAvailableServiceTypes] = useState(['Ménage', 'Entrée/Sortie', 'Piscine', 'Divers']);
 
   // --- FILTRES UNIFIÉS ---
-  const [filterYear, setFilterYear] = useState('all');
-  const [filterMonth, setFilterMonth] = useState('all');
+  const [filterYear, setFilterYear] = useState(new Date().getFullYear().toString());
+  const [filterMonth, setFilterMonth] = useState(new Date().getMonth().toString());
   const [filterProp, setFilterProp] = useState('all');
   const [filterPlat, setFilterPlat] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -235,7 +235,7 @@ const App = () => {
   // --- LOGIQUE DE FILTRAGE UNIFIÉE ---
   const filteredData = useMemo(() => {
     return tenants.filter(t => {
-      const dateRef = t.paymentDate ? new Date(t.paymentDate) : new Date(t.startDate);
+      const dateRef = t.startDate ? new Date(t.startDate) : new Date();
       const matchYear = filterYear === 'all' || dateRef.getFullYear() === parseInt(filterYear);
       const matchMonth = filterMonth === 'all' || dateRef.getMonth() === parseInt(filterMonth);
       const matchProp = filterProp === 'all' || t.propertyId === filterProp;
@@ -289,7 +289,7 @@ const App = () => {
     return Object.values(recap).sort((a,b) => b.month.localeCompare(a.month));
   }, [filteredData]);
 
-  const planningList = useMemo(() => {
+  const reservationsList = useMemo(() => {
     return filteredData.filter(t => {
       if (filterStatus === 'all') return true;
       if (filterStatus === 'paid') return !!t.paymentDate;
@@ -303,6 +303,26 @@ const App = () => {
     const payYears = tenants.filter(t => t.paymentDate).map(t => new Date(t.paymentDate).getFullYear());
     return [...new Set([...years, ...payYears])].sort((a, b) => b - a);
   }, [tenants]);
+
+  // --- LOGIQUE AGENDA VISUEL ---
+  const agendaDays = useMemo(() => {
+    const y = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
+    const m = filterMonth === 'all' ? new Date().getMonth() : parseInt(filterMonth);
+    const firstDay = new Date(y, m, 1);
+    const lastDay = new Date(y, m + 1, 0);
+    
+    const days = [];
+    // Jours vides au début (pour caler sur le bon jour de la semaine)
+    // getDay() : 0 = Dim, 1 = Lun... on convertit en 0 = Lun, 6 = Dim
+    let startOffset = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
+    for (let i = 0; i < startOffset; i++) days.push({ empty: true });
+    
+    for (let i = 1; i <= lastDay.getDate(); i++) {
+      const dateStr = `${y}-${(m+1).toString().padStart(2, '0')}-${i.toString().padStart(2, '0')}`;
+      days.push({ day: i, dateStr });
+    }
+    return days;
+  }, [filterYear, filterMonth]);
 
   if (loading) return (
     <div className="h-screen w-full flex items-center justify-center bg-slate-50 flex-col gap-4">
@@ -350,7 +370,7 @@ const App = () => {
           {availablePlatforms.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
       </div>
-      {activeTab === 'planning' && (
+      {(activeTab === 'reservations' || activeTab === 'agenda') && (
         <div className="flex items-center gap-1.5 px-3 py-2 bg-blue-50/50 rounded-2xl border border-blue-100 ml-auto">
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="text-[10px] font-black uppercase bg-transparent text-blue-600 cursor-pointer outline-none">
             <option value="all">Tous les statuts</option>
@@ -378,7 +398,8 @@ const App = () => {
         </div>
         <nav className="flex-1 p-6 space-y-2 overflow-y-auto">
           {[
-            { id: 'planning', label: 'Planning', icon: <CalendarIcon size={18}/> },
+            { id: 'reservations', label: 'Réservations', icon: <List size={18}/> },
+            { id: 'agenda', label: 'Agenda', icon: <CalendarRange size={18}/> },
             { id: 'dashboard', label: 'Tableau de bord', icon: <LayoutDashboard size={18}/> },
             { id: 'finances', label: 'Finances', icon: <Calculator size={18}/> },
             { id: 'settings', label: 'Paramètres', icon: <Settings size={18}/> }
@@ -409,6 +430,128 @@ const App = () => {
           
           <RenderFilters />
 
+          {/* TAB: RESERVATIONS (Ancien Planning) */}
+          {activeTab === 'reservations' && (
+            <div className="space-y-8 animate-in fade-in">
+              <div className="flex flex-wrap items-center justify-between gap-6">
+                <div>
+                    <h2 className="text-3xl font-black uppercase tracking-tighter">Liste des Réservations</h2>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Vue tabulaire de vos séjours</p>
+                </div>
+                <button onClick={() => { 
+                  if (properties.length === 0) { alert("Créez d'abord un bien dans l'onglet Paramètres"); return; }
+                  setEditingResId(null); 
+                  setFormData({ propertyId: properties[0]?.id || '', name: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [] }); 
+                  setIsModalOpen(true); 
+                }} className="bg-blue-600 text-white px-8 py-4 rounded-[24px] font-black text-[11px] uppercase tracking-widest shadow-xl shadow-blue-200 hover:bg-blue-700 hover:-translate-y-1 active:translate-y-0 transition-all flex items-center gap-2">
+                  <PlusCircle size={18}/> Nouvelle Réservation
+                </button>
+              </div>
+              <div className="bg-white rounded-[40px] border border-slate-50 shadow-2xl shadow-slate-200/50 overflow-hidden text-xs">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50 font-black uppercase tracking-widest border-b border-slate-100 text-[10px] text-slate-400">
+                    <tr>
+                      <th className="p-6">Bien / Plateforme</th>
+                      <th className="p-6">Client / Voyageur</th>
+                      <th className="p-6 text-center">Dates séjour</th>
+                      <th className="p-6 text-right">Net Perçu</th>
+                      <th className="p-6 text-center">État Paiement</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 font-bold">
+                    {reservationsList.length === 0 ? (
+                      <tr><td colSpan="5" className="p-20 text-center text-slate-300 font-medium italic text-sm">Aucune réservation ne correspond à vos critères.</td></tr>
+                    ) : (
+                      reservationsList.map(t => (
+                        <tr key={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="hover:bg-slate-50/80 cursor-pointer transition-all group">
+                          <td className="p-6">
+                             <div className="flex flex-col">
+                                <span className="text-slate-400 uppercase font-black tracking-tighter">{properties.find(p => p.id === t.propertyId)?.name || '--'}</span>
+                                <div className="flex items-center gap-1.5 mt-1.5">
+                                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                                   <span className="text-[10px] text-blue-600 font-black uppercase tracking-widest">{t.platform}</span>
+                                </div>
+                             </div>
+                          </td>
+                          <td className="p-6 font-black text-slate-900 text-sm">{t.name}</td>
+                          <td className="p-6 text-center text-slate-500 font-medium whitespace-nowrap bg-slate-50/30 group-hover:bg-blue-50/20 transition-colors">{t.startDate} <span className="mx-2 text-slate-300">➔</span> {t.endDate}</td>
+                          <td className="p-6 text-right font-black text-slate-900 text-sm tabular-nums">{t.netAmount.toFixed(2)}€</td>
+                          <td className="p-6 text-center">
+                            <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                              {t.paymentDate ? 'Validé' : 'Attente'}
+                            </span>
+                            {t.paymentDate && <p className="text-[9px] text-slate-400 mt-2 font-bold">{t.paymentDate}</p>}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: AGENDA VISUEL */}
+          {activeTab === 'agenda' && (
+            <div className="space-y-8 animate-in fade-in">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h2 className="text-3xl font-black uppercase tracking-tighter">Agenda Visuel</h2>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Projection mensuelle de l'occupation</p>
+                    </div>
+                </div>
+
+                <div className="bg-white p-6 md:p-8 rounded-[40px] border border-slate-50 shadow-2xl shadow-slate-200/40">
+                    {/* En-tête des jours */}
+                    <div className="grid grid-cols-7 mb-4 border-b border-slate-100 pb-4">
+                        {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map(d => (
+                            <div key={d} className="text-center text-[10px] font-black uppercase text-slate-300 tracking-widest">{d}</div>
+                        ))}
+                    </div>
+
+                    {/* Grille du calendrier */}
+                    <div className="grid grid-cols-7 gap-1 md:gap-2">
+                        {agendaDays.map((item, idx) => {
+                            if (item.empty) return <div key={`empty-${idx}`} className="h-24 md:h-32 bg-slate-50/30 rounded-2xl"></div>;
+
+                            // Trouver les réservations qui passent par ce jour
+                            const dayReservations = reservationsList.filter(res => {
+                                const start = res.startDate;
+                                const end = res.endDate;
+                                return item.dateStr >= start && item.dateStr <= end;
+                            });
+
+                            return (
+                                <div key={item.dateStr} className="h-24 md:h-32 bg-white border border-slate-100 rounded-2xl p-2 relative group overflow-hidden hover:border-blue-200 transition-colors">
+                                    <span className="text-[10px] font-black text-slate-300 group-hover:text-blue-500 transition-colors">{item.day}</span>
+                                    
+                                    <div className="mt-1 space-y-1 overflow-y-auto max-h-full no-scrollbar pb-4">
+                                        {dayReservations.map((res, i) => {
+                                            const propIdx = properties.findIndex(p => p.id === res.propertyId);
+                                            const color = CHART_COLORS[propIdx % CHART_COLORS.length];
+                                            const isStart = res.startDate === item.dateStr;
+                                            return (
+                                                <div 
+                                                    key={res.id} 
+                                                    onClick={(e) => { e.stopPropagation(); setEditingResId(res.id); setFormData(res); setIsModalOpen(true); }}
+                                                    className={`h-4 md:h-5 rounded-md text-[8px] md:text-[9px] font-black text-white px-1.5 flex items-center truncate cursor-pointer hover:brightness-110 shadow-sm transition-all ${isStart ? 'ring-2 ring-white ring-inset' : ''}`}
+                                                    style={{ backgroundColor: color }}
+                                                    title={`${res.name} - ${properties.find(p => p.id === res.propertyId)?.name}`}
+                                                >
+                                                    {isStart && <span className="mr-1">●</span>}
+                                                    {res.name.split(' ')[0]}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+          )}
+
           {/* TAB: DASHBOARD */}
           {activeTab === 'dashboard' && (
             <div className="space-y-10 animate-in fade-in duration-700">
@@ -425,7 +568,7 @@ const App = () => {
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Net Banque (Encaissé)</p>
                   <p className="text-3xl font-black text-indigo-600 tracking-tighter">{financials.netB.toLocaleString('fr-FR')}€</p>
                   <div className="mt-4 flex items-center gap-2 text-emerald-500 font-bold text-[10px] uppercase">
-                    <TrendingUp size={14}/> + 12% vs mois dernier
+                    <TrendingUp size={14}/> + Performance active
                   </div>
                 </div>
                 <div className="bg-slate-900 p-8 rounded-[40px] shadow-2xl shadow-slate-900/20 relative overflow-hidden group">
@@ -459,67 +602,6 @@ const App = () => {
                     color: CHART_COLORS[(idx + 4) % CHART_COLORS.length] 
                   }))} 
                 />
-              </div>
-            </div>
-          )}
-
-          {/* TAB: PLANNING */}
-          {activeTab === 'planning' && (
-            <div className="space-y-8 animate-in fade-in">
-              <div className="flex flex-wrap items-center justify-between gap-6">
-                <div>
-                    <h2 className="text-3xl font-black uppercase tracking-tighter">Planning Réservations</h2>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Gestion des séjours et plateformes</p>
-                </div>
-                <button onClick={() => { 
-                  if (properties.length === 0) { alert("Créez d'abord un bien dans l'onglet Paramètres"); return; }
-                  setEditingResId(null); 
-                  setFormData({ propertyId: properties[0]?.id || '', name: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [] }); 
-                  setIsModalOpen(true); 
-                }} className="bg-blue-600 text-white px-8 py-4 rounded-[24px] font-black text-[11px] uppercase tracking-widest shadow-xl shadow-blue-200 hover:bg-blue-700 hover:-translate-y-1 active:translate-y-0 transition-all flex items-center gap-2">
-                  <PlusCircle size={18}/> Nouvelle Réservation
-                </button>
-              </div>
-              <div className="bg-white rounded-[40px] border border-slate-50 shadow-2xl shadow-slate-200/50 overflow-hidden text-xs">
-                <table className="w-full text-left">
-                  <thead className="bg-slate-50 font-black uppercase tracking-widest border-b border-slate-100 text-[10px] text-slate-400">
-                    <tr>
-                      <th className="p-6">Bien / Plateforme</th>
-                      <th className="p-6">Client / Voyageur</th>
-                      <th className="p-6 text-center">Dates séjour</th>
-                      <th className="p-6 text-right">Net Perçu</th>
-                      <th className="p-6 text-center">État Paiement</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50 font-bold">
-                    {planningList.length === 0 ? (
-                      <tr><td colSpan="5" className="p-20 text-center text-slate-300 font-medium italic text-sm">Aucune réservation ne correspond à vos critères.</td></tr>
-                    ) : (
-                      planningList.map(t => (
-                        <tr key={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="hover:bg-slate-50/80 cursor-pointer transition-all group">
-                          <td className="p-6">
-                             <div className="flex flex-col">
-                                <span className="text-slate-400 uppercase font-black tracking-tighter">{properties.find(p => p.id === t.propertyId)?.name || '--'}</span>
-                                <div className="flex items-center gap-1.5 mt-1.5">
-                                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-                                   <span className="text-[10px] text-blue-600 font-black uppercase tracking-widest">{t.platform}</span>
-                                </div>
-                             </div>
-                          </td>
-                          <td className="p-6 font-black text-slate-900 text-sm">{t.name}</td>
-                          <td className="p-6 text-center text-slate-500 font-medium whitespace-nowrap bg-slate-50/30 group-hover:bg-blue-50/20 transition-colors">{t.startDate} <span className="mx-2 text-slate-300">➔</span> {t.endDate}</td>
-                          <td className="p-6 text-right font-black text-slate-900 text-sm tabular-nums">{t.netAmount.toFixed(2)}€</td>
-                          <td className="p-6 text-center">
-                            <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
-                              {t.paymentDate ? 'Validé' : 'Attente'}
-                            </span>
-                            {t.paymentDate && <p className="text-[9px] text-slate-400 mt-2 font-bold">{t.paymentDate}</p>}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
               </div>
             </div>
           )}
