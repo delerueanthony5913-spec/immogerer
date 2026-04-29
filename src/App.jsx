@@ -6,8 +6,8 @@ import {
   Home, Euro, LayoutDashboard, Plus, Trash2, MapPin, Calendar as CalendarIcon,
   Menu, X, CalendarCheck, CheckCircle, Clock, PieChart as PieChartIcon,
   ChevronLeft, ChevronRight, BarChart3, List, Wallet, Settings, Calculator,
-  UserCheck, PlusCircle, TrendingUp, Info, ChevronUp, ChevronDown, Filter, Loader2,
-  Building2, Globe, CalendarRange, MessageSquare, CreditCard
+  UserCheck, PlusCircle, TrendingUp, Info, Filter, Loader2,
+  Building2, CalendarRange, MessageSquare, CreditCard, Activity
 } from 'lucide-react';
 
 // --- CONFIGURATION FIREBASE EXACTE ---
@@ -279,18 +279,30 @@ const App = () => {
     return Object.entries(stats).sort((a, b) => b[0].localeCompare(a[0]));
   }, [filteredData]);
 
-  const providerRecap = useMemo(() => {
-    const recap = {};
-    filteredData.filter(t => !!t.paymentDate).forEach(t => {
-      const month = t.paymentDate.substring(0, 7);
-      t.resExpenses?.forEach(exp => {
-        const key = `${month}_${exp.person}`;
-        if (!recap[key]) recap[key] = { month, person: exp.person, total: 0 };
-        recap[key].total += (parseFloat(exp.amount) || 0);
-      });
+  const detailedExpenses = useMemo(() => {
+    const list = [];
+    filteredData.forEach(t => {
+      if (t.resExpenses) {
+        t.resExpenses.forEach(exp => {
+          // Si filtre prestataire actif, on ne garde que lui
+          if (filterProv === 'all' || exp.person === filterProv) {
+            list.push({
+              id: `${t.id}-${exp.id}`,
+              resId: t.id,
+              propertyId: t.propertyId,
+              propertyName: properties.find(p => p.id === t.propertyId)?.name || '--',
+              dateRes: t.startDate,
+              person: exp.person,
+              type: exp.type,
+              amount: parseFloat(exp.amount) || 0,
+              paymentDate: exp.paymentDate || ''
+            });
+          }
+        });
+      }
     });
-    return Object.values(recap).sort((a,b) => b.month.localeCompare(a.month));
-  }, [filteredData]);
+    return list.sort((a, b) => b.dateRes.localeCompare(a.dateRes));
+  }, [filteredData, properties, filterProv]);
 
   const reservationsList = useMemo(() => {
     return filteredData.filter(t => {
@@ -592,7 +604,7 @@ const App = () => {
                                                 <div 
                                                     key={res.id} 
                                                     onClick={(e) => { e.stopPropagation(); setEditingResId(res.id); setFormData(res); setIsModalOpen(true); }}
-                                                    className={`h-4 md:h-5 rounded-lg text-[8px] md:text-[9px] font-black text-white px-2 flex items-center truncate cursor-pointer hover:scale-105 transition-all shadow-sm ${isStart ? 'ring-2 ring-white/50' : ''}`}
+                                                    className={`h-4 md:h-5 rounded-lg text-[8px] md:text-[9px] font-black text-white px-2 flex items-center truncate cursor-pointer hover:scale-105 active:scale-95 transition-all shadow-sm ${isStart ? 'ring-2 ring-white/50' : ''}`}
                                                     style={{ backgroundColor: color }}
                                                 >
                                                     {isStart && <span className="mr-1 opacity-60">●</span>}
@@ -667,27 +679,33 @@ const App = () => {
           {activeTab === 'finances' && (
             <div className="space-y-10 animate-in fade-in">
               <h2 className="text-3xl font-black uppercase tracking-tighter">Comptabilité Détaillée</h2>
+              
+              {/* TABLEAU 1: BILAN GLOBAL */}
               <div className="bg-white rounded-[40px] border border-slate-50 shadow-2xl shadow-slate-200/50 overflow-hidden text-xs">
-                <div className="p-8 bg-slate-900 text-white font-black uppercase text-[11px] tracking-widest flex justify-between items-center">
+                <div className="p-8 bg-slate-900 text-white font-black uppercase text-[11px] tracking-widest flex justify-between items-center border-b border-white/5">
                    <div className="flex items-center gap-3"><Calculator size={20} className="text-blue-400"/> Bilan Direct & URSSAF</div>
                    <span className="opacity-40 font-bold">Base Taxes 7.7%</span>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
-                    <thead className="bg-slate-50 font-black uppercase tracking-widest border-b text-[10px] text-slate-400">
+                    <thead className="bg-slate-50/50 font-black uppercase tracking-widest border-b border-slate-100 text-[10px] text-slate-400">
                       <tr><th className="p-6">Période</th><th className="p-6 text-right text-indigo-600 font-black">Banque</th><th className="p-6 text-right">Base URSSAF</th><th className="p-6 text-right text-rose-500">Provision Taxes</th><th className="p-6 text-right">Charges Svc.</th><th className="p-6 text-right font-black">Profit Réel</th></tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 font-bold text-slate-900">
-                      {monthlyRecapData.map(([m, d]) => (
-                        <tr key={m} className="hover:bg-slate-50 transition-all">
-                          <td className="p-6 capitalize font-black text-slate-900">{formatMonthYear(m)}</td>
-                          <td className="p-6 text-right font-black text-indigo-600 tabular-nums">{d.totalBank.toLocaleString('fr-FR')}€</td>
-                          <td className="p-6 text-right text-slate-500 tabular-nums">{d.urssafGross.toLocaleString('fr-FR')}€</td>
-                          <td className="p-6 text-right text-rose-500 tabular-nums">-{d.taxes.toFixed(2)}€</td>
-                          <td className="p-6 text-right text-slate-500 tabular-nums">-{d.charges.toLocaleString('fr-FR')}€</td>
-                          <td className={`p-6 text-right font-black text-sm tabular-nums ${d.totalBank - d.taxes - d.charges >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{(d.totalBank - d.taxes - d.charges).toLocaleString('fr-FR')}€</td>
-                        </tr>
-                      ))}
+                      {monthlyRecapData.length === 0 ? (
+                        <tr><td colSpan="6" className="p-20 text-center text-slate-300 font-medium italic">Aucune donnée comptable.</td></tr>
+                      ) : (
+                        monthlyRecapData.map(([m, d]) => (
+                          <tr key={m} className="hover:bg-slate-50 transition-all">
+                            <td className="p-6 capitalize font-black text-slate-900">{formatMonthYear(m)}</td>
+                            <td className="p-6 text-right font-black text-indigo-600 tabular-nums">{d.totalBank.toLocaleString('fr-FR')}€</td>
+                            <td className="p-6 text-right text-slate-500 tabular-nums">{d.urssafGross.toLocaleString('fr-FR')}€</td>
+                            <td className="p-6 text-right text-rose-500 tabular-nums">-{d.taxes.toFixed(2)}€</td>
+                            <td className="p-6 text-right text-slate-500 tabular-nums">-{d.charges.toLocaleString('fr-FR')}€</td>
+                            <td className={`p-6 text-right font-black text-sm tabular-nums ${d.totalBank - d.taxes - d.charges >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{(d.totalBank - d.taxes - d.charges).toLocaleString('fr-FR')}€</td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                     <tfoot className="bg-indigo-600 text-white font-black">
                       <tr>
@@ -700,6 +718,60 @@ const App = () => {
                       </tr>
                     </tfoot>
                   </table>
+                </div>
+              </div>
+
+              {/* TABLEAU 2: DÉTAIL DES PRESTATIONS RESTAURÉ ET ENRICHI */}
+              <div className="bg-white rounded-[40px] border border-slate-50 shadow-2xl shadow-slate-200/50 overflow-hidden text-xs">
+                <div className="p-8 bg-slate-900 text-white font-black flex justify-between items-center uppercase tracking-widest border-b border-white/5">
+                   <div className="flex items-center gap-3"><UserCheck className="text-indigo-400" size={20}/> Suivi des Prestations</div>
+                   <span className="opacity-40 font-bold">Détail par intervenant</span>
+                </div>
+                <div className="overflow-x-auto text-xs">
+                   <table className="w-full text-left">
+                      <thead className="bg-slate-50 font-black uppercase tracking-widest border-b border-slate-100 text-[10px] text-slate-400">
+                         <tr>
+                            <th className="p-6">Date Séjour</th>
+                            <th className="p-6">Logement</th>
+                            <th className="p-6">Prestataire</th>
+                            <th className="p-6">Type Service</th>
+                            <th className="p-6 text-right">Montant</th>
+                            <th className="p-6 text-center">Règlement</th>
+                         </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50 font-bold text-slate-600">
+                         {detailedExpenses.length === 0 ? (
+                           <tr><td colSpan="6" className="p-20 text-center text-slate-300 font-medium italic">Aucune prestation enregistrée pour ces filtres.</td></tr>
+                         ) : (
+                           detailedExpenses.map((exp) => (
+                             <tr key={exp.id} className="hover:bg-slate-50 transition-all">
+                                <td className="p-6 tabular-nums">{exp.dateRes}</td>
+                                <td className="p-6 text-slate-900 uppercase tracking-tighter">{exp.propertyName}</td>
+                                <td className="p-6 text-blue-600 font-black uppercase text-[10px] tracking-widest">{exp.person}</td>
+                                <td className="p-6 font-medium italic">{exp.type}</td>
+                                <td className="p-6 text-right font-black text-slate-900 tabular-nums">{exp.amount.toLocaleString('fr-FR')} €</td>
+                                <td className="p-6 text-center">
+                                   {exp.paymentDate ? (
+                                      <div className="flex flex-col items-center">
+                                         <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[9px] uppercase tracking-widest">Payé</span>
+                                         <span className="text-[8px] text-slate-400 mt-1 uppercase">{exp.paymentDate}</span>
+                                      </div>
+                                   ) : (
+                                      <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-[9px] uppercase tracking-widest">Attente</span>
+                                   )}
+                                </td>
+                             </tr>
+                           ))
+                         )}
+                      </tbody>
+                      <tfoot className="bg-slate-800 text-white font-black border-t-2">
+                        <tr>
+                          <td colSpan="4" className="p-8 uppercase text-[11px] tracking-widest">TOTAL PRESTATIONS FILTRÉES</td>
+                          <td className="p-8 text-right text-2xl tracking-tighter tabular-nums">{detailedExpenses.reduce((acc, curr) => acc + curr.amount, 0).toLocaleString('fr-FR')}€</td>
+                          <td className="bg-slate-900/50"></td>
+                        </tr>
+                      </tfoot>
+                   </table>
                 </div>
               </div>
             </div>
