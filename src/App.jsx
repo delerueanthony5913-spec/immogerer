@@ -102,7 +102,6 @@ const App = () => {
   const [activeTab, setActiveTab] = useState('planning');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [planningViewMode, setPlanningViewMode] = useState('list');
-  const [viewDate, setViewDate] = useState(new Date());
   
   const [properties, setProperties] = useState([]);
   const [tenants, setTenants] = useState([]);
@@ -115,7 +114,7 @@ const App = () => {
   const [monthFilter, setMonthFilter] = useState('all');
   const [yearFilter, setYearFilter] = useState('all');
 
-  // Filtres spécifiques Finance
+  // Filtres Finance
   const [finFilterMonth, setFinFilterMonth] = useState('all');
   const [finFilterYear, setFinFilterYear] = useState('all');
   const [finFilterProp, setFinFilterProp] = useState('all');
@@ -500,28 +499,59 @@ const App = () => {
             <div className="space-y-8 animate-in fade-in">
               <h2 className="text-3xl font-black text-slate-800 tracking-tighter uppercase">Paramètres & Biens</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                
                 {/* Plateformes */}
                 <div className="bg-white p-6 rounded-[32px] border shadow-sm flex flex-col h-full">
                   <h3 className="text-[11px] font-black uppercase tracking-widest mb-4 text-slate-400">Plateformes</h3>
-                  <div className="space-y-1.5 mb-6 flex-1 overflow-y-auto max-h-[250px]">{availablePlatforms.map(p => (<div key={p} className="flex justify-between items-center text-xs font-bold bg-slate-50 p-3 rounded-xl hover:bg-slate-100">{p}<button onClick={() => { const n = availablePlatforms.filter(x => x !== p); setAvailablePlatforms(n); updateSettings({ platforms: n }); }} className="text-slate-300 hover:text-red-500"><X size={14} /></button></div>))}</div>
-                  <form onSubmit={(e) => { e.preventDefault(); if (inputPlat.trim()) { const n = [...availablePlatforms, inputPlat.trim()]; setAvailablePlatforms(n); updateSettings({ platforms: n }); setInputPlat(''); } }} className="flex gap-2"><input value={inputPlat} onChange={e => setInputPlat(e.target.value)} className="flex-1 p-3 bg-slate-50 border rounded-xl font-bold text-xs outline-none" placeholder="Ajouter..." /><button type="submit" className="bg-slate-900 text-white p-3 rounded-xl transition-all hover:scale-105 active:scale-95 shadow-md"><Plus size={18} /></button></form>
+                  <div className="space-y-1.5 mb-6 flex-1 overflow-y-auto max-h-[250px]">
+                    {availablePlatforms.map(p => (
+                      <div key={p} className="flex justify-between items-center text-xs font-bold bg-slate-50 p-3 rounded-xl hover:bg-slate-100">
+                        {p}
+                        <button onClick={() => { const n = availablePlatforms.filter(x => x !== p); setAvailablePlatforms(n); updateSettings({ platforms: n }); }} className="text-slate-300 hover:text-red-500"><X size={14} /></button>
+                      </div>
+                    ))}
+                  </div>
+                  <form onSubmit={(e) => { e.preventDefault(); if (inputPlat.trim()) { const n = [...availablePlatforms, inputPlat.trim()]; setAvailablePlatforms(n); updateSettings({ platforms: n }); setInputPlat(''); } }} className="flex gap-2">
+                    <input value={inputPlat} onChange={e => setInputPlat(e.target.value)} className="flex-1 p-3 bg-slate-50 border rounded-xl font-bold text-xs outline-none" placeholder="Ajouter..." />
+                    <button type="submit" className="bg-slate-900 text-white p-3 rounded-xl transition-all hover:scale-105 active:scale-95 shadow-md"><Plus size={18} /></button>
+                  </form>
                 </div>
                 
                 {/* Prestataires */}
                 <div className="bg-white p-6 rounded-[32px] border shadow-sm flex flex-col h-full">
                   <h3 className="text-[11px] font-black uppercase tracking-widest mb-4 text-slate-400">Prestataires</h3>
-                  <div className="space-y-1.5 mb-6 flex-1 overflow-y-auto max-h-[250px]">{availableProviders.map(p => (<div key={p} className="flex justify-between items-center text-xs font-bold bg-slate-50 p-3 rounded-xl hover:bg-slate-100">{p}<button onClick={() => { const n = availableProviders.filter(x => x !== p); setAvailableProviders(n); updateSettings({ providers: n }); }} className="text-slate-300 hover:text-red-500"><X size={14} /></button></div>))}</div>
-                  <form onSubmit={(e) => { e.preventDefault(); if (inputProv.trim()) { const n = [...availableProviders, inputProv.trim()]; setAvailableProviders(n); updateSettings({ providers: n }); setInputProv(''); } }} className="flex gap-2"><input value={inputProv} onChange={e => setInputProv(e.target.value)} className="flex-1 p-3 bg-slate-50 border rounded-xl font-bold text-xs outline-none" placeholder="Prénom..." /><button type="submit" className="bg-slate-900 text-white p-3 rounded-xl transition-all hover:scale-105 active:scale-95 shadow-md"><Plus size={18} /></button></form>
+                  <div className="space-y-1.5 mb-6 flex-1 overflow-y-auto max-h-[250px]">
+                    {availableProviders.map(p => (
+                      <div key={p} className="flex justify-between items-center text-xs font-bold bg-slate-50 p-3 rounded-xl hover:bg-slate-100">
+                        {p}
+                        <button onClick={() => { const n = availableProviders.filter(x => x !== p); setAvailableProviders(n); updateSettings({ providers: n }); }} className="text-slate-300 hover:text-red-500"><X size={14} /></button>
+                      </div>
+                    ))}
+                  </div>
+                  <form onSubmit={(e) => { e.preventDefault(); if (inputProv.trim()) { const n = [...availableProviders, inputProv.trim()]; setAvailableProviders(n); updateSettings({ providers: n }); setInputProv(''); } }} className="flex gap-2">
+                    <input value={inputProv} onChange={e => setInputProv(e.target.value)} className="flex-1 p-3 bg-slate-50 border rounded-xl font-bold text-xs outline-none" placeholder="Prénom..." />
+                    <button type="submit" className="bg-slate-900 text-white p-3 rounded-xl transition-all hover:scale-105 active:scale-95 shadow-md"><Plus size={18} /></button>
+                  </form>
                 </div>
 
                 {/* Types Services */}
                 <div className="bg-white p-6 rounded-[32px] border shadow-sm flex flex-col h-full">
                   <h3 className="text-[11px] font-black uppercase tracking-widest mb-4 text-slate-400">Types Services</h3>
-                  <div className="space-y-1.5 mb-6 flex-1 overflow-y-auto max-h-[250px]">{availableServiceTypes.map(p => (<div key={p} className="flex justify-between items-center text-xs font-bold bg-slate-50 p-3 rounded-xl hover:bg-slate-100">{p}<button onClick={() => { const n = availableServiceTypes.filter(x => x !== p); setAvailableServiceTypes(n); updateSettings({ services: n }); }} className="text-slate-300 hover:text-red-500"><X size={14} /></button></div>))}</div>
-                  <form onSubmit={(e) => { e.preventDefault(); if (inputSvc.trim()) { const n = [...availableServiceTypes, inputSvc.trim()]; setAvailableServiceTypes(n); updateSettings({ services: n }); setInputSvc(''); } }} className="flex gap-2"><input value={inputSvc} onChange={e => setInputSvc(e.target.value)} className="flex-1 p-3 bg-slate-50 border rounded-xl font-bold text-xs outline-none" placeholder="Service..." /><button type="submit" className="bg-slate-900 text-white p-3 rounded-xl transition-all hover:scale-105 active:scale-95 shadow-md"><Plus size={18} /></button></form>
+                  <div className="space-y-1.5 mb-6 flex-1 overflow-y-auto max-h-[250px]">
+                    {availableServiceTypes.map(p => (
+                      <div key={p} className="flex justify-between items-center text-xs font-bold bg-slate-50 p-3 rounded-xl hover:bg-slate-100">
+                        {p}
+                        <button onClick={() => { const n = availableServiceTypes.filter(x => x !== p); setAvailableServiceTypes(n); updateSettings({ services: n }); }} className="text-slate-300 hover:text-red-500"><X size={14} /></button>
+                      </div>
+                    ))}
+                  </div>
+                  <form onSubmit={(e) => { e.preventDefault(); if (inputSvc.trim()) { const n = [...availableServiceTypes, inputSvc.trim()]; setAvailableServiceTypes(n); updateSettings({ services: n }); setInputSvc(''); } }} className="flex gap-2">
+                    <input value={inputSvc} onChange={e => setInputSvc(e.target.value)} className="flex-1 p-3 bg-slate-50 border rounded-xl font-bold text-xs outline-none" placeholder="Service..." />
+                    <button type="submit" className="bg-slate-900 text-white p-3 rounded-xl transition-all hover:scale-105 active:scale-95 shadow-md"><Plus size={18} /></button>
+                  </form>
                 </div>
 
-                {/* LOGEMENTS (Anciennement "Mes Biens") */}
+                {/* LOGEMENTS */}
                 <div className="bg-white p-6 rounded-[32px] border shadow-sm flex flex-col h-full border-blue-100 border-2">
                   <h3 className="text-[11px] font-black uppercase tracking-widest mb-4 text-blue-600 flex items-center gap-2"><Home size={14}/> Mes Logements</h3>
                   <div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[250px]">
@@ -533,3 +563,108 @@ const App = () => {
                           <div className="flex-1 min-w-0">
                             <p className="text-xs font-black text-slate-800 truncate">{p.name}</p>
                             <p className="text-[9px] text-slate-500 truncate">{p.address}</p>
+                          </div>
+                          <button onClick={async () => { if(window.confirm("Supprimer ce bien ?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', p.id)) }} className="text-slate-300 hover:text-red-500 p-1"><Trash2 size={14} /></button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <form onSubmit={async (e) => { 
+                    e.preventDefault(); 
+                    if(user && user.uid !== 'local-test-user' && inputProp.name.trim()) {
+                      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'properties'), { 
+                        name: inputProp.name.trim(), 
+                        address: inputProp.address.trim() 
+                      }); 
+                      setInputProp({ name: '', address: '' });
+                    }
+                  }} className="space-y-2 pt-4 border-t">
+                    <input required value={inputProp.name} onChange={e => setInputProp({...inputProp, name: e.target.value})} className="w-full p-2 bg-slate-50 border rounded-xl font-bold text-[10px] outline-none" placeholder="Nom du bien" />
+                    <div className="flex gap-2">
+                      <input value={inputProp.address} onChange={e => setInputProp({...inputProp, address: e.target.value})} className="flex-1 p-2 bg-slate-50 border rounded-xl font-bold text-[10px] outline-none" placeholder="Adresse" />
+                      <button type="submit" className="bg-blue-600 text-white p-2 rounded-xl transition-all hover:scale-105 active:scale-95 shadow-md"><Plus size={16} /></button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* MODALE RÉSERVATION */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
+          <div className="bg-white rounded-[48px] shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col scale-in-center overflow-hidden">
+            <div className="p-10 border-b flex justify-between items-center bg-white sticky top-0 z-10">
+              <div className="flex items-center gap-3 text-blue-600"><CalendarCheck size={24} /><h3 className="font-black text-xl tracking-tight">Réservation</h3></div>
+              <button onClick={() => setIsModalOpen(false)} className="p-2 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900 transition-all"><X size={24} /></button>
+            </div>
+            <form onSubmit={saveRes} className="p-10 space-y-8 overflow-y-auto flex-1 custom-scrollbar text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-1"><label className="text-[9px] font-black uppercase ml-2 text-slate-400">Logement</label>
+                  <select required value={formData.propertyId} onChange={e => setFormData({ ...formData, propertyId: e.target.value })} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold shadow-inner">
+                    <option value="" disabled>Choisir un bien...</option>
+                    {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1"><label className="text-[9px] font-black uppercase ml-2 text-slate-400">Voyageur</label><input required placeholder="Nom Client" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold shadow-inner" /></div>
+                <div className="space-y-1"><label className="text-[9px] font-black uppercase ml-2 text-slate-400">Arrivée</label><input type="date" required value={formData.startDate} onChange={e => setFormData({ ...formData, startDate: e.target.value })} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold shadow-inner" /></div>
+                <div className="space-y-1"><label className="text-[9px] font-black uppercase ml-2 text-slate-400">Départ</label><input type="date" required value={formData.endDate} onChange={e => setFormData({ ...formData, endDate: e.target.value })} className="w-full p-4 bg-slate-50 border rounded-2xl font-bold shadow-inner" /></div>
+              </div>
+              <div className="bg-blue-50/50 p-8 rounded-[40px] border border-blue-100 space-y-6">
+                <div className="flex justify-between items-center font-black text-[9px] uppercase text-blue-900"><span>Finances</span><select value={formData.platform} onChange={e => setFormData({ ...formData, platform: e.target.value })} className="bg-white border rounded-xl px-2 py-1 text-blue-600">{availablePlatforms.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
+                {formData.platform === 'Booking' || formData.platform === 'Abritel' ? (
+                  <div className="grid grid-cols-2 gap-4 text-[10px]">
+                    <div><label className="font-black uppercase block mb-1">Prix Client</label><input type="number" step="0.01" value={formData.displayedAmount} onChange={e => setFormData({ ...formData, displayedAmount: e.target.value })} className="w-full p-3 border rounded-xl font-bold" /></div>
+                    <div><label className="font-black uppercase block mb-1 text-red-500">Taxe Séjour</label><input type="number" step="0.01" value={formData.cityTax} onChange={e => setFormData({ ...formData, cityTax: e.target.value })} className="w-full p-3 border rounded-xl font-bold text-red-500" /></div>
+                    <div className="col-span-2 flex justify-between bg-slate-800 p-3 rounded-xl text-white font-black uppercase"><span>Base URSSAF (Brut)</span><span>{(parseFloat(formData.displayedAmount) - (parseFloat(formData.cityTax) || 0)).toFixed(2)}€</span></div>
+                    <div><label className="font-black uppercase block mb-1">Commission</label><input type="number" step="0.01" value={formData.platformFees} onChange={e => setFormData({ ...formData, platformFees: e.target.value })} className="w-full p-3 border rounded-xl font-bold" /></div>
+                    <div><label className="font-black uppercase block mb-1">Frais Banq.</label><input type="number" step="0.01" value={formData.bankFees} onChange={e => setFormData({ ...formData, bankFees: e.target.value })} className="w-full p-3 border rounded-xl font-bold" /></div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-4 text-[10px]">
+                    <div><label className="font-black uppercase block mb-1">Brut URSSAF</label><input type="number" step="0.01" value={formData.grossAmount} onChange={e => setFormData({ ...formData, grossAmount: e.target.value })} className="w-full p-3 border rounded-xl font-bold" /></div>
+                    <div><label className="font-black uppercase block mb-1">Commission</label><input type="number" step="0.01" value={formData.platformFees} onChange={e => setFormData({ ...formData, platformFees: e.target.value })} className="w-full p-3 border rounded-xl font-bold" /></div>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 bg-white/50 p-3 rounded-2xl"><input type="checkbox" className="w-4 h-4" checked={formData.isUrssaf} onChange={e => setFormData({ ...formData, isUrssaf: e.target.checked })} /><span className="text-[10px] font-black uppercase text-slate-600">Provisionner taxes AE (7.7%)</span></div>
+              </div>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center"><span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Prestations de services</span><button type="button" onClick={() => setFormData({ ...formData, resExpenses: [...formData.resExpenses, { id: Date.now().toString(), person: availableProviders[0] || '', type: availableServiceTypes[0] || '', amount: 0 }] })} className="bg-slate-100 text-slate-600 px-3 py-1 rounded-lg text-[9px] font-black uppercase">+ Ajouter</button></div>
+                <div className="space-y-2">
+                   {formData.resExpenses.map(exp => (
+                    <div key={exp.id} className="flex gap-2 items-center bg-slate-50 p-3 rounded-2xl">
+                      <select value={exp.person} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, person: e.target.value } : x) })} className="flex-1 p-2 border rounded-xl text-[10px] font-bold">{availableProviders.map(p => <option key={p} value={p}>{p}</option>)}</select>
+                      <select value={exp.type} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, type: e.target.value } : x) })} className="flex-1 p-2 border rounded-xl text-[10px] font-bold">{availableServiceTypes.map(p => <option key={p} value={p}>{p}</option>)}</select>
+                      <input type="number" value={exp.amount} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, amount: e.target.value } : x) })} className="w-20 p-2 border rounded-xl font-black text-right text-xs" />
+                      <button type="button" onClick={() => setFormData({ ...formData, resExpenses: formData.resExpenses.filter(x => x.id !== exp.id) })} className="text-red-300"><Trash2 size={18} /></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className={`p-8 rounded-[40px] border-2 flex items-center justify-between transition-all ${formData.paymentDate ? 'bg-emerald-50 border-emerald-100' : 'bg-orange-50 border-orange-100 shadow-inner'}`}>
+                <h4 className="text-xs font-black uppercase">Paiement reçu (Banque)</h4>
+                <input type="date" value={formData.paymentDate} onChange={e => setFormData({ ...formData, paymentDate: e.target.value })} className="p-3 border rounded-2xl font-black bg-white shadow-lg outline-none" />
+              </div>
+              {editingResId && (
+                <div className="flex pt-4">
+                   <a href={getGoogleCalendarUrl(formData, properties.find(p => p.id === formData.propertyId))} target="_blank" rel="noreferrer" className="flex-1 bg-blue-50 text-blue-700 p-5 rounded-[24px] font-black text-[10px] uppercase tracking-[2px] flex items-center justify-center gap-2 hover:bg-blue-600 hover:text-white transition-all shadow-xl shadow-blue-100 border-2 border-white"><CalendarIcon size={18}/> Synchroniser Google Agenda</a>
+                </div>
+              )}
+              <div className="flex justify-between items-center pt-8 border-t">
+                <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400 leading-none mb-1">Estimation Profit Net</p><p className="text-3xl font-black text-blue-600 tracking-tighter leading-none">{(nModale - curChargesModale - (formData.isUrssaf ? ((formData.platform === 'Booking' || formData.platform === 'Abritel' ? (parseFloat(formData.displayedAmount) - (parseFloat(formData.cityTax) || 0)) : parseFloat(formData.grossAmount) || 0) * 0.077) : 0)).toFixed(2)}€</p></div>
+                <div className="flex gap-4">
+                  {editingResId && <button type="button" onClick={() => deleteRes(editingResId)} className="px-6 py-4 text-red-500 font-bold text-[10px] uppercase hover:bg-red-50 rounded-2xl transition-colors">Supprimer</button>}
+                  <button type="submit" className="bg-blue-600 text-white px-10 py-4 rounded-[24px] font-black shadow-xl hover:bg-blue-700 uppercase tracking-widest text-[10px] active:scale-95 transition-all">Enregistrer</button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default App;
