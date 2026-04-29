@@ -6,7 +6,8 @@ import {
   Home, Euro, LayoutDashboard, Plus, Trash2, MapPin, Calendar as CalendarIcon,
   Menu, X, CalendarCheck, CheckCircle, Clock, PieChart as PieChartIcon,
   ChevronLeft, ChevronRight, BarChart3, List, Wallet, Settings, Calculator,
-  UserCheck, PlusCircle, TrendingUp, Info, ChevronUp, ChevronDown, Filter, Loader2
+  UserCheck, PlusCircle, TrendingUp, Info, ChevronUp, ChevronDown, Filter, Loader2,
+  Building2, Globe
 } from 'lucide-react';
 
 // --- CONFIGURATION FIREBASE EXACTE ---
@@ -306,7 +307,7 @@ const App = () => {
   if (loading) return (
     <div className="h-screen w-full flex items-center justify-center bg-slate-50 flex-col gap-4">
       <Loader2 className="animate-spin text-blue-600" size={48} />
-      <p className="text-blue-600 font-bold uppercase tracking-widest text-[10px]">Chargement ImmoGérer...</p>
+      <p className="text-blue-600 font-bold uppercase tracking-widest text-[10px]">Chargement CADEL MANAGER...</p>
     </div>
   );
 
@@ -350,7 +351,7 @@ const App = () => {
         </select>
       </div>
       {activeTab === 'planning' && (
-        <div className="flex items-center gap-1.5 px-3 py-2 bg-blue-50/50 rounded-2xl border border-blue-100">
+        <div className="flex items-center gap-1.5 px-3 py-2 bg-blue-50/50 rounded-2xl border border-blue-100 ml-auto">
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="text-[10px] font-black uppercase bg-transparent text-blue-600 cursor-pointer outline-none">
             <option value="all">Tous les statuts</option>
             <option value="paid">Payé</option>
@@ -366,9 +367,14 @@ const App = () => {
       {/* SIDEBAR */}
       <aside className={`fixed md:sticky top-0 left-0 z-40 w-72 h-full md:h-screen bg-white border-r border-slate-100 flex flex-col transform md:translate-x-0 transition-transform duration-300 ease-in-out ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-10 border-b border-slate-50 flex flex-col items-center">
-          <div className="bg-gradient-to-tr from-blue-600 to-indigo-600 p-3 rounded-2xl text-white shadow-xl shadow-blue-200 mb-4"><Home size={24} /></div>
-          <h1 className="font-black uppercase tracking-tighter text-xl text-slate-900">ImmoGérer</h1>
-          <p className="text-[9px] font-black uppercase tracking-[3px] text-slate-300 mt-1">Management Pro</p>
+          <div className="relative group mb-4">
+             <div className="absolute inset-0 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-2xl blur opacity-25 group-hover:opacity-40 transition-opacity"></div>
+             <div className="relative bg-gradient-to-tr from-blue-600 to-indigo-600 p-4 rounded-2xl text-white shadow-xl shadow-blue-200">
+                <Building2 size={28} />
+             </div>
+          </div>
+          <h1 className="font-black uppercase tracking-tighter text-2xl text-slate-900 leading-none">CADEL</h1>
+          <h2 className="font-black uppercase tracking-[0.3em] text-[10px] text-blue-600 mt-1.5">MANAGER</h2>
         </div>
         <nav className="flex-1 p-6 space-y-2 overflow-y-auto">
           {[
@@ -391,7 +397,10 @@ const App = () => {
       </aside>
 
       <div className="md:hidden flex items-center justify-between p-5 bg-white border-b border-slate-100 sticky top-0 z-30 shadow-sm">
-        <h1 className="font-black text-blue-600 uppercase tracking-tighter">ImmoGérer</h1>
+        <div className="flex items-center gap-2">
+            <div className="bg-blue-600 p-1.5 rounded-lg text-white"><Building2 size={16}/></div>
+            <h1 className="font-black text-slate-900 uppercase tracking-tighter text-sm">CADEL MANAGER</h1>
+        </div>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 bg-slate-50 rounded-xl text-slate-600"><Menu /></button>
       </div>
 
@@ -406,7 +415,7 @@ const App = () => {
               <div className="flex items-end justify-between">
                 <div>
                   <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase mb-1">Tableau de bord</h2>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Aperçu de vos performances</p>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest italic">Analyse en temps réel de votre parc</p>
                 </div>
               </div>
               
@@ -458,7 +467,10 @@ const App = () => {
           {activeTab === 'planning' && (
             <div className="space-y-8 animate-in fade-in">
               <div className="flex flex-wrap items-center justify-between gap-6">
-                <h2 className="text-3xl font-black uppercase tracking-tighter">Planning Réservations</h2>
+                <div>
+                    <h2 className="text-3xl font-black uppercase tracking-tighter">Planning Réservations</h2>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Gestion des séjours et plateformes</p>
+                </div>
                 <button onClick={() => { 
                   if (properties.length === 0) { alert("Créez d'abord un bien dans l'onglet Paramètres"); return; }
                   setEditingResId(null); 
@@ -472,7 +484,7 @@ const App = () => {
                 <table className="w-full text-left">
                   <thead className="bg-slate-50 font-black uppercase tracking-widest border-b border-slate-100 text-[10px] text-slate-400">
                     <tr>
-                      <th className="p-6">Bien immobilier</th>
+                      <th className="p-6">Bien / Plateforme</th>
                       <th className="p-6">Client / Voyageur</th>
                       <th className="p-6 text-center">Dates séjour</th>
                       <th className="p-6 text-right">Net Perçu</th>
@@ -484,11 +496,19 @@ const App = () => {
                       <tr><td colSpan="5" className="p-20 text-center text-slate-300 font-medium italic text-sm">Aucune réservation ne correspond à vos critères.</td></tr>
                     ) : (
                       planningList.map(t => (
-                        <tr key={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="hover:bg-slate-50/80 cursor-pointer transition-all">
-                          <td className="p-6 text-slate-400 uppercase font-black tracking-tighter">{properties.find(p => p.id === t.propertyId)?.name || '--'}</td>
+                        <tr key={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="hover:bg-slate-50/80 cursor-pointer transition-all group">
+                          <td className="p-6">
+                             <div className="flex flex-col">
+                                <span className="text-slate-400 uppercase font-black tracking-tighter">{properties.find(p => p.id === t.propertyId)?.name || '--'}</span>
+                                <div className="flex items-center gap-1.5 mt-1.5">
+                                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                                   <span className="text-[10px] text-blue-600 font-black uppercase tracking-widest">{t.platform}</span>
+                                </div>
+                             </div>
+                          </td>
                           <td className="p-6 font-black text-slate-900 text-sm">{t.name}</td>
-                          <td className="p-6 text-center text-slate-500 font-medium whitespace-nowrap bg-slate-50/30">{t.startDate} <span className="mx-2 text-slate-300">➔</span> {t.endDate}</td>
-                          <td className="p-6 text-right font-black text-slate-900 text-sm">{t.netAmount.toFixed(2)}€</td>
+                          <td className="p-6 text-center text-slate-500 font-medium whitespace-nowrap bg-slate-50/30 group-hover:bg-blue-50/20 transition-colors">{t.startDate} <span className="mx-2 text-slate-300">➔</span> {t.endDate}</td>
+                          <td className="p-6 text-right font-black text-slate-900 text-sm tabular-nums">{t.netAmount.toFixed(2)}€</td>
                           <td className="p-6 text-center">
                             <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
                               {t.paymentDate ? 'Validé' : 'Attente'}
@@ -643,19 +663,19 @@ const App = () => {
 
                 {/* LOGEMENTS */}
                 <div className="bg-white p-8 rounded-[40px] shadow-2xl shadow-blue-100 flex flex-col h-full border-2 border-blue-100 relative">
-                  <div className="absolute -top-3 -right-3 bg-blue-600 text-white px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest">Actifs</div>
+                  <div className="absolute -top-3 -right-3 bg-blue-600 text-white px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest shadow-lg">Actifs</div>
                   <h3 className="text-[11px] font-black uppercase tracking-widest mb-6 text-blue-600 flex items-center gap-2"><Home size={14}/> Votre Parc</h3>
-                  <div className="space-y-3 mb-8 flex-1 overflow-y-auto max-h-[250px] custom-scrollbar">
+                  <div className="space-y-3 mb-8 flex-1 overflow-y-auto max-h-[250px] custom-scrollbar text-[11px]">
                     {properties.length === 0 ? (
                       <p className="text-[10px] text-slate-400 italic text-center p-4">Aucun bien enregistré.</p>
                     ) : (
                       properties.map(p => (
-                        <div key={p.id} className="flex justify-between items-start bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-2xl hover:shadow-lg hover:shadow-blue-100 transition-all">
+                        <div key={p.id} className="flex justify-between items-start bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-2xl hover:shadow-lg hover:shadow-blue-100 transition-all border border-blue-100/50">
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs font-black text-slate-900 truncate uppercase tracking-tighter">{p.name}</p>
-                            <p className="text-[10px] text-slate-500 truncate mt-0.5">{p.address}</p>
+                            <p className="font-black text-slate-900 truncate uppercase tracking-tighter leading-tight">{p.name}</p>
+                            <p className="text-[10px] text-slate-500 truncate mt-1">{p.address}</p>
                           </div>
-                          <button onClick={async () => { if(window.confirm("Supprimer ce bien ?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', p.id)) }} className="text-slate-300 hover:text-rose-500 p-1"><Trash2 size={16} /></button>
+                          <button onClick={async () => { if(window.confirm("Supprimer ce bien ?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', p.id)) }} className="text-slate-300 hover:text-rose-500 p-1 ml-2"><Trash2 size={16} /></button>
                         </div>
                       ))
                     )}
