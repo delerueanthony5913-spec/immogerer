@@ -157,17 +157,16 @@ const App = () => {
   // --- LECTURE CLOUD ---
   useEffect(() => {
     if (!user) return;
-    const userId = user.uid;
 
-    const unsubProps = onSnapshot(collection(db, 'artifacts', appId, 'users', userId, 'properties'), (snap) => {
+    const unsubProps = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'properties'), (snap) => {
       setProperties(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (error) => console.warn(error));
 
-    const unsubTenants = onSnapshot(collection(db, 'artifacts', appId, 'users', userId, 'tenants'), (snap) => {
+    const unsubTenants = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), (snap) => {
       setTenants(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (error) => console.warn(error));
 
-    const unsubSettings = onSnapshot(doc(db, 'artifacts', appId, 'users', userId, 'settings', 'config'), (snap) => {
+    const unsubSettings = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), (snap) => {
       if (snap.exists()) {
         const d = snap.data();
         if (d.platforms && d.platforms.length > 0) setAvailablePlatforms(d.platforms);
@@ -182,7 +181,7 @@ const App = () => {
   // --- SAUVEGARDE CLOUD ---
   const updateSettings = async (n) => {
     if(!user || user.uid === 'local-test-user') return;
-    await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config'), n, { merge: true });
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), n, { merge: true });
   };
 
   const handleFormChange = (e) => {
@@ -199,9 +198,9 @@ const App = () => {
     const d = { ...formData, grossAmount: g, netAmount: n, resExpenses: formData.resExpenses.map(r => ({ ...r, amount: parseFloat(r.amount) || 0 })) };
     
     if (editingResId) {
-      await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'tenants', editingResId), d);
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', editingResId), d);
     } else {
-      await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'tenants'), d);
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), d);
     }
     setIsModalOpen(false);
   };
@@ -209,7 +208,7 @@ const App = () => {
   const deleteRes = async (id) => {
     if (!user || user.uid === 'local-test-user') return;
     if(window.confirm("Supprimer cette reservation ?")) {
-      await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'tenants', id));
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', id));
       setIsModalOpen(false);
     }
   };
@@ -473,7 +472,7 @@ const App = () => {
                   e.preventDefault(); 
                   const fd = new FormData(e.target); 
                   if(user && user.uid !== 'local-test-user') {
-                    await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'properties'), { name: fd.get('n'), address: fd.get('a'), rent: parseFloat(fd.get('r')) }); 
+                    await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'properties'), { name: fd.get('n'), address: fd.get('a'), rent: parseFloat(fd.get('r')) }); 
                   } else {
                     alert("Configurez vos clés Firebase d'abord !");
                   }
@@ -490,7 +489,7 @@ const App = () => {
                   <div key={p.id} className="bg-white p-6 rounded-3xl border relative group transition-all hover:border-blue-200 shadow-sm">
                     <div className="flex justify-between items-start mb-4">
                       <div><h4 className="font-black text-slate-800">{p.name}</h4><p className="text-[9px] text-slate-400 font-black uppercase flex items-center gap-1 mt-1"><MapPin size={10} /> {p.address}</p></div>
-                      <button onClick={async () => { if(user && user.uid !== 'local-test-user' && window.confirm("Supprimer ce bien ?")) await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'properties', p.id)) }} className="text-slate-200 hover:text-red-500 transition-colors p-1"><Trash2 size={16} /></button>
+                      <button onClick={async () => { if(user && user.uid !== 'local-test-user' && window.confirm("Supprimer ce bien ?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', p.id)) }} className="text-slate-200 hover:text-red-500 transition-colors p-1"><Trash2 size={16} /></button>
                     </div>
                     <div className="bg-blue-50 inline-block px-3 py-1 rounded-xl text-blue-600 font-black text-xs">{p.rent}€ / nuit</div>
                   </div>
