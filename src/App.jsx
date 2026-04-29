@@ -7,7 +7,7 @@ import {
   Menu, X, CalendarCheck, CheckCircle, Clock, PieChart as PieChartIcon,
   ChevronLeft, ChevronRight, BarChart3, List, Wallet, Settings, Calculator,
   UserCheck, PlusCircle, TrendingUp, Info, ChevronUp, ChevronDown, Filter, Loader2,
-  Building2, Globe, CalendarRange
+  Building2, Globe, CalendarRange, MessageSquare
 } from 'lucide-react';
 
 // --- CONFIGURATION FIREBASE EXACTE ---
@@ -115,7 +115,7 @@ const App = () => {
   const getGoogleCalendarUrl = (res, prop) => {
     if (!res.startDate || !res.endDate) return '#';
     const text = encodeURIComponent(`Reservation: ${res.name} - ${prop?.name || ''}`);
-    const details = encodeURIComponent(`Client: ${res.name}\nLogement: ${prop?.name || ''}\nPlateforme: ${res.platform}`);
+    const details = encodeURIComponent(`Client: ${res.name}\nLogement: ${prop?.name || ''}\nPlateforme: ${res.platform}\nNotes: ${res.comment || 'Aucune'}`);
     const dates = `${res.startDate.replace(/-/g, '')}/${res.endDate.replace(/-/g, '')}`;
     return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${details}`;
   };
@@ -144,7 +144,8 @@ const App = () => {
   const [formData, setFormData] = useState({ 
     propertyId: '', name: '', startDate: '', endDate: '', paymentDate: '', 
     platform: 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', 
-    bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [] 
+    bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [],
+    comment: ''
   });
 
   const [inputPlat, setInputPlat] = useState('');
@@ -305,6 +306,19 @@ const App = () => {
   }, [tenants]);
 
   // --- LOGIQUE AGENDA VISUEL ---
+  const handleMonthChange = (direction) => {
+    let m = filterMonth === 'all' ? new Date().getMonth() : parseInt(filterMonth);
+    let y = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
+    
+    if (direction === 'next') {
+      if (m === 11) { m = 0; y += 1; } else { m += 1; }
+    } else {
+      if (m === 0) { m = 11; y -= 1; } else { m -= 1; }
+    }
+    setFilterMonth(m.toString());
+    setFilterYear(y.toString());
+  };
+
   const agendaDays = useMemo(() => {
     const y = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
     const m = filterMonth === 'all' ? new Date().getMonth() : parseInt(filterMonth);
@@ -312,8 +326,6 @@ const App = () => {
     const lastDay = new Date(y, m + 1, 0);
     
     const days = [];
-    // Jours vides au début (pour caler sur le bon jour de la semaine)
-    // getDay() : 0 = Dim, 1 = Lun... on convertit en 0 = Lun, 6 = Dim
     let startOffset = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
     for (let i = 0; i < startOffset; i++) days.push({ empty: true });
     
@@ -323,6 +335,13 @@ const App = () => {
     }
     return days;
   }, [filterYear, filterMonth]);
+
+  const currentMonthName = useMemo(() => {
+    const m = filterMonth === 'all' ? new Date().getMonth() : parseInt(filterMonth);
+    return ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][m];
+  }, [filterMonth]);
+
+  const todayStr = new Date().toISOString().split('T')[0];
 
   if (loading) return (
     <div className="h-screen w-full flex items-center justify-center bg-slate-50 flex-col gap-4">
@@ -430,7 +449,7 @@ const App = () => {
           
           <RenderFilters />
 
-          {/* TAB: RESERVATIONS (Ancien Planning) */}
+          {/* TAB: RESERVATIONS */}
           {activeTab === 'reservations' && (
             <div className="space-y-8 animate-in fade-in">
               <div className="flex flex-wrap items-center justify-between gap-6">
@@ -441,7 +460,7 @@ const App = () => {
                 <button onClick={() => { 
                   if (properties.length === 0) { alert("Créez d'abord un bien dans l'onglet Paramètres"); return; }
                   setEditingResId(null); 
-                  setFormData({ propertyId: properties[0]?.id || '', name: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [] }); 
+                  setFormData({ propertyId: properties[0]?.id || '', name: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '' }); 
                   setIsModalOpen(true); 
                 }} className="bg-blue-600 text-white px-8 py-4 rounded-[24px] font-black text-[11px] uppercase tracking-widest shadow-xl shadow-blue-200 hover:bg-blue-700 hover:-translate-y-1 active:translate-y-0 transition-all flex items-center gap-2">
                   <PlusCircle size={18}/> Nouvelle Réservation
@@ -494,39 +513,60 @@ const App = () => {
           {/* TAB: AGENDA VISUEL */}
           {activeTab === 'agenda' && (
             <div className="space-y-8 animate-in fade-in">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                     <div>
                         <h2 className="text-3xl font-black uppercase tracking-tighter">Agenda Visuel</h2>
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Projection mensuelle de l'occupation</p>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Occupation par logement</p>
+                    </div>
+                    {/* Navigation du mois */}
+                    <div className="flex items-center gap-4 bg-white px-6 py-3 rounded-[24px] shadow-lg shadow-slate-100 border border-slate-50">
+                        <button onClick={() => handleMonthChange('prev')} className="p-2 hover:bg-slate-50 rounded-xl transition-colors text-blue-600"><ChevronLeft size={24}/></button>
+                        <div className="text-center min-w-[140px]">
+                            <span className="block text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] mb-0.5">{filterYear === 'all' ? new Date().getFullYear() : filterYear}</span>
+                            <span className="text-xl font-black text-slate-900 tracking-tight">{currentMonthName}</span>
+                        </div>
+                        <button onClick={() => handleMonthChange('next')} className="p-2 hover:bg-slate-50 rounded-xl transition-colors text-blue-600"><ChevronRight size={24}/></button>
                     </div>
                 </div>
 
-                <div className="bg-white p-6 md:p-8 rounded-[40px] border border-slate-50 shadow-2xl shadow-slate-200/40">
+                {/* Légende des Logements */}
+                <div className="bg-white/50 p-4 rounded-[32px] border border-white flex flex-wrap gap-4 justify-center md:justify-start">
+                    {properties.map((p, idx) => (
+                        <div key={p.id} className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-full shadow-sm border border-slate-50">
+                            <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }}></div>
+                            <span className="text-[10px] font-black uppercase text-slate-600 tracking-tighter">{p.name}</span>
+                        </div>
+                    ))}
+                    {properties.length === 0 && <p className="text-[10px] text-slate-400 italic">Aucun logement enregistré pour la légende.</p>}
+                </div>
+
+                <div className="bg-white p-6 md:p-10 rounded-[48px] border border-slate-50 shadow-2xl shadow-slate-200/40">
                     {/* En-tête des jours */}
-                    <div className="grid grid-cols-7 mb-4 border-b border-slate-100 pb-4">
-                        {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map(d => (
-                            <div key={d} className="text-center text-[10px] font-black uppercase text-slate-300 tracking-widest">{d}</div>
+                    <div className="grid grid-cols-7 mb-6 border-b border-slate-100 pb-6">
+                        {['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'].map(d => (
+                            <div key={d} className="text-center text-[11px] font-black uppercase text-slate-300 tracking-widest">{d}</div>
                         ))}
                     </div>
 
                     {/* Grille du calendrier */}
-                    <div className="grid grid-cols-7 gap-1 md:gap-2">
+                    <div className="grid grid-cols-7 gap-2 md:gap-3">
                         {agendaDays.map((item, idx) => {
-                            if (item.empty) return <div key={`empty-${idx}`} className="h-24 md:h-32 bg-slate-50/30 rounded-2xl"></div>;
+                            if (item.empty) return <div key={`empty-${idx}`} className="h-24 md:h-36 bg-slate-50/20 rounded-3xl"></div>;
 
-                            // Trouver les réservations qui passent par ce jour
+                            const isToday = item.dateStr === todayStr;
                             const dayReservations = reservationsList.filter(res => {
-                                const start = res.startDate;
-                                const end = res.endDate;
-                                return item.dateStr >= start && item.dateStr <= end;
+                                return item.dateStr >= res.startDate && item.dateStr <= res.endDate;
                             });
 
                             return (
-                                <div key={item.dateStr} className="h-24 md:h-32 bg-white border border-slate-100 rounded-2xl p-2 relative group overflow-hidden hover:border-blue-200 transition-colors">
-                                    <span className="text-[10px] font-black text-slate-300 group-hover:text-blue-500 transition-colors">{item.day}</span>
+                                <div key={item.dateStr} className={`h-24 md:h-36 bg-white border ${isToday ? 'border-blue-400 ring-2 ring-blue-50 shadow-blue-100' : 'border-slate-100'} rounded-[24px] p-3 relative group overflow-hidden hover:border-blue-200 transition-all flex flex-col`}>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className={`text-[11px] font-black ${isToday ? 'text-blue-600' : 'text-slate-300'} group-hover:text-blue-400 transition-colors`}>{item.day}</span>
+                                        {isToday && <div className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-ping"></div>}
+                                    </div>
                                     
-                                    <div className="mt-1 space-y-1 overflow-y-auto max-h-full no-scrollbar pb-4">
-                                        {dayReservations.map((res, i) => {
+                                    <div className="flex-1 space-y-1.5 overflow-y-auto no-scrollbar pb-2">
+                                        {dayReservations.map((res) => {
                                             const propIdx = properties.findIndex(p => p.id === res.propertyId);
                                             const color = CHART_COLORS[propIdx % CHART_COLORS.length];
                                             const isStart = res.startDate === item.dateStr;
@@ -534,11 +574,10 @@ const App = () => {
                                                 <div 
                                                     key={res.id} 
                                                     onClick={(e) => { e.stopPropagation(); setEditingResId(res.id); setFormData(res); setIsModalOpen(true); }}
-                                                    className={`h-4 md:h-5 rounded-md text-[8px] md:text-[9px] font-black text-white px-1.5 flex items-center truncate cursor-pointer hover:brightness-110 shadow-sm transition-all ${isStart ? 'ring-2 ring-white ring-inset' : ''}`}
+                                                    className={`h-4 md:h-5 rounded-lg text-[8px] md:text-[9px] font-black text-white px-2 flex items-center truncate cursor-pointer hover:scale-105 active:scale-95 transition-all shadow-sm ${isStart ? 'ring-2 ring-white/50' : ''}`}
                                                     style={{ backgroundColor: color }}
-                                                    title={`${res.name} - ${properties.find(p => p.id === res.propertyId)?.name}`}
                                                 >
-                                                    {isStart && <span className="mr-1">●</span>}
+                                                    {isStart && <span className="mr-1 opacity-60">●</span>}
                                                     {res.name.split(' ')[0]}
                                                 </div>
                                             );
@@ -663,7 +702,7 @@ const App = () => {
                       </thead>
                       <tbody className="divide-y divide-slate-50 font-bold text-slate-600">
                          {providerRecap.length === 0 ? (
-                           <tr><td colSpan="3" className="p-20 text-center text-slate-300 font-medium italic">Aucune dépense prestataire enregistrée.</td></tr>
+                           <tr><td colSpan="3" className="p-20 text-center text-slate-300 font-medium italic text-sm">Aucune dépense prestataire enregistrée.</td></tr>
                          ) : (
                            providerRecap.map((item, idx) => (
                              <tr key={idx} className="hover:bg-slate-50 transition-all">
@@ -691,7 +730,6 @@ const App = () => {
             <div className="space-y-10 animate-in fade-in">
               <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">Configuration Système</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-                
                 {/* Plateformes */}
                 <div className="bg-white p-8 rounded-[40px] border border-slate-50 shadow-xl shadow-slate-200/40 flex flex-col h-full">
                   <h3 className="text-[11px] font-black uppercase tracking-widest mb-6 text-slate-400">Canaux de vente</h3>
@@ -708,7 +746,6 @@ const App = () => {
                     <button type="submit" className="bg-slate-900 text-white p-3 rounded-[18px] hover:scale-105 active:scale-95 transition-all shadow-lg"><Plus size={18} /></button>
                   </form>
                 </div>
-                
                 {/* Prestataires */}
                 <div className="bg-white p-8 rounded-[40px] border border-slate-50 shadow-xl shadow-slate-200/40 flex flex-col h-full">
                   <h3 className="text-[11px] font-black uppercase tracking-widest mb-6 text-slate-400">Prestataires</h3>
@@ -725,8 +762,7 @@ const App = () => {
                     <button type="submit" className="bg-slate-900 text-white p-3 rounded-[18px] hover:scale-105 active:scale-95 transition-all shadow-lg"><Plus size={18} /></button>
                   </form>
                 </div>
-
-                {/* Types Services */}
+                {/* Prestations types */}
                 <div className="bg-white p-8 rounded-[40px] border border-slate-50 shadow-xl shadow-slate-200/40 flex flex-col h-full">
                   <h3 className="text-[11px] font-black uppercase tracking-widest mb-6 text-slate-400">Prestations types</h3>
                   <div className="space-y-2 mb-8 flex-1 overflow-y-auto max-h-[250px] custom-scrollbar">
@@ -742,8 +778,7 @@ const App = () => {
                     <button type="submit" className="bg-slate-900 text-white p-3 rounded-[18px] hover:scale-105 active:scale-95 transition-all shadow-lg"><Plus size={18} /></button>
                   </form>
                 </div>
-
-                {/* LOGEMENTS */}
+                {/* Logements */}
                 <div className="bg-white p-8 rounded-[40px] shadow-2xl shadow-blue-100 flex flex-col h-full border-2 border-blue-100 relative">
                   <div className="absolute -top-3 -right-3 bg-blue-600 text-white px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest shadow-lg">Actifs</div>
                   <h3 className="text-[11px] font-black uppercase tracking-widest mb-6 text-blue-600 flex items-center gap-2"><Home size={14}/> Votre Parc</h3>
@@ -765,10 +800,7 @@ const App = () => {
                   <form onSubmit={async (e) => { 
                     e.preventDefault(); 
                     if(user && user.uid !== 'local-test-user' && inputProp.name.trim()) {
-                      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'properties'), { 
-                        name: inputProp.name.trim(), 
-                        address: inputProp.address.trim() 
-                      }); 
+                      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'properties'), { name: inputProp.name.trim(), address: inputProp.address.trim() }); 
                       setInputProp({ name: '', address: '' });
                     }
                   }} className="space-y-2 pt-4 border-t border-blue-50">
@@ -820,6 +852,15 @@ const App = () => {
                   <label className="text-[10px] font-black uppercase ml-3 text-slate-400 tracking-widest">Date de Départ</label>
                   <input type="date" required value={formData.endDate} onChange={e => setFormData({ ...formData, endDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black shadow-inner outline-none" />
                 </div>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-[10px] font-black uppercase ml-3 text-slate-400 tracking-widest flex items-center gap-2"><MessageSquare size={12}/> Commentaire / Notes Voyageur</label>
+                  <textarea 
+                    placeholder="Notez ici les particularités (ex: lit bébé, arrivée tardive...)" 
+                    value={formData.comment} 
+                    onChange={e => setFormData({ ...formData, comment: e.target.value })} 
+                    className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-bold shadow-inner outline-none focus:border-blue-300 min-h-[100px] resize-none"
+                  />
+                </div>
               </div>
 
               <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-10 rounded-[48px] border border-blue-50 space-y-8 shadow-inner">
@@ -870,7 +911,6 @@ const App = () => {
                       <button type="button" onClick={() => setFormData({ ...formData, resExpenses: formData.resExpenses.filter(x => x.id !== exp.id) })} className="text-slate-300 hover:text-rose-500 transition-colors group-hover:scale-110"><Trash2 size={20} /></button>
                     </div>
                   ))}
-                  {formData.resExpenses.length === 0 && <p className="text-center text-slate-300 py-4 italic font-medium">Aucun service associé.</p>}
                 </div>
               </div>
 
