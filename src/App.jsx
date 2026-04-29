@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc, addDoc, query } from 'firebase/firestore';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc, addDoc } from 'firebase/firestore';
 import { 
   Home, Euro, LayoutDashboard, Plus, Trash2, MapPin, Calendar as CalendarIcon,
   Menu, X, CalendarCheck, CheckCircle, Clock, PieChart as PieChartIcon,
@@ -9,38 +9,21 @@ import {
   UserCheck, PlusCircle, TrendingUp, Info, ChevronUp, ChevronDown, Filter, Loader2
 } from 'lucide-react';
 
-// --- CONFIGURATION FIREBASE SÉCURISÉE (ANTI PAGE-BLANCHE VERCEL) ---
-let firebaseConfig;
-if (typeof __firebase_config !== 'undefined') {
-  firebaseConfig = JSON.parse(__firebase_config);
-} else {
-  // 👇 REMPLACE CES CLÉS PAR CELLES DE TON PROJET FIREBASE PLUS TARD 👇
+// --- CONFIGURATION FIREBASE ---
 const firebaseConfig = {
-
-  apiKey: "AIzaSyDJYT5L0A9f1YdRGEcvdk4iyoKgcfrBGWw",
-
+  apiKey: "AIzaSyDJYT5L0A9f1YdRgEcvdk4iyoKgcfrBGWw",
   authDomain: "immogerer-7f706.firebaseapp.com",
-
   projectId: "immogerer-7f706",
-
   storageBucket: "immogerer-7f706.firebasestorage.app",
-
   messagingSenderId: "703084929054",
-
   appId: "1:703084929054:web:313fae5f706e4dba4fce0f",
-
   measurementId: "G-QQE1Q309TB"
-
 };
-
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-
-// CORRECTION MAJEURE: On remplace les caractères spéciaux et les slashs dans l'appId
-// pour éviter que Firebase ne les confonde avec des sous-dossiers (Erreur : Invalid collection reference)
-const appId = typeof __app_id !== 'undefined' ? String(__app_id).replace(/[^a-zA-Z0-9_-]/g, '_') : 'immogerer-prod-final';
+const appId = 'immogerer-prod-final';
 
 // --- COMPOSANT GRAPHIQUE ---
 const DonutChart = ({ data, title }) => {
@@ -48,12 +31,14 @@ const DonutChart = ({ data, title }) => {
   const visibleData = data.filter(d => d.value > 0);
   const displayTotal = visibleData.reduce((acc, curr) => acc + curr.value, 0);
 
-  if (!displayTotal) return (
-    <div className="bg-white p-6 rounded-[32px] border border-gray-100 flex flex-col items-center justify-center min-h-[250px]">
-      <PieChartIcon size={24} className="text-gray-200 mb-2" />
-      <p className="text-gray-400 font-black text-[10px] uppercase tracking-widest text-center">{title}</p>
-    </div>
-  );
+  if (!displayTotal) {
+    return (
+      <div className="bg-white p-6 rounded-[32px] border border-gray-100 flex flex-col items-center justify-center min-h-[250px]">
+        <PieChartIcon size={24} className="text-gray-200 mb-2" />
+        <p className="text-gray-400 font-black text-[10px] uppercase tracking-widest text-center">{title}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white p-8 rounded-[40px] border border-gray-100 flex flex-col md:flex-row items-center gap-8 animate-in fade-in">
@@ -90,7 +75,8 @@ const DonutChart = ({ data, title }) => {
   );
 };
 
-export default function App() {
+// --- COMPOSANT PRINCIPAL ---
+const App = () => {
   // --- HELPERS ---
   const parseLocalDate = (d) => d ? new Date(parseInt(d.split('-')[0]), parseInt(d.split('-')[1]) - 1, parseInt(d.split('-')[2])) : new Date();
   
@@ -104,13 +90,13 @@ export default function App() {
 
   const getGoogleCalendarUrl = (res, prop) => {
     if (!res.startDate || !res.endDate) return '#';
-    const text = encodeURIComponent(`Réservation: ${res.name} - ${prop?.name || ''}`);
+    const text = encodeURIComponent(`Reservation: ${res.name} - ${prop?.name || ''}`);
     const details = encodeURIComponent(`Client: ${res.name}\nLogement: ${prop?.name || ''}\nPlateforme: ${res.platform}`);
     const dates = `${res.startDate.replace(/-/g, '')}/${res.endDate.replace(/-/g, '')}`;
     return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${details}`;
   };
 
-  // --- ÉTATS ---
+  // --- ETATS ---
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('planning');
@@ -142,23 +128,19 @@ export default function App() {
   const [inputProv, setInputProv] = useState('');
   const [inputSvc, setInputSvc] = useState('');
 
-  // --- AUTHENTIFICATION SÉCURISÉE ---
+  // --- AUTHENTIFICATION ---
   useEffect(() => {
     const initAuth = async () => {
       try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
+        await signInAnonymously(auth);
       } catch(e) {
-        console.error("Auth error", e);
-        // Si l'erreur arrive (ex: mauvaises clés), on permet quand même l'accès pour ne pas bloquer l'écran
+        console.error("Erreur Auth", e);
         setUser({uid: 'local-test-user'});
         setLoading(false);
       }
     };
     initAuth();
+    
     const unsub = onAuthStateChanged(auth, (u) => {
       if (u) {
         setUser(u);
@@ -168,7 +150,7 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // --- LECTURE CLOUD FIREBASE ---
+  // --- LECTURE CLOUD ---
   useEffect(() => {
     if (!user) return;
     const userId = user.uid;
@@ -193,9 +175,9 @@ export default function App() {
     return () => { unsubProps(); unsubTenants(); unsubSettings(); };
   }, [user]);
 
-  // --- SAUVEGARDE CLOUD FIREBASE ---
+  // --- SAUVEGARDE CLOUD ---
   const updateSettings = async (n) => {
-    if(!user) return;
+    if(!user || user.uid === 'local-test-user') return;
     await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'config'), n, { merge: true });
   };
 
@@ -221,8 +203,8 @@ export default function App() {
   };
 
   const deleteRes = async (id) => {
-    if (!user) return;
-    if(window.confirm("Supprimer cette réservation ?")) {
+    if (!user || user.uid === 'local-test-user') return;
+    if(window.confirm("Supprimer cette reservation ?")) {
       await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'tenants', id));
       setIsModalOpen(false);
     }
@@ -486,8 +468,10 @@ export default function App() {
                 <form onSubmit={async (e) => { 
                   e.preventDefault(); 
                   const fd = new FormData(e.target); 
-                  if(user) {
+                  if(user && user.uid !== 'local-test-user') {
                     await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'properties'), { name: fd.get('n'), address: fd.get('a'), rent: parseFloat(fd.get('r')) }); 
+                  } else {
+                    alert("Configurez vos clés Firebase d'abord !");
                   }
                   setIsPropertyFormOpen(false); 
                 }} className="bg-white p-8 rounded-[32px] border-2 border-blue-50 grid grid-cols-1 md:grid-cols-3 gap-6 animate-in slide-in-from-top-4 shadow-xl">
@@ -502,7 +486,7 @@ export default function App() {
                   <div key={p.id} className="bg-white p-6 rounded-3xl border relative group transition-all hover:border-blue-200 shadow-sm">
                     <div className="flex justify-between items-start mb-4">
                       <div><h4 className="font-black text-slate-800">{p.name}</h4><p className="text-[9px] text-slate-400 font-black uppercase flex items-center gap-1 mt-1"><MapPin size={10} /> {p.address}</p></div>
-                      <button onClick={async () => { if(user && window.confirm("Supprimer ce bien ?")) await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'properties', p.id)) }} className="text-slate-200 hover:text-red-500 transition-colors p-1"><Trash2 size={16} /></button>
+                      <button onClick={async () => { if(user && user.uid !== 'local-test-user' && window.confirm("Supprimer ce bien ?")) await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'properties', p.id)) }} className="text-slate-200 hover:text-red-500 transition-colors p-1"><Trash2 size={16} /></button>
                     </div>
                     <div className="bg-blue-50 inline-block px-3 py-1 rounded-xl text-blue-600 font-black text-xs">{p.rent}€ / nuit</div>
                   </div>
@@ -580,31 +564,4 @@ export default function App() {
                       <select value={exp.person} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, person: e.target.value } : x) })} className="flex-1 p-2 border rounded-xl text-[10px] font-bold">{availableProviders.map(p => <option key={p} value={p}>{p}</option>)}</select>
                       <select value={exp.type} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, type: e.target.value } : x) })} className="flex-1 p-2 border rounded-xl text-[10px] font-bold">{availableServiceTypes.map(p => <option key={p} value={p}>{p}</option>)}</select>
                       <input type="number" value={exp.amount} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, amount: e.target.value } : x) })} className="w-20 p-2 border rounded-xl font-black text-right text-xs" />
-                      <button type="button" onClick={() => setFormData({ ...formData, resExpenses: formData.resExpenses.filter(x => x.id !== exp.id) })} className="text-red-300"><Trash2 size={18} /></button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className={`p-8 rounded-[40px] border-2 flex items-center justify-between transition-all ${formData.paymentDate ? 'bg-emerald-50 border-emerald-100' : 'bg-orange-50 border-orange-100 shadow-inner'}`}>
-                <h4 className="text-xs font-black uppercase">Paiement reçu (Banque)</h4>
-                <input type="date" value={formData.paymentDate} onChange={e => setFormData({ ...formData, paymentDate: e.target.value })} className="p-3 border rounded-2xl font-black bg-white shadow-lg outline-none" />
-              </div>
-              {editingResId && (
-                <div className="flex pt-4">
-                   <a href={getGoogleCalendarUrl(formData, properties.find(p => p.id === formData.propertyId))} target="_blank" rel="noreferrer" className="flex-1 bg-blue-50 text-blue-700 p-5 rounded-[24px] font-black text-[10px] uppercase tracking-[2px] flex items-center justify-center gap-2 hover:bg-blue-600 hover:text-white transition-all shadow-xl shadow-blue-100 border-2 border-white"><CalendarIcon size={18}/> Synchroniser Google Agenda</a>
-                </div>
-              )}
-              <div className="flex justify-between items-center pt-8 border-t">
-                <div><p className="text-[10px] font-black uppercase tracking-widest text-slate-400 leading-none mb-1">Estimation Profit Net</p><p className="text-3xl font-black text-blue-600 tracking-tighter leading-none">{(nModale - curChargesModale - (formData.isUrssaf ? ((formData.platform === 'Booking' || formData.platform === 'Abritel' ? (parseFloat(formData.displayedAmount) - (parseFloat(formData.cityTax) || 0)) : parseFloat(formData.grossAmount) || 0) * 0.077) : 0)).toFixed(2)}€</p></div>
-                <div className="flex gap-4">
-                  {editingResId && <button type="button" onClick={() => deleteRes(editingResId)} className="px-6 py-4 text-red-500 font-bold text-[10px] uppercase hover:bg-red-50 rounded-2xl">Supprimer</button>}
-                  <button type="submit" className="bg-blue-600 text-white px-10 py-4 rounded-[24px] font-black shadow-xl hover:bg-blue-700 uppercase tracking-widest text-[10px] active:scale-95 transition-all">Enregistrer</button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+                      <button type="button"
