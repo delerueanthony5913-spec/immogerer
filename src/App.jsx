@@ -504,17 +504,26 @@ const App = () => {
               <div className="bg-white p-8 rounded-[32px] border shadow-sm">
                 <h3 className="text-[11px] font-black uppercase tracking-widest mb-6 text-slate-400">Plateformes</h3>
                 <div className="space-y-1.5 mb-6">{availablePlatforms.map(p => (<div key={p} className="flex justify-between items-center text-xs font-bold bg-slate-50 p-3 rounded-xl hover:bg-slate-100">{p}<button onClick={() => { const n = availablePlatforms.filter(x => x !== p); setAvailablePlatforms(n); updateSettings({ platforms: n }); }} className="text-slate-300 hover:text-red-500"><X size={14} /></button></div>))}</div>
-                <div className="flex gap-2"><input value={inputPlat} onChange={e => setInputPlat(e.target.value)} className="flex-1 p-3 bg-slate-50 border rounded-xl font-bold text-xs outline-none" placeholder="Ajouter..." /><button onClick={() => { if (inputPlat.trim()) { const n = [...availablePlatforms, inputPlat.trim()]; setAvailablePlatforms(n); updateSettings({ platforms: n }); setInputPlat(''); } }} className="bg-slate-900 text-white p-3 rounded-xl transition-all hover:scale-110 active:scale-95 shadow-md"><Plus size={18} /></button></div>
+                <form onSubmit={(e) => { e.preventDefault(); if (inputPlat.trim()) { const n = [...availablePlatforms, inputPlat.trim()]; setAvailablePlatforms(n); updateSettings({ platforms: n }); setInputPlat(''); } }} className="flex gap-2">
+                  <input value={inputPlat} onChange={e => setInputPlat(e.target.value)} className="flex-1 p-3 bg-slate-50 border rounded-xl font-bold text-xs outline-none" placeholder="Ajouter..." />
+                  <button type="submit" className="bg-slate-900 text-white p-3 rounded-xl transition-all hover:scale-110 active:scale-95 shadow-md"><Plus size={18} /></button>
+                </form>
               </div>
               <div className="bg-white p-8 rounded-[32px] border shadow-sm">
                 <h3 className="text-[11px] font-black uppercase tracking-widest mb-6 text-slate-400">Prestataires</h3>
                 <div className="space-y-1.5 mb-6">{availableProviders.map(p => (<div key={p} className="flex justify-between items-center text-xs font-bold bg-slate-50 p-3 rounded-xl hover:bg-slate-100">{p}<button onClick={() => { const n = availableProviders.filter(x => x !== p); setAvailableProviders(n); updateSettings({ providers: n }); }} className="text-slate-300 hover:text-red-500"><X size={14} /></button></div>))}</div>
-                <div className="flex gap-2"><input value={inputProv} onChange={e => setInputProv(e.target.value)} className="flex-1 p-3 bg-slate-50 border rounded-xl font-bold text-xs outline-none" placeholder="Prénom..." /><button onClick={() => { if (inputProv.trim()) { const n = [...availableProviders, inputProv.trim()]; setAvailableProviders(n); updateSettings({ providers: n }); setInputProv(''); } }} className="bg-slate-900 text-white p-3 rounded-xl transition-all hover:scale-110 active:scale-95 shadow-md"><Plus size={18} /></button></div>
+                <form onSubmit={(e) => { e.preventDefault(); if (inputProv.trim()) { const n = [...availableProviders, inputProv.trim()]; setAvailableProviders(n); updateSettings({ providers: n }); setInputProv(''); } }} className="flex gap-2">
+                  <input value={inputProv} onChange={e => setInputProv(e.target.value)} className="flex-1 p-3 bg-slate-50 border rounded-xl font-bold text-xs outline-none" placeholder="Prénom..." />
+                  <button type="submit" className="bg-slate-900 text-white p-3 rounded-xl transition-all hover:scale-110 active:scale-95 shadow-md"><Plus size={18} /></button>
+                </form>
               </div>
               <div className="bg-white p-8 rounded-[32px] border shadow-sm">
                 <h3 className="text-[11px] font-black uppercase tracking-widest mb-6 text-slate-400">Services</h3>
                 <div className="space-y-1.5 mb-6">{availableServiceTypes.map(p => (<div key={p} className="flex justify-between items-center text-xs font-bold bg-slate-50 p-3 rounded-xl hover:bg-slate-100">{p}<button onClick={() => { const n = availableServiceTypes.filter(x => x !== p); setAvailableServiceTypes(n); updateSettings({ services: n }); }} className="text-slate-300 hover:text-red-500"><X size={14} /></button></div>))}</div>
-                <div className="flex gap-2"><input value={inputSvc} onChange={e => setInputSvc(e.target.value)} className="flex-1 p-3 bg-slate-50 border rounded-xl font-bold text-xs outline-none" placeholder="Service..." /><button onClick={() => { if (inputSvc.trim()) { const n = [...availableServiceTypes, inputSvc.trim()]; setAvailableServiceTypes(n); updateSettings({ services: n }); setInputSvc(''); } }} className="bg-slate-900 text-white p-3 rounded-xl transition-all hover:scale-110 active:scale-95 shadow-md"><Plus size={18} /></button></div>
+                <form onSubmit={(e) => { e.preventDefault(); if (inputSvc.trim()) { const n = [...availableServiceTypes, inputSvc.trim()]; setAvailableServiceTypes(n); updateSettings({ services: n }); setInputSvc(''); } }} className="flex gap-2">
+                  <input value={inputSvc} onChange={e => setInputSvc(e.target.value)} className="flex-1 p-3 bg-slate-50 border rounded-xl font-bold text-xs outline-none" placeholder="Service..." />
+                  <button type="submit" className="bg-slate-900 text-white p-3 rounded-xl transition-all hover:scale-110 active:scale-95 shadow-md"><Plus size={18} /></button>
+                </form>
               </div>
             </div>
           )}
