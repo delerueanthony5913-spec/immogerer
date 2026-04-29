@@ -78,8 +78,6 @@ const DonutChart = ({ data, title }) => {
 // --- COMPOSANT PRINCIPAL ---
 const App = () => {
   // --- HELPERS ---
-  const parseLocalDate = (d) => d ? new Date(parseInt(d.split('-')[0]), parseInt(d.split('-')[1]) - 1, parseInt(d.split('-')[2])) : new Date();
-  
   const formatMonthYear = (m) => {
     if (!m) return "";
     const [year, month] = m.split('-');
@@ -101,7 +99,6 @@ const App = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('planning');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [planningViewMode, setPlanningViewMode] = useState('list');
   
   const [properties, setProperties] = useState([]);
   const [tenants, setTenants] = useState([]);
@@ -109,16 +106,13 @@ const App = () => {
   const [availableProviders, setAvailableProviders] = useState(['Justine', 'Marc', 'Stéphanie']);
   const [availableServiceTypes, setAvailableServiceTypes] = useState(['Ménage', 'Entrée/Sortie', 'Piscine', 'Divers']);
 
-  const [sortConfig, setSortConfig] = useState({ key: 'startDate', direction: 'desc' });
-  const [propertyFilter, setPropertyFilter] = useState('all');
-  const [monthFilter, setMonthFilter] = useState('all');
-  const [yearFilter, setYearFilter] = useState('all');
-
-  // Filtres Finance
-  const [finFilterMonth, setFinFilterMonth] = useState('all');
-  const [finFilterYear, setFinFilterYear] = useState('all');
-  const [finFilterProp, setFinFilterProp] = useState('all');
-  const [finFilterPlat, setFinFilterPlat] = useState('all');
+  // --- FILTRES UNIFIÉS ---
+  const [filterYear, setFilterYear] = useState('all');
+  const [filterMonth, setFilterMonth] = useState('all');
+  const [filterProp, setFilterProp] = useState('all');
+  const [filterPlat, setFilterPlat] = useState('all');
+  // Filtre supplémentaire pour le planning
+  const [filterStatus, setFilterStatus] = useState('all');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingResId, setEditingResId] = useState(null);
@@ -183,15 +177,10 @@ const App = () => {
     return () => { unsubProps(); unsubTenants(); unsubSettings(); };
   }, [user]);
 
-  // --- SAUVEGARDE CLOUD ---
+  // --- ACTIONS ---
   const updateSettings = async (n) => {
     if(!user || user.uid === 'local-test-user') return;
     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), n, { merge: true });
-  };
-
-  const handleFormChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
   const saveRes = async (e) => {
@@ -218,31 +207,36 @@ const App = () => {
     }
   };
 
+  // --- LOGIQUE DE FILTRAGE UNIFIÉE ---
+  const filteredData = useMemo(() => {
+    return tenants.filter(t => {
+      const dateRef = t.paymentDate ? new Date(t.paymentDate) : new Date(t.startDate);
+      const matchYear = filterYear === 'all' || dateRef.getFullYear() === parseInt(filterYear);
+      const matchMonth = filterMonth === 'all' || dateRef.getMonth() === parseInt(filterMonth);
+      const matchProp = filterProp === 'all' || t.propertyId === filterProp;
+      const matchPlat = filterPlat === 'all' || t.platform === filterPlat;
+      return matchYear && matchMonth && matchProp && matchPlat;
+    });
+  }, [tenants, filterYear, filterMonth, filterProp, filterPlat]);
+
   // --- CALCULS LOGIQUES ---
   const financials = useMemo(() => {
-    const paid = tenants.filter(t => !!t.paymentDate);
+    const paid = filteredData.filter(t => !!t.paymentDate);
+    const upcoming = filteredData.filter(t => !t.paymentDate);
+    
     const netB = paid.reduce((a, t) => a + (t.netAmount || 0), 0);
     const taxes = paid.filter(t => t.isUrssaf).reduce((a, t) => a + (t.grossAmount || 0), 0) * 0.077;
     const exp = paid.reduce((a, t) => a + (t.resExpenses?.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0) || 0), 0);
-    return { count: properties.length, netB, taxes, exp, profit: netB - exp - taxes };
-  }, [tenants, properties]);
+    
+    const netUpcoming = upcoming.reduce((a, t) => a + (t.netAmount || 0), 0);
 
-  const filteredFinanceTenants = useMemo(() => {
-    return tenants.filter(t => {
-      if (!t.paymentDate) return false;
-      const date = new Date(t.paymentDate);
-      const matchMonth = finFilterMonth === 'all' || date.getMonth() === parseInt(finFilterMonth);
-      const matchYear = finFilterYear === 'all' || date.getFullYear() === parseInt(finFilterYear);
-      const matchProp = finFilterProp === 'all' || t.propertyId === finFilterProp;
-      const matchPlat = finFilterPlat === 'all' || t.platform === finFilterPlat;
-      return matchMonth && matchYear && matchProp && matchPlat;
-    });
-  }, [tenants, finFilterMonth, finFilterYear, finFilterProp, finFilterPlat]);
+    return { netB, taxes, exp, profit: netB - exp - taxes, netUpcoming };
+  }, [filteredData]);
 
   const monthlyRecapData = useMemo(() => {
     const stats = {};
     const initMonth = (m) => { if (!stats[m]) stats[m] = { totalBank: 0, urssafGross: 0, directNet: 0, charges: 0, taxes: 0 }; };
-    filteredFinanceTenants.forEach(t => {
+    filteredData.filter(t => !!t.paymentDate).forEach(t => {
       const m = t.paymentDate.substring(0, 7);
       initMonth(m);
       stats[m].totalBank += t.netAmount;
@@ -255,11 +249,11 @@ const App = () => {
       stats[m].charges += (t.resExpenses?.reduce((acc, c) => acc + (parseFloat(c.amount) || 0), 0) || 0);
     });
     return Object.entries(stats).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [filteredFinanceTenants]);
+  }, [filteredData]);
 
   const providerRecap = useMemo(() => {
     const recap = {};
-    filteredFinanceTenants.forEach(t => {
+    filteredData.filter(t => !!t.paymentDate).forEach(t => {
       const month = t.paymentDate.substring(0, 7);
       t.resExpenses?.forEach(exp => {
         const key = `${month}_${exp.person}`;
@@ -268,33 +262,16 @@ const App = () => {
       });
     });
     return Object.values(recap).sort((a,b) => b.month.localeCompare(a.month));
-  }, [filteredFinanceTenants]);
+  }, [filteredData]);
 
-  const sortedList = useMemo(() => {
-    let f = tenants.filter(t => {
-      const d = new Date(t.startDate);
-      const matchProp = propertyFilter === 'all' || t.propertyId === propertyFilter;
-      const matchMonth = monthFilter === 'all' || d.getMonth() === parseInt(monthFilter);
-      const matchYear = yearFilter === 'all' || d.getFullYear() === parseInt(yearFilter);
-      return matchProp && matchMonth && matchYear;
-    });
-    if (sortConfig.key) {
-      f.sort((a, b) => {
-        let av, bv;
-        if (sortConfig.key === 'property') {
-          av = properties.find(p => p.id === a.propertyId)?.name || '';
-          bv = properties.find(p => p.id === b.propertyId)?.name || '';
-        } else if (sortConfig.key === 'status') {
-          av = !!a.paymentDate; bv = !!b.paymentDate;
-        } else {
-          av = a[sortConfig.key] || '';
-          bv = b[sortConfig.key] || '';
-        }
-        return sortConfig.direction === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
-      });
-    }
-    return f;
-  }, [tenants, sortConfig, propertyFilter, monthFilter, yearFilter, properties]);
+  const planningList = useMemo(() => {
+    return filteredData.filter(t => {
+      if (filterStatus === 'all') return true;
+      if (filterStatus === 'paid') return !!t.paymentDate;
+      if (filterStatus === 'pending') return !t.paymentDate;
+      return true;
+    }).sort((a, b) => b.startDate.localeCompare(a.startDate));
+  }, [filteredData, filterStatus]);
 
   const yearsAvailable = useMemo(() => {
     const years = tenants.map(t => new Date(t.startDate).getFullYear());
@@ -305,7 +282,7 @@ const App = () => {
   if (loading) return (
     <div className="h-screen w-full flex items-center justify-center bg-slate-50 flex-col gap-4">
       <Loader2 className="animate-spin text-blue-600" size={48} />
-      <p className="text-blue-600 font-bold uppercase tracking-widest text-xs">Connexion au Cloud...</p>
+      <p className="text-blue-600 font-bold uppercase tracking-widest text-xs">Chargement ImmoGérer...</p>
     </div>
   );
 
@@ -319,6 +296,35 @@ const App = () => {
     gModale = parseFloat(formData.grossAmount) || 0;
     nModale = gModale - (parseFloat(formData.platformFees) || 0);
   }
+
+  // --- FILTRES RÉUTILISABLES ---
+  const RenderFilters = () => (
+    <div className="flex flex-wrap items-center gap-2 bg-white/50 p-2 rounded-2xl border border-slate-100 mb-6">
+      <select value={filterYear} onChange={e => setFilterYear(e.target.value)} className="text-[10px] font-black border rounded-xl p-2 uppercase bg-white cursor-pointer outline-none">
+        <option value="all">Années</option>
+        {yearsAvailable.map(y => <option key={y} value={y}>{y}</option>)}
+      </select>
+      <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="text-[10px] font-black border rounded-xl p-2 uppercase bg-white cursor-pointer outline-none">
+        <option value="all">Mois</option>
+        {['Janv','Févr','Mars','Avril','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'].map((m,i)=><option key={i} value={i}>{m}</option>)}
+      </select>
+      <select value={filterProp} onChange={e => setFilterProp(e.target.value)} className="text-[10px] font-black border rounded-xl p-2 uppercase bg-white cursor-pointer outline-none max-w-[120px]">
+        <option value="all">Logements</option>
+        {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+      <select value={filterPlat} onChange={e => setFilterPlat(e.target.value)} className="text-[10px] font-black border rounded-xl p-2 uppercase bg-white cursor-pointer outline-none">
+        <option value="all">Plateformes</option>
+        {availablePlatforms.map(p => <option key={p} value={p}>{p}</option>)}
+      </select>
+      {activeTab === 'planning' && (
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="text-[10px] font-black border rounded-xl p-2 uppercase bg-blue-50 text-blue-600 cursor-pointer outline-none border-blue-100">
+          <option value="all">Tous les statuts</option>
+          <option value="paid">Payé</option>
+          <option value="pending">En attente</option>
+        </select>
+      )}
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans text-slate-900 overflow-hidden">
@@ -355,6 +361,8 @@ const App = () => {
       <main className="flex-1 p-6 md:p-10 overflow-y-auto h-screen custom-scrollbar">
         <div className="max-w-6xl mx-auto pb-24">
           
+          <RenderFilters />
+
           {/* TAB: DASHBOARD */}
           {activeTab === 'dashboard' && (
             <div className="space-y-8 animate-in fade-in duration-500">
@@ -362,6 +370,7 @@ const App = () => {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="bg-white p-6 rounded-3xl border shadow-sm"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Encaissé (Banque)</p><p className="text-2xl font-black text-indigo-600">{financials.netB.toLocaleString('fr-FR')}€</p></div>
                 <div className="bg-white p-6 rounded-3xl border shadow-sm"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Bénéfice Réel</p><p className="text-2xl font-black text-emerald-600">{Math.round(financials.profit).toLocaleString('fr-FR')}€</p></div>
+                <div className="bg-white p-6 rounded-3xl border shadow-sm"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Recettes à venir</p><p className="text-2xl font-black text-blue-500">{Math.round(financials.netUpcoming).toLocaleString('fr-FR')}€</p></div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <DonutChart title="Net par Logement" data={properties.map(p => ({ label: p.name, value: tenants.filter(t => t.propertyId === p.id && !!t.paymentDate).reduce((acc, t) => acc + (t.netAmount - (t.resExpenses?.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0) || 0) - (t.isUrssaf ? t.grossAmount * 0.077 : 0)), 0), color: '#3B82F6' }))} />
@@ -374,20 +383,7 @@ const App = () => {
           {activeTab === 'planning' && (
             <div className="space-y-6 animate-in fade-in">
               <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <h2 className="text-xl font-black uppercase">Planning</h2>
-                  <div className="flex flex-wrap gap-2">
-                    <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm">
-                      <Filter size={14} className="text-slate-400" />
-                      <select value={propertyFilter} onChange={e => setPropertyFilter(e.target.value)} className="text-[10px] font-black uppercase outline-none bg-transparent cursor-pointer">
-                        <option value="all">Logements</option>
-                        {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                      </select>
-                    </div>
-                    <select value={monthFilter} onChange={e => setMonthFilter(e.target.value)} className="text-[10px] font-black border rounded-xl p-2 uppercase bg-white cursor-pointer"><option value="all">Mois</option>{['Janv','Févr','Mars','Avril','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'].map((m,i)=><option key={i} value={i}>{m}</option>)}</select>
-                    <select value={yearFilter} onChange={e => setYearFilter(e.target.value)} className="text-[10px] font-black border rounded-xl p-2 uppercase bg-white cursor-pointer"><option value="all">Années</option>{yearsAvailable.map(y=><option key={y} value={y}>{y}</option>)}</select>
-                  </div>
-                </div>
+                <h2 className="text-xl font-black uppercase">Planning</h2>
                 <button onClick={() => { 
                   if (properties.length === 0) { alert("Créez d'abord un bien dans l'onglet Paramètres"); return; }
                   setEditingResId(null); 
@@ -399,24 +395,29 @@ const App = () => {
                 <table className="w-full text-left">
                   <thead className="bg-slate-50 font-black uppercase tracking-widest border-b text-[9px]">
                     <tr>
-                      <th className="p-5 cursor-pointer hover:text-blue-600" onClick={() => setSortConfig({ key: 'property', direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>Bien</th>
-                      <th className="p-5 cursor-pointer hover:text-blue-600" onClick={() => setSortConfig({ key: 'name', direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>Client</th>
+                      <th className="p-5">Bien</th>
+                      <th className="p-5">Client</th>
                       <th className="p-5 text-center">Dates</th>
                       <th className="p-5 text-right">Net Reçu</th>
                       <th className="p-5 text-center">Statut</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 font-bold">
-                    {sortedList.length === 0 ? (
-                      <tr><td colSpan="5" className="p-10 text-center text-slate-400 font-medium italic">Aucune réservation trouvée pour ces filtres.</td></tr>
+                    {planningList.length === 0 ? (
+                      <tr><td colSpan="5" className="p-10 text-center text-slate-400 font-medium italic">Aucune réservation trouvée.</td></tr>
                     ) : (
-                      sortedList.map(t => (
+                      planningList.map(t => (
                         <tr key={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="hover:bg-slate-50 cursor-pointer transition-colors">
                           <td className="p-5 text-slate-400 uppercase font-black">{properties.find(p => p.id === t.propertyId)?.name || '--'}</td>
                           <td className="p-5 font-black text-slate-800">{t.name}</td>
                           <td className="p-5 text-center text-slate-500 whitespace-nowrap">{t.startDate} ➔ {t.endDate}</td>
                           <td className="p-5 text-right font-black text-slate-900">{t.netAmount.toFixed(2)}€</td>
-                          <td className="p-5 text-center"><span className={`px-2.5 py-1 rounded-full text-[9px] uppercase tracking-tighter ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>{t.paymentDate ? 'Payé' : 'Attente'}</span></td>
+                          <td className="p-5 text-center">
+                            <span className={`px-2.5 py-1 rounded-full text-[9px] uppercase tracking-tighter ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                              {t.paymentDate ? 'Payé' : 'Attente'}
+                            </span>
+                            {t.paymentDate && <p className="text-[8px] text-slate-400 mt-1 font-bold">{t.paymentDate}</p>}
+                          </td>
                         </tr>
                       ))
                     )}
@@ -429,16 +430,8 @@ const App = () => {
           {/* TAB: FINANCES */}
           {activeTab === 'finances' && (
             <div className="space-y-6 animate-in fade-in">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <h2 className="text-xl font-black uppercase tracking-widest">Analyse Comptable</h2>
-                <div className="flex flex-wrap gap-2">
-                   <select value={finFilterMonth} onChange={e => setFinFilterMonth(e.target.value)} className="text-[10px] font-black border rounded-xl p-2 uppercase bg-white cursor-pointer"><option value="all">Tous les mois</option>{['Janv','Févr','Mars','Avril','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'].map((m,i)=><option key={i} value={i}>{m}</option>)}</select>
-                   <select value={finFilterYear} onChange={e => setFinFilterYear(e.target.value)} className="text-[10px] font-black border rounded-xl p-2 uppercase bg-white cursor-pointer"><option value="all">Toutes les années</option>{yearsAvailable.map(y=><option key={y} value={y}>{y}</option>)}</select>
-                   <select value={finFilterProp} onChange={e => setFinFilterProp(e.target.value)} className="text-[10px] font-black border rounded-xl p-2 uppercase bg-white cursor-pointer"><option value="all">Tous les biens</option>{properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
-                   <select value={finFilterPlat} onChange={e => setFinFilterPlat(e.target.value)} className="text-[10px] font-black border rounded-xl p-2 uppercase bg-white cursor-pointer"><option value="all">Toutes les plateformes</option>{availablePlatforms.map(p => <option key={p} value={p}>{p}</option>)}</select>
-                </div>
-              </div>
-
+              <h2 className="text-xl font-black uppercase tracking-widest">Analyse Comptable</h2>
+              
               <div className="bg-white rounded-[32px] border shadow-sm overflow-hidden text-xs">
                 <div className="p-5 bg-slate-900 text-white font-black uppercase text-[10px] tracking-widest flex justify-between items-center"><span>Bilan Direct & URSSAF (Filtres actifs)</span><span className="opacity-40">Provision Taxes AE (7.7%)</span></div>
                 <div className="overflow-x-auto">
@@ -448,7 +441,7 @@ const App = () => {
                     </thead>
                     <tbody className="divide-y divide-slate-50 font-bold">
                       {monthlyRecapData.length === 0 ? (
-                        <tr><td colSpan="6" className="p-10 text-center text-slate-400 font-medium italic">Pas de données pour ces critères.</td></tr>
+                        <tr><td colSpan="6" className="p-10 text-center text-slate-400 font-medium italic">Pas de données.</td></tr>
                       ) : (
                         monthlyRecapData.map(([m, d]) => (
                           <tr key={m} className="hover:bg-slate-50 transition-colors">
@@ -462,6 +455,16 @@ const App = () => {
                         ))
                       )}
                     </tbody>
+                    <tfoot className="bg-slate-50 font-black border-t-2 border-slate-200">
+                      <tr>
+                        <td className="p-5 uppercase text-[10px]">TOTAUX FILTRÉS</td>
+                        <td className="p-5 text-right text-indigo-600">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0).toLocaleString('fr-FR')}€</td>
+                        <td className="p-5 text-right text-slate-400">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.urssafGross, 0).toLocaleString('fr-FR')}€</td>
+                        <td className="p-5 text-right text-red-400">-{monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes, 0).toLocaleString('fr-FR')}€</td>
+                        <td className="p-5 text-right text-slate-400">-{monthlyRecapData.reduce((acc, [m, d]) => acc + d.charges, 0).toLocaleString('fr-FR')}€</td>
+                        <td className="p-5 text-right text-emerald-600 text-lg">{(monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0) - monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes + d.charges, 0)).toLocaleString('fr-FR')}€</td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
               </div>
@@ -488,6 +491,12 @@ const App = () => {
                            ))
                          )}
                       </tbody>
+                      <tfoot className="bg-slate-50 font-black border-t-2">
+                        <tr>
+                          <td colSpan="2" className="p-5 uppercase text-[10px]">TOTAL PRESTATAIRES</td>
+                          <td className="p-5 text-right text-indigo-900">{providerRecap.reduce((acc, curr) => acc + curr.total, 0).toLocaleString('fr-FR')}€</td>
+                        </tr>
+                      </tfoot>
                    </table>
                 </div>
               </div>
