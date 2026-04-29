@@ -7,7 +7,7 @@ import {
   Menu, X, CalendarCheck, CheckCircle, Clock, PieChart as PieChartIcon,
   ChevronLeft, ChevronRight, BarChart3, List, Wallet, Settings, Calculator,
   UserCheck, PlusCircle, TrendingUp, Info, Filter, Loader2,
-  Building2, CalendarRange, MessageSquare, CreditCard, Activity
+  Building2, CalendarRange, MessageSquare, CreditCard, Activity, ArrowRight
 } from 'lucide-react';
 
 // --- CONFIGURATION FIREBASE EXACTE ---
@@ -284,7 +284,6 @@ const App = () => {
     filteredData.forEach(t => {
       if (t.resExpenses) {
         t.resExpenses.forEach(exp => {
-          // Si filtre prestataire actif, on ne garde que lui
           if (filterProv === 'all' || exp.person === filterProv) {
             list.push({
               id: `${t.id}-${exp.id}`,
@@ -377,41 +376,41 @@ const App = () => {
 
   // --- FILTRES RÉUTILISABLES ---
   const RenderFilters = () => (
-    <div className="flex flex-wrap items-center gap-3 bg-white/70 backdrop-blur-md p-3 rounded-[28px] border border-white shadow-xl shadow-slate-200/50 mb-8 animate-in slide-in-from-top-4">
-      <div className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+    <div className="flex flex-wrap items-center gap-2 bg-white/70 backdrop-blur-md p-3 rounded-[28px] border border-white shadow-xl shadow-slate-200/50 mb-6 md:mb-8 animate-in slide-in-from-top-4">
+      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
         <Filter size={12} className="text-slate-400" />
         <select value={filterYear} onChange={e => setFilterYear(e.target.value)} className="text-[10px] font-black uppercase bg-transparent cursor-pointer outline-none text-slate-600">
           <option value="all">Années</option>
           {yearsAvailable.map(y => <option key={y} value={y}>{y}</option>)}
         </select>
       </div>
-      <div className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
         <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="text-[10px] font-black uppercase bg-transparent cursor-pointer outline-none text-slate-600">
           <option value="all">Mois</option>
           {['Janv','Févr','Mars','Avril','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'].map((m,i)=><option key={i} value={i}>{m}</option>)}
         </select>
       </div>
-      <div className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-        <select value={filterProp} onChange={e => setFilterProp(e.target.value)} className="text-[10px] font-black uppercase bg-transparent cursor-pointer outline-none text-slate-600 max-w-[130px]">
+      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+        <select value={filterProp} onChange={e => setFilterProp(e.target.value)} className="text-[10px] font-black uppercase bg-transparent cursor-pointer outline-none text-slate-600 max-w-[100px] md:max-w-[130px]">
           <option value="all">Logements</option>
           {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
       </div>
-      <div className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
         <select value={filterPlat} onChange={e => setFilterPlat(e.target.value)} className="text-[10px] font-black uppercase bg-transparent cursor-pointer outline-none text-slate-600">
           <option value="all">Plateformes</option>
           {availablePlatforms.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
       </div>
-      <div className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
         <select value={filterProv} onChange={e => setFilterProv(e.target.value)} className="text-[10px] font-black uppercase bg-transparent cursor-pointer outline-none text-slate-600">
           <option value="all">Prestataires</option>
           {availableProviders.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
       </div>
       {(activeTab === 'reservations' || activeTab === 'agenda') && (
-        <div className="flex items-center gap-1.5 px-3 py-2 bg-blue-50/50 rounded-2xl border border-blue-100 ml-auto">
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="text-[10px] font-black uppercase bg-transparent text-blue-600 cursor-pointer outline-none">
+        <div className="flex items-center gap-1.5 px-3 py-2 bg-blue-50/50 rounded-2xl border border-blue-100 md:ml-auto w-full md:w-auto">
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="text-[10px] font-black uppercase bg-transparent text-blue-600 cursor-pointer outline-none w-full">
             <option value="all">Tous les statuts</option>
             <option value="paid">Payé</option>
             <option value="pending">En attente</option>
@@ -424,7 +423,7 @@ const App = () => {
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col md:flex-row font-sans text-slate-900 overflow-hidden">
       {/* SIDEBAR */}
-      <aside className={`fixed md:sticky top-0 left-0 z-40 w-72 h-full md:h-screen bg-white border-r border-slate-100 flex flex-col transform md:translate-x-0 transition-transform duration-300 ease-in-out ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed md:sticky top-0 left-0 z-50 w-72 h-full md:h-screen bg-white border-r border-slate-100 flex flex-col transform md:translate-x-0 transition-transform duration-300 ease-in-out ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-10 border-b border-slate-50 flex flex-col items-center">
           <div className="relative group mb-4">
              <div className="absolute inset-0 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-2xl blur opacity-25 group-hover:opacity-40 transition-opacity"></div>
@@ -451,171 +450,199 @@ const App = () => {
         <div className="p-6 border-t border-slate-50">
           <div className="bg-emerald-50 text-emerald-700 p-4 rounded-2xl flex items-center justify-between text-[10px] font-black uppercase shadow-inner">
             <div className="flex items-center gap-3"><div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-sm shadow-emerald-500"></div> Cloud Actif</div>
-            <Info size={14} className="opacity-40" />
           </div>
         </div>
       </aside>
 
-      <div className="md:hidden flex items-center justify-between p-5 bg-white border-b border-slate-100 sticky top-0 z-30 shadow-sm">
+      {/* HEADER MOBILE FIXE */}
+      <div className="md:hidden flex items-center justify-between p-5 bg-white border-b border-slate-100 sticky top-0 z-40 shadow-sm">
         <div className="flex items-center gap-2">
             <div className="bg-blue-600 p-1.5 rounded-lg text-white"><Building2 size={16}/></div>
             <h1 className="font-black text-slate-900 uppercase tracking-tighter text-sm">CADEL MANAGER</h1>
         </div>
-        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 bg-slate-50 rounded-xl text-slate-600"><Menu /></button>
+        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 bg-slate-50 rounded-xl text-slate-600">
+           {isMobileMenuOpen ? <X /> : <Menu />}
+        </button>
       </div>
 
-      <main className="flex-1 p-6 md:p-12 overflow-y-auto h-screen custom-scrollbar">
-        <div className="max-w-7xl mx-auto pb-24">
+      <main className="flex-1 p-4 md:p-12 overflow-y-auto h-screen custom-scrollbar">
+        <div className="max-w-7xl mx-auto pb-32">
           
           <RenderFilters />
 
-          {/* TAB: RESERVATIONS */}
+          {/* TAB: RESERVATIONS (Mode Cartes sur Mobile) */}
           {activeTab === 'reservations' && (
-            <div className="space-y-8 animate-in fade-in">
-              <div className="flex flex-wrap items-center justify-between gap-6">
+            <div className="space-y-6 md:space-y-8 animate-in fade-in">
+              <div className="flex flex-wrap items-center justify-between gap-4 md:gap-6">
                 <div>
-                    <h2 className="text-3xl font-black uppercase tracking-tighter">Liste des Réservations</h2>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Vue tabulaire de vos séjours</p>
+                    <h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-slate-900">Réservations</h2>
+                    <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Vos séjours en cours</p>
                 </div>
                 <button onClick={() => { 
                   if (properties.length === 0) { alert("Créez d'abord un bien dans l'onglet Paramètres"); return; }
                   setEditingResId(null); 
                   setFormData({ propertyId: properties[0]?.id || '', name: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '' }); 
                   setIsModalOpen(true); 
-                }} className="bg-blue-600 text-white px-8 py-4 rounded-[24px] font-black text-[11px] uppercase tracking-widest shadow-xl shadow-blue-200 hover:bg-blue-700 hover:-translate-y-1 active:translate-y-0 transition-all flex items-center gap-2">
-                  <PlusCircle size={18}/> Nouvelle Réservation
+                }} className="bg-blue-600 text-white px-6 md:px-8 py-3 md:py-4 rounded-[20px] md:rounded-[24px] font-black text-[10px] md:text-[11px] uppercase tracking-widest shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all flex items-center gap-2">
+                  <PlusCircle size={18}/> Nouvelle
                 </button>
               </div>
-              <div className="bg-white rounded-[40px] border border-slate-50 shadow-2xl shadow-slate-200/50 overflow-hidden text-xs">
-                <table className="w-full text-left">
-                  <thead className="bg-slate-50 font-black uppercase tracking-widest border-b border-slate-100 text-[10px] text-slate-400">
-                    <tr>
-                      <th className="p-6">Bien / Plateforme</th>
-                      <th className="p-6">Client / Voyageur</th>
-                      <th className="p-6 text-center">Dates séjour</th>
-                      <th className="p-6">Prestations</th>
-                      <th className="p-6 text-right">Net Perçu</th>
-                      <th className="p-6 text-center">État Paiement</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50 font-bold">
-                    {reservationsList.length === 0 ? (
-                      <tr><td colSpan="6" className="p-20 text-center text-slate-300 font-medium italic text-sm">Aucune réservation ne correspond à vos critères.</td></tr>
-                    ) : (
-                      reservationsList.map(t => (
-                        <tr key={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="hover:bg-slate-50/80 cursor-pointer transition-all group">
-                          <td className="p-6">
-                             <div className="flex flex-col">
-                                <span className="text-slate-400 uppercase font-black tracking-tighter">{properties.find(p => p.id === t.propertyId)?.name || '--'}</span>
-                                <div className="flex items-center gap-1.5 mt-1.5">
-                                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-                                   <span className="text-[10px] text-blue-600 font-black uppercase tracking-widest">{t.platform}</span>
-                                </div>
-                             </div>
-                          </td>
-                          <td className="p-6 font-black text-slate-900 text-sm">{t.name}</td>
-                          <td className="p-6 text-center text-slate-500 font-medium whitespace-nowrap bg-slate-50/30 group-hover:bg-blue-50/20 transition-colors">{t.startDate} <span className="mx-2 text-slate-300">➔</span> {t.endDate}</td>
-                          <td className="p-6">
-                             <div className="space-y-2">
-                                {t.resExpenses && t.resExpenses.length > 0 ? (
-                                    t.resExpenses.map((exp, idx) => (
-                                        <div key={idx} className="flex flex-col">
-                                            <div className="flex items-center gap-2">
-                                                <span className={`text-[10px] font-black uppercase tracking-tighter ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>
-                                                    {exp.person} : {exp.amount}€
-                                                </span>
-                                                {exp.paymentDate ? <CheckCircle size={10} className="text-emerald-500" /> : <Clock size={10} className="text-orange-400" />}
-                                            </div>
-                                            {exp.paymentDate && <span className="text-[8px] text-slate-400 font-bold uppercase">{exp.paymentDate}</span>}
+
+              {/* VUE MOBILE : CARTES */}
+              <div className="grid grid-cols-1 gap-4 md:hidden">
+                {reservationsList.length === 0 ? (
+                    <div className="bg-white p-12 rounded-[40px] border border-slate-50 text-center text-slate-300 italic text-sm">Aucune réservation</div>
+                ) : (
+                    reservationsList.map(t => (
+                        <div key={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="bg-white p-6 rounded-[32px] border border-slate-50 shadow-lg shadow-slate-200/40 active:scale-[0.98] transition-all">
+                           <div className="flex justify-between items-start mb-4">
+                              <div className="flex flex-col">
+                                 <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{t.platform}</span>
+                                 <h3 className="text-lg font-black text-slate-900 leading-tight">{t.name}</h3>
+                                 <p className="text-[10px] font-black text-slate-400 uppercase mt-1 flex items-center gap-1"><MapPin size={10}/> {properties.find(p => p.id === t.propertyId)?.name || '--'}</p>
+                              </div>
+                              <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                                 {t.paymentDate ? 'Validé' : 'Attente'}
+                              </span>
+                           </div>
+                           <div className="bg-slate-50 p-4 rounded-2xl flex items-center justify-between mb-4">
+                              <div className="flex flex-col"><span className="text-[8px] font-black text-slate-300 uppercase">Arrivée</span><span className="text-xs font-black text-slate-700">{t.startDate}</span></div>
+                              <ArrowRight size={14} className="text-slate-300"/>
+                              <div className="flex flex-col text-right"><span className="text-[8px] font-black text-slate-300 uppercase">Départ</span><span className="text-xs font-black text-slate-700">{t.endDate}</span></div>
+                           </div>
+                           <div className="flex justify-between items-center border-t border-slate-50 pt-4">
+                               <div className="flex flex-col">
+                                  <span className="text-[9px] font-black text-slate-400 uppercase leading-none">Net Perçu</span>
+                                  <span className="text-lg font-black text-slate-900 tabular-nums">{t.netAmount.toFixed(2)}€</span>
+                               </div>
+                               {t.resExpenses && t.resExpenses.length > 0 && (
+                                   <div className="flex -space-x-2">
+                                      {t.resExpenses.map((e,i) => <div key={i} className="w-6 h-6 rounded-full bg-indigo-500 border-2 border-white flex items-center justify-center text-[8px] text-white font-black">{e.person.charAt(0)}</div>)}
+                                   </div>
+                               )}
+                           </div>
+                        </div>
+                    ))
+                )}
+              </div>
+
+              {/* VUE DESKTOP : TABLEAU */}
+              <div className="hidden md:block bg-white rounded-[40px] border border-slate-50 shadow-2xl shadow-slate-200/50 overflow-hidden text-xs">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left min-w-[800px]">
+                        <thead className="bg-slate-50 font-black uppercase tracking-widest border-b border-slate-100 text-[10px] text-slate-400">
+                            <tr>
+                            <th className="p-6">Bien / Plateforme</th>
+                            <th className="p-6">Client / Voyageur</th>
+                            <th className="p-6 text-center">Dates séjour</th>
+                            <th className="p-6">Prestations</th>
+                            <th className="p-6 text-right">Net Perçu</th>
+                            <th className="p-6 text-center">État Paiement</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50 font-bold">
+                            {reservationsList.map(t => (
+                                <tr key={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="hover:bg-slate-50/80 cursor-pointer transition-all group">
+                                <td className="p-6">
+                                    <div className="flex flex-col">
+                                        <span className="text-slate-400 uppercase font-black tracking-tighter">{properties.find(p => p.id === t.propertyId)?.name || '--'}</span>
+                                        <div className="flex items-center gap-1.5 mt-1.5">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                                        <span className="text-[10px] text-blue-600 font-black uppercase tracking-widest">{t.platform}</span>
                                         </div>
-                                    ))
-                                ) : (
-                                    <span className="text-slate-300 italic text-[10px]">Aucune</span>
-                                )}
-                             </div>
-                          </td>
-                          <td className="p-6 text-right font-black text-slate-900 text-sm tabular-nums">{t.netAmount.toFixed(2)}€</td>
-                          <td className="p-6 text-center">
-                            <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
-                              {t.paymentDate ? 'Validé' : 'Attente'}
-                            </span>
-                            {t.paymentDate && <p className="text-[9px] text-slate-400 mt-2 font-bold">{t.paymentDate}</p>}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                                    </div>
+                                </td>
+                                <td className="p-6 font-black text-slate-900 text-sm">{t.name}</td>
+                                <td className="p-6 text-center text-slate-500 font-medium whitespace-nowrap bg-slate-50/30 group-hover:bg-blue-50/20 transition-colors">{t.startDate} <span className="mx-2 text-slate-300">➔</span> {t.endDate}</td>
+                                <td className="p-6">
+                                    <div className="space-y-2">
+                                        {t.resExpenses?.map((exp, idx) => (
+                                            <div key={idx} className="flex flex-col">
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`text-[10px] font-black uppercase tracking-tighter ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>
+                                                        {exp.person} : {exp.amount}€
+                                                    </span>
+                                                    {exp.paymentDate ? <CheckCircle size={10} className="text-emerald-500" /> : <Clock size={10} className="text-orange-400" />}
+                                                </div>
+                                                {exp.paymentDate && <span className="text-[8px] text-slate-400 font-bold uppercase">{exp.paymentDate}</span>}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </td>
+                                <td className="p-6 text-right font-black text-slate-900 text-sm tabular-nums">{t.netAmount.toFixed(2)}€</td>
+                                <td className="p-6 text-center">
+                                    <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                                    {t.paymentDate ? 'Validé' : 'Attente'}
+                                    </span>
+                                    {t.paymentDate && <p className="text-[9px] text-slate-400 mt-2 font-bold">{t.paymentDate}</p>}
+                                </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
               </div>
             </div>
           )}
 
           {/* TAB: AGENDA VISUEL */}
           {activeTab === 'agenda' && (
-            <div className="space-y-8 animate-in fade-in">
-                <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+            <div className="space-y-6 md:space-y-8 animate-in fade-in">
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                     <div>
-                        <h2 className="text-3xl font-black uppercase tracking-tighter">Agenda Visuel</h2>
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Occupation par logement</p>
+                        <h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-slate-900 leading-none">Agenda Visuel</h2>
+                        <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Flux d'occupation mensuel</p>
                     </div>
-                    <div className="flex items-center gap-4 bg-white px-6 py-3 rounded-[24px] shadow-lg shadow-slate-100 border border-slate-50">
-                        <button onClick={() => handleMonthChange('prev')} className="p-2 hover:bg-slate-50 rounded-xl transition-colors text-blue-600"><ChevronLeft size={24}/></button>
-                        <div className="text-center min-w-[140px]">
-                            <span className="block text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] mb-0.5">{filterYear === 'all' ? new Date().getFullYear() : filterYear}</span>
-                            <span className="text-xl font-black text-slate-900 tracking-tight">{currentMonthName}</span>
+                    <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-[20px] shadow-lg shadow-slate-100 border border-slate-50 w-full md:w-auto justify-between md:justify-start">
+                        <button onClick={() => handleMonthChange('prev')} className="p-2 hover:bg-slate-50 rounded-xl transition-colors text-blue-600"><ChevronLeft size={20}/></button>
+                        <div className="text-center min-w-[120px]">
+                            <span className="block text-[8px] font-black text-slate-300 uppercase tracking-[0.2em] mb-0.5">{filterYear === 'all' ? new Date().getFullYear() : filterYear}</span>
+                            <span className="text-sm md:text-lg font-black text-slate-900 tracking-tight">{currentMonthName}</span>
                         </div>
-                        <button onClick={() => handleMonthChange('next')} className="p-2 hover:bg-slate-50 rounded-xl transition-colors text-blue-600"><ChevronRight size={24}/></button>
+                        <button onClick={() => handleMonthChange('next')} className="p-2 hover:bg-slate-50 rounded-xl transition-colors text-blue-600"><ChevronRight size={20}/></button>
                     </div>
                 </div>
 
-                <div className="bg-white/50 p-4 rounded-[32px] border border-white flex flex-wrap gap-4 justify-center md:justify-start">
+                <div className="bg-white/50 p-3 md:p-4 rounded-[32px] border border-white flex flex-wrap gap-2 md:gap-4 justify-start">
                     {properties.map((p, idx) => (
-                        <div key={p.id} className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-full shadow-sm border border-slate-50">
-                            <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }}></div>
-                            <span className="text-[10px] font-black uppercase text-slate-600 tracking-tighter">{p.name}</span>
+                        <div key={p.id} className="flex items-center gap-2 px-2 py-1 bg-white rounded-full shadow-sm border border-slate-50 shrink-0">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: CHART_COLORS[idx % CHART_COLORS.length] }}></div>
+                            <span className="text-[9px] font-black uppercase text-slate-600">{p.name}</span>
                         </div>
                     ))}
                 </div>
 
-                <div className="bg-white p-6 md:p-10 rounded-[48px] border border-slate-50 shadow-2xl shadow-slate-200/40">
-                    <div className="grid grid-cols-7 mb-6 border-b border-slate-100 pb-6 text-center text-[11px] font-black uppercase text-slate-300 tracking-widest">
-                        {['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'].map(d => <div key={d}>{d}</div>)}
-                    </div>
+                <div className="bg-white p-4 md:p-10 rounded-[40px] md:rounded-[48px] border border-slate-50 shadow-2xl shadow-slate-200/50 overflow-x-auto no-scrollbar">
+                    <div className="min-w-[600px]">
+                        <div className="grid grid-cols-7 mb-4 md:mb-6 border-b border-slate-100 pb-4 md:pb-6 text-center text-[9px] md:text-[11px] font-black uppercase text-slate-300 tracking-widest">
+                            {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map(d => <div key={d}>{d}</div>)}
+                        </div>
+                        <div className="grid grid-cols-7 gap-1 md:gap-3">
+                            {agendaDays.map((item, idx) => {
+                                if (item.empty) return <div key={`empty-${idx}`} className="h-20 md:h-36 bg-slate-50/20 rounded-2xl md:rounded-3xl"></div>;
+                                const isToday = item.dateStr === todayStr;
+                                const dayReservations = reservationsList.filter(res => item.dateStr >= res.startDate && item.dateStr <= res.endDate);
 
-                    <div className="grid grid-cols-7 gap-2 md:gap-3">
-                        {agendaDays.map((item, idx) => {
-                            if (item.empty) return <div key={`empty-${idx}`} className="h-24 md:h-36 bg-slate-50/20 rounded-3xl"></div>;
-
-                            const isToday = item.dateStr === todayStr;
-                            const dayReservations = reservationsList.filter(res => item.dateStr >= res.startDate && item.dateStr <= res.endDate);
-
-                            return (
-                                <div key={item.dateStr} className={`h-24 md:h-36 bg-white border ${isToday ? 'border-blue-400 ring-2 ring-blue-50 shadow-blue-100' : 'border-slate-100'} rounded-[24px] p-3 relative group overflow-hidden hover:border-blue-200 transition-all flex flex-col`}>
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className={`text-[11px] font-black ${isToday ? 'text-blue-600' : 'text-slate-300'}`}>{item.day}</span>
-                                        {isToday && <div className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-ping"></div>}
+                                return (
+                                    <div key={item.dateStr} className={`h-20 md:h-36 bg-white border ${isToday ? 'border-blue-400 ring-2 ring-blue-50 shadow-blue-100' : 'border-slate-100'} rounded-xl md:rounded-[24px] p-1.5 md:p-3 relative flex flex-col group overflow-hidden`}>
+                                        <span className={`text-[9px] md:text-[11px] font-black ${isToday ? 'text-blue-600' : 'text-slate-300'}`}>{item.day}</span>
+                                        <div className="flex-1 space-y-1 overflow-y-auto no-scrollbar mt-1">
+                                            {dayReservations.map((res) => {
+                                                const propIdx = properties.findIndex(p => p.id === res.propertyId);
+                                                const color = CHART_COLORS[propIdx % CHART_COLORS.length];
+                                                const isStart = res.startDate === item.dateStr;
+                                                return (
+                                                    <div key={res.id} onClick={(e) => { e.stopPropagation(); setEditingResId(res.id); setFormData(res); setIsModalOpen(true); }} className="h-3.5 md:h-5 rounded-md text-[7px] md:text-[9px] font-black text-white px-1 flex items-center truncate cursor-pointer" style={{ backgroundColor: color }}>
+                                                        {isStart && <span className="mr-0.5 opacity-60">●</span>}
+                                                        {res.name.split(' ')[0]}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
-                                    <div className="flex-1 space-y-1.5 overflow-y-auto no-scrollbar pb-2">
-                                        {dayReservations.map((res) => {
-                                            const propIdx = properties.findIndex(p => p.id === res.propertyId);
-                                            const color = CHART_COLORS[propIdx % CHART_COLORS.length];
-                                            const isStart = res.startDate === item.dateStr;
-                                            return (
-                                                <div 
-                                                    key={res.id} 
-                                                    onClick={(e) => { e.stopPropagation(); setEditingResId(res.id); setFormData(res); setIsModalOpen(true); }}
-                                                    className={`h-4 md:h-5 rounded-lg text-[8px] md:text-[9px] font-black text-white px-2 flex items-center truncate cursor-pointer hover:scale-105 active:scale-95 transition-all shadow-sm ${isStart ? 'ring-2 ring-white/50' : ''}`}
-                                                    style={{ backgroundColor: color }}
-                                                >
-                                                    {isStart && <span className="mr-1 opacity-60">●</span>}
-                                                    {res.name.split(' ')[0]}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            );
-                        })}
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -623,151 +650,102 @@ const App = () => {
 
           {/* TAB: DASHBOARD */}
           {activeTab === 'dashboard' && (
-            <div className="space-y-10 animate-in fade-in duration-700">
-              <div className="flex items-end justify-between">
-                <div>
-                  <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase mb-1">Tableau de bord</h2>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest italic">Analyse en temps réel de votre parc</p>
-                </div>
+            <div className="space-y-8 md:space-y-10 animate-in fade-in duration-700">
+              <div>
+                <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter uppercase leading-none">Tableau de bord</h2>
+                <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Performances du parc</p>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white p-8 rounded-[40px] border border-slate-50 shadow-xl shadow-slate-200/40 relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-transform"><Wallet size={80}/></div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Net Banque (Encaissé)</p>
-                  <p className="text-3xl font-black text-indigo-600 tracking-tighter">{financials.netB.toLocaleString('fr-FR')}€</p>
-                  <div className="mt-4 flex items-center gap-2 text-emerald-500 font-bold text-[10px] uppercase">
-                    <TrendingUp size={14}/> + Performance active
-                  </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+                <div className="bg-white p-6 md:p-8 rounded-[32px] md:rounded-[40px] border border-slate-50 shadow-xl shadow-slate-200/40">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Net Encaissé</p>
+                  <p className="text-2xl md:text-3xl font-black text-indigo-600 tracking-tighter">{financials.netB.toLocaleString('fr-FR')}€</p>
                 </div>
-                <div className="bg-slate-900 p-8 rounded-[40px] shadow-2xl shadow-slate-900/20 relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform text-white"><CheckCircle size={80}/></div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Bénéfice Réel (Net Net)</p>
-                  <p className="text-3xl font-black text-white tracking-tighter">{Math.round(financials.profit).toLocaleString('fr-FR')}€</p>
-                  <div className="mt-4 bg-white/10 px-3 py-1 rounded-full inline-block text-[9px] font-black text-slate-300 uppercase tracking-widest">Profit optimisé</div>
+                <div className="bg-slate-900 p-6 md:p-8 rounded-[32px] md:rounded-[40px] shadow-2xl shadow-slate-900/20">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Bénéfice Réel (Net Net)</p>
+                  <p className="text-2xl md:text-3xl font-black text-white tracking-tighter">{Math.round(financials.profit).toLocaleString('fr-FR')}€</p>
                 </div>
-                <div className="bg-white p-8 rounded-[40px] border border-slate-50 shadow-xl shadow-slate-200/40 relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-transform"><Clock size={80}/></div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Recettes à venir</p>
-                  <p className="text-3xl font-black text-blue-500 tracking-tighter">{Math.round(financials.netUpcoming).toLocaleString('fr-FR')}€</p>
-                  <div className="mt-4 text-slate-400 font-bold text-[10px] uppercase italic">Paiements attendus</div>
+                <div className="bg-white p-6 md:p-8 rounded-[32px] md:rounded-[40px] border border-slate-50 shadow-xl shadow-slate-200/40">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Recettes à venir</p>
+                  <p className="text-2xl md:text-3xl font-black text-blue-500 tracking-tighter">{Math.round(financials.netUpcoming).toLocaleString('fr-FR')}€</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                <DonutChart 
-                  title="Net par Logement" 
-                  data={properties.map((p, idx) => ({ 
-                    label: p.name, 
-                    value: tenants.filter(t => t.propertyId === p.id && !!t.paymentDate).reduce((acc, t) => acc + (t.netAmount - (t.resExpenses?.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0) || 0) - (t.isUrssaf ? t.grossAmount * 0.077 : 0)), 0), 
-                    color: CHART_COLORS[idx % CHART_COLORS.length] 
-                  }))} 
-                />
-                <DonutChart 
-                  title="Net par Plateforme" 
-                  data={availablePlatforms.map((p, idx) => ({ 
-                    label: p, 
-                    value: tenants.filter(t => t.platform === p && !!t.paymentDate).reduce((acc, t) => acc + (t.netAmount - (t.isUrssaf ? t.grossAmount * 0.077 : 0)), 0), 
-                    color: CHART_COLORS[(idx + 4) % CHART_COLORS.length] 
-                  }))} 
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10">
+                <DonutChart title="Net par Logement" data={properties.map((p, idx) => ({ label: p.name, value: tenants.filter(t => t.propertyId === p.id && !!t.paymentDate).reduce((acc, t) => acc + (t.netAmount - (t.resExpenses?.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0) || 0) - (t.isUrssaf ? t.grossAmount * 0.077 : 0)), 0), color: CHART_COLORS[idx % CHART_COLORS.length] }))} />
+                <DonutChart title="Net par Plateforme" data={availablePlatforms.map((p, idx) => ({ label: p, value: tenants.filter(t => t.platform === p && !!t.paymentDate).reduce((acc, t) => acc + (t.netAmount - (t.isUrssaf ? t.grossAmount * 0.077 : 0)), 0), color: CHART_COLORS[(idx + 4) % CHART_COLORS.length] }))} />
               </div>
             </div>
           )}
 
           {/* TAB: FINANCES */}
           {activeTab === 'finances' && (
-            <div className="space-y-10 animate-in fade-in">
-              <h2 className="text-3xl font-black uppercase tracking-tighter">Comptabilité Détaillée</h2>
+            <div className="space-y-8 md:space-y-10 animate-in fade-in">
+              <h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-slate-900">Comptabilité</h2>
               
-              {/* TABLEAU 1: BILAN GLOBAL */}
-              <div className="bg-white rounded-[40px] border border-slate-50 shadow-2xl shadow-slate-200/50 overflow-hidden text-xs">
-                <div className="p-8 bg-slate-900 text-white font-black uppercase text-[11px] tracking-widest flex justify-between items-center border-b border-white/5">
-                   <div className="flex items-center gap-3"><Calculator size={20} className="text-blue-400"/> Bilan Direct & URSSAF</div>
-                   <span className="opacity-40 font-bold">Base Taxes 7.7%</span>
+              <div className="bg-white rounded-[32px] md:rounded-[40px] border border-slate-50 shadow-2xl shadow-slate-200/50 overflow-hidden text-xs">
+                <div className="p-6 md:p-8 bg-slate-900 text-white font-black uppercase text-[10px] md:text-[11px] tracking-widest flex justify-between items-center">
+                   <div className="flex items-center gap-2 md:gap-3"><Calculator size={18} className="text-blue-400"/> Bilan Global</div>
+                   <span className="opacity-40">Taxes 7.7%</span>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead className="bg-slate-50/50 font-black uppercase tracking-widest border-b border-slate-100 text-[10px] text-slate-400">
-                      <tr><th className="p-6">Période</th><th className="p-6 text-right text-indigo-600 font-black">Banque</th><th className="p-6 text-right">Base URSSAF</th><th className="p-6 text-right text-rose-500">Provision Taxes</th><th className="p-6 text-right">Charges Svc.</th><th className="p-6 text-right font-black">Profit Réel</th></tr>
+                <div className="overflow-x-auto no-scrollbar">
+                  <table className="w-full text-left border-collapse min-w-[700px]">
+                    <thead className="bg-slate-50/50 font-black uppercase tracking-widest border-b border-slate-100 text-[9px] md:text-[10px] text-slate-400">
+                      <tr><th className="p-4 md:p-6">Période</th><th className="p-4 md:p-6 text-right">Banque</th><th className="p-4 md:p-6 text-right">Base URSSAF</th><th className="p-4 md:p-6 text-right text-rose-500">Taxes</th><th className="p-4 md:p-6 text-right">Services</th><th className="p-4 md:p-6 text-right font-black">Profit Réel</th></tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 font-bold text-slate-900">
-                      {monthlyRecapData.length === 0 ? (
-                        <tr><td colSpan="6" className="p-20 text-center text-slate-300 font-medium italic">Aucune donnée comptable.</td></tr>
-                      ) : (
-                        monthlyRecapData.map(([m, d]) => (
-                          <tr key={m} className="hover:bg-slate-50 transition-all">
-                            <td className="p-6 capitalize font-black text-slate-900">{formatMonthYear(m)}</td>
-                            <td className="p-6 text-right font-black text-indigo-600 tabular-nums">{d.totalBank.toLocaleString('fr-FR')}€</td>
-                            <td className="p-6 text-right text-slate-500 tabular-nums">{d.urssafGross.toLocaleString('fr-FR')}€</td>
-                            <td className="p-6 text-right text-rose-500 tabular-nums">-{d.taxes.toFixed(2)}€</td>
-                            <td className="p-6 text-right text-slate-500 tabular-nums">-{d.charges.toLocaleString('fr-FR')}€</td>
-                            <td className={`p-6 text-right font-black text-sm tabular-nums ${d.totalBank - d.taxes - d.charges >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{(d.totalBank - d.taxes - d.charges).toLocaleString('fr-FR')}€</td>
-                          </tr>
-                        ))
-                      )}
+                      {monthlyRecapData.map(([m, d]) => (
+                        <tr key={m} className="hover:bg-slate-50">
+                          <td className="p-4 md:p-6 capitalize">{formatMonthYear(m)}</td>
+                          <td className="p-4 md:p-6 text-right text-indigo-600">{d.totalBank.toLocaleString('fr-FR')}€</td>
+                          <td className="p-4 md:p-6 text-right text-slate-500">{d.urssafGross.toLocaleString('fr-FR')}€</td>
+                          <td className="p-4 md:p-6 text-right text-rose-500">-{d.taxes.toFixed(2)}€</td>
+                          <td className="p-4 md:p-6 text-right text-slate-500">-{d.charges.toLocaleString('fr-FR')}€</td>
+                          <td className={`p-4 md:p-6 text-right font-black ${d.totalBank - d.taxes - d.charges >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{(d.totalBank - d.taxes - d.charges).toLocaleString('fr-FR')}€</td>
+                        </tr>
+                      ))}
                     </tbody>
                     <tfoot className="bg-indigo-600 text-white font-black">
                       <tr>
-                        <td className="p-8 uppercase text-[11px] tracking-widest">TOTAUX FILTRÉS</td>
-                        <td className="p-8 text-right tabular-nums text-lg">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0).toLocaleString('fr-FR')}€</td>
-                        <td className="p-8 text-right tabular-nums opacity-80">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.urssafGross, 0).toLocaleString('fr-FR')}€</td>
-                        <td className="p-8 text-right tabular-nums text-rose-200">-{monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes, 0).toLocaleString('fr-FR')}€</td>
-                        <td className="p-8 text-right tabular-nums opacity-80">-{monthlyRecapData.reduce((acc, [m, d]) => acc + d.charges, 0).toLocaleString('fr-FR')}€</td>
-                        <td className="p-8 text-right tabular-nums text-2xl font-black bg-indigo-700/50">{(monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0) - monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes + d.charges, 0)).toLocaleString('fr-FR')}€</td>
+                        <td className="p-6 md:p-8 uppercase text-[9px] md:text-[11px]">TOTAUX FILTRÉS</td>
+                        <td className="p-6 md:p-8 text-right text-base md:text-lg">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0).toLocaleString('fr-FR')}€</td>
+                        <td colSpan="3" className="hidden md:table-cell"></td>
+                        <td className="p-6 md:p-8 text-right text-lg md:text-2xl font-black bg-indigo-700/50">{(monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0) - monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes + d.charges, 0)).toLocaleString('fr-FR')}€</td>
                       </tr>
                     </tfoot>
                   </table>
                 </div>
               </div>
 
-              {/* TABLEAU 2: DÉTAIL DES PRESTATIONS RESTAURÉ ET ENRICHI */}
-              <div className="bg-white rounded-[40px] border border-slate-50 shadow-2xl shadow-slate-200/50 overflow-hidden text-xs">
-                <div className="p-8 bg-slate-900 text-white font-black flex justify-between items-center uppercase tracking-widest border-b border-white/5">
-                   <div className="flex items-center gap-3"><UserCheck className="text-indigo-400" size={20}/> Suivi des Prestations</div>
-                   <span className="opacity-40 font-bold">Détail par intervenant</span>
+              <div className="bg-white rounded-[32px] md:rounded-[40px] border border-slate-50 shadow-2xl shadow-slate-200/50 overflow-hidden text-xs">
+                <div className="p-6 md:p-8 bg-slate-900 text-white font-black flex justify-between items-center uppercase tracking-widest border-b border-white/5">
+                   <div className="flex items-center gap-3"><UserCheck className="text-indigo-400" size={18}/> Suivi Prestataires</div>
                 </div>
-                <div className="overflow-x-auto text-xs">
-                   <table className="w-full text-left">
-                      <thead className="bg-slate-50 font-black uppercase tracking-widest border-b border-slate-100 text-[10px] text-slate-400">
-                         <tr>
-                            <th className="p-6">Date Séjour</th>
-                            <th className="p-6">Logement</th>
-                            <th className="p-6">Prestataire</th>
-                            <th className="p-6">Type Service</th>
-                            <th className="p-6 text-right">Montant</th>
-                            <th className="p-6 text-center">Règlement</th>
-                         </tr>
+                <div className="overflow-x-auto no-scrollbar">
+                   <table className="w-full text-left min-w-[700px]">
+                      <thead className="bg-slate-50 font-black uppercase tracking-widest border-b border-slate-100 text-[9px] md:text-[10px] text-slate-400">
+                         <tr><th className="p-4 md:p-6">Date</th><th className="p-4 md:p-6">Logement</th><th className="p-4 md:p-6">Prestataire</th><th className="p-4 md:p-6">Service</th><th className="p-4 md:p-6 text-right">Montant</th><th className="p-4 md:p-6 text-center">Statut</th></tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50 font-bold text-slate-600">
-                         {detailedExpenses.length === 0 ? (
-                           <tr><td colSpan="6" className="p-20 text-center text-slate-300 font-medium italic">Aucune prestation enregistrée pour ces filtres.</td></tr>
-                         ) : (
-                           detailedExpenses.map((exp) => (
+                         {detailedExpenses.map((exp) => (
                              <tr key={exp.id} className="hover:bg-slate-50 transition-all">
-                                <td className="p-6 tabular-nums">{exp.dateRes}</td>
-                                <td className="p-6 text-slate-900 uppercase tracking-tighter">{exp.propertyName}</td>
-                                <td className="p-6 text-blue-600 font-black uppercase text-[10px] tracking-widest">{exp.person}</td>
-                                <td className="p-6 font-medium italic">{exp.type}</td>
-                                <td className="p-6 text-right font-black text-slate-900 tabular-nums">{exp.amount.toLocaleString('fr-FR')} €</td>
-                                <td className="p-6 text-center">
-                                   {exp.paymentDate ? (
-                                      <div className="flex flex-col items-center">
-                                         <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[9px] uppercase tracking-widest">Payé</span>
-                                         <span className="text-[8px] text-slate-400 mt-1 uppercase">{exp.paymentDate}</span>
-                                      </div>
-                                   ) : (
-                                      <span className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-[9px] uppercase tracking-widest">Attente</span>
-                                   )}
+                                <td className="p-4 md:p-6">{exp.dateRes}</td>
+                                <td className="p-4 md:p-6 text-slate-900 uppercase">{exp.propertyName}</td>
+                                <td className="p-4 md:p-6 text-blue-600 font-black uppercase">{exp.person}</td>
+                                <td className="p-4 md:p-6 italic">{exp.type}</td>
+                                <td className="p-4 md:p-6 text-right font-black text-slate-900">{exp.amount.toLocaleString('fr-FR')} €</td>
+                                <td className="p-4 md:p-6 text-center">
+                                   <span className={`px-2 py-1 rounded-full text-[8px] md:text-[9px] font-black uppercase ${exp.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                                      {exp.paymentDate ? `Payé (${exp.paymentDate})` : 'Attente'}
+                                   </span>
                                 </td>
                              </tr>
-                           ))
-                         )}
+                           ))}
                       </tbody>
                       <tfoot className="bg-slate-800 text-white font-black border-t-2">
                         <tr>
-                          <td colSpan="4" className="p-8 uppercase text-[11px] tracking-widest">TOTAL PRESTATIONS FILTRÉES</td>
-                          <td className="p-8 text-right text-2xl tracking-tighter tabular-nums">{detailedExpenses.reduce((acc, curr) => acc + curr.amount, 0).toLocaleString('fr-FR')}€</td>
+                          <td colSpan="4" className="p-6 md:p-8 uppercase text-[9px] md:text-[11px]">TOTAL PRÉSTATIONS</td>
+                          <td className="p-6 md:p-8 text-right text-lg md:text-2xl tabular-nums">{detailedExpenses.reduce((acc, curr) => acc + curr.amount, 0).toLocaleString('fr-FR')}€</td>
                           <td className="bg-slate-900/50"></td>
                         </tr>
                       </tfoot>
@@ -780,68 +758,67 @@ const App = () => {
           {/* TAB: SETTINGS */}
           {activeTab === 'settings' && (
             <div className="space-y-10 animate-in fade-in">
-              <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">Configuration Système</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+              <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">Paramètres</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
                 {/* Plateformes */}
-                <div className="bg-white p-8 rounded-[40px] border border-slate-50 shadow-xl shadow-slate-200/40 flex flex-col h-full">
-                  <h3 className="text-[11px] font-black uppercase tracking-widest mb-6 text-slate-400">Canaux de vente</h3>
+                <div className="bg-white p-6 md:p-8 rounded-[32px] md:rounded-[40px] border border-slate-50 shadow-xl shadow-slate-200/40 flex flex-col h-full">
+                  <h3 className="text-[10px] md:text-[11px] font-black uppercase tracking-widest mb-6 text-slate-400">Plateformes</h3>
                   <div className="space-y-2 mb-8 flex-1 overflow-y-auto max-h-[250px] custom-scrollbar">
                     {availablePlatforms.map(p => (
-                      <div key={p} className="flex justify-between items-center text-[11px] font-black bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-slate-300 transition-all uppercase tracking-tighter">
+                      <div key={p} className="flex justify-between items-center text-[11px] font-black bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-slate-300 transition-all uppercase">
                         {p}
-                        <button onClick={() => { const n = availablePlatforms.filter(x => x !== p); setAvailablePlatforms(n); updateSettings({ platforms: n }); }} className="text-slate-300 hover:text-rose-500 transition-colors"><X size={16} /></button>
+                        <button onClick={() => { const n = availablePlatforms.filter(x => x !== p); setAvailablePlatforms(n); updateSettings({ platforms: n }); }} className="text-slate-300 hover:text-rose-500"><X size={16} /></button>
                       </div>
                     ))}
                   </div>
                   <form onSubmit={(e) => { e.preventDefault(); if (inputPlat.trim()) { const n = [...availablePlatforms, inputPlat.trim()]; setAvailablePlatforms(n); updateSettings({ platforms: n }); setInputPlat(''); } }} className="flex gap-2 bg-slate-100 p-2 rounded-[24px]">
-                    <input value={inputPlat} onChange={e => setInputPlat(e.target.value)} className="flex-1 bg-transparent px-4 py-2 font-bold text-xs outline-none" placeholder="Ajouter..." />
-                    <button type="submit" className="bg-slate-900 text-white p-3 rounded-[18px] hover:scale-105 active:scale-95 transition-all shadow-lg"><Plus size={18} /></button>
+                    <input value={inputPlat} onChange={e => setInputPlat(e.target.value)} className="flex-1 bg-transparent px-4 py-2 font-bold text-xs outline-none w-0" placeholder="Ajouter..." />
+                    <button type="submit" className="bg-slate-900 text-white p-3 rounded-[18px] hover:scale-105 transition-all shrink-0"><Plus size={18} /></button>
                   </form>
                 </div>
                 {/* Prestataires */}
-                <div className="bg-white p-8 rounded-[40px] border border-slate-50 shadow-xl shadow-slate-200/40 flex flex-col h-full">
-                  <h3 className="text-[11px] font-black uppercase tracking-widest mb-6 text-slate-400">Prestataires</h3>
-                  <div className="space-y-2 mb-8 flex-1 overflow-y-auto max-h-[250px] custom-scrollbar">
+                <div className="bg-white p-6 md:p-8 rounded-[32px] md:rounded-[40px] border border-slate-50 shadow-xl shadow-slate-200/40 flex flex-col h-full">
+                  <h3 className="text-[10px] md:text-[11px] font-black uppercase tracking-widest mb-6 text-slate-400">Prestataires</h3>
+                  <div className="space-y-2 mb-8 flex-1 overflow-y-auto max-h-[250px] custom-scrollbar text-blue-600">
                     {availableProviders.map(p => (
-                      <div key={p} className="flex justify-between items-center text-[11px] font-black bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-slate-300 transition-all uppercase tracking-tighter text-blue-600">
+                      <div key={p} className="flex justify-between items-center text-[11px] font-black bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-slate-300 transition-all uppercase">
                         {p}
-                        <button onClick={() => { const n = availableProviders.filter(x => x !== p); setAvailableProviders(n); updateSettings({ providers: n }); }} className="text-slate-300 hover:text-rose-500 transition-colors"><X size={16} /></button>
+                        <button onClick={() => { const n = availableProviders.filter(x => x !== p); setAvailableProviders(n); updateSettings({ providers: n }); }} className="text-slate-300 hover:text-rose-500"><X size={16} /></button>
                       </div>
                     ))}
                   </div>
                   <form onSubmit={(e) => { e.preventDefault(); if (inputProv.trim()) { const n = [...availableProviders, inputProv.trim()]; setAvailableProviders(n); updateSettings({ providers: n }); setInputProv(''); } }} className="flex gap-2 bg-slate-100 p-2 rounded-[24px]">
-                    <input value={inputProv} onChange={e => setInputProv(e.target.value)} className="flex-1 bg-transparent px-4 py-2 font-bold text-xs outline-none" placeholder="Prénom..." />
-                    <button type="submit" className="bg-slate-900 text-white p-3 rounded-[18px] hover:scale-105 active:scale-95 transition-all shadow-lg"><Plus size={18} /></button>
+                    <input value={inputProv} onChange={e => setInputProv(e.target.value)} className="flex-1 bg-transparent px-4 py-2 font-bold text-xs outline-none w-0" placeholder="Prénom..." />
+                    <button type="submit" className="bg-slate-900 text-white p-3 rounded-[18px] hover:scale-105 transition-all shrink-0"><Plus size={18} /></button>
                   </form>
                 </div>
-                {/* Prestations types */}
-                <div className="bg-white p-8 rounded-[40px] border border-slate-50 shadow-xl shadow-slate-200/40 flex flex-col h-full">
-                  <h3 className="text-[11px] font-black uppercase tracking-widest mb-6 text-slate-400">Prestations types</h3>
+                {/* Services */}
+                <div className="bg-white p-6 md:p-8 rounded-[32px] md:rounded-[40px] border border-slate-50 shadow-xl shadow-slate-200/40 flex flex-col h-full">
+                  <h3 className="text-[10px] md:text-[11px] font-black uppercase tracking-widest mb-6 text-slate-400">Services</h3>
                   <div className="space-y-2 mb-8 flex-1 overflow-y-auto max-h-[250px] custom-scrollbar">
                     {availableServiceTypes.map(p => (
-                      <div key={p} className="flex justify-between items-center text-[11px] font-black bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-slate-300 transition-all uppercase tracking-tighter">
+                      <div key={p} className="flex justify-between items-center text-[11px] font-black bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-slate-300 transition-all uppercase">
                         {p}
-                        <button onClick={() => { const n = availableServiceTypes.filter(x => x !== p); setAvailableServiceTypes(n); updateSettings({ services: n }); }} className="text-slate-300 hover:text-rose-500 transition-colors"><X size={16} /></button>
+                        <button onClick={() => { const n = availableServiceTypes.filter(x => x !== p); setAvailableServiceTypes(n); updateSettings({ services: n }); }} className="text-slate-300 hover:text-rose-500"><X size={16} /></button>
                       </div>
                     ))}
                   </div>
                   <form onSubmit={(e) => { e.preventDefault(); if (inputSvc.trim()) { const n = [...availableServiceTypes, inputSvc.trim()]; setAvailableServiceTypes(n); updateSettings({ services: n }); setInputSvc(''); } }} className="flex gap-2 bg-slate-100 p-2 rounded-[24px]">
-                    <input value={inputSvc} onChange={e => setInputSvc(e.target.value)} className="flex-1 bg-transparent px-4 py-2 font-bold text-xs outline-none" placeholder="Service..." />
-                    <button type="submit" className="bg-slate-900 text-white p-3 rounded-[18px] hover:scale-105 active:scale-95 transition-all shadow-lg"><Plus size={18} /></button>
+                    <input value={inputSvc} onChange={e => setInputSvc(e.target.value)} className="flex-1 bg-transparent px-4 py-2 font-bold text-xs outline-none w-0" placeholder="Service..." />
+                    <button type="submit" className="bg-slate-900 text-white p-3 rounded-[18px] hover:scale-105 transition-all shrink-0"><Plus size={18} /></button>
                   </form>
                 </div>
                 {/* Logements */}
-                <div className="bg-white p-8 rounded-[40px] shadow-2xl shadow-blue-100 flex flex-col h-full border-2 border-blue-100 relative">
-                  <div className="absolute -top-3 -right-3 bg-blue-600 text-white px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest shadow-lg">Actifs</div>
-                  <h3 className="text-[11px] font-black uppercase tracking-widest mb-6 text-blue-600 flex items-center gap-2"><Home size={14}/> Votre Parc</h3>
-                  <div className="space-y-3 mb-8 flex-1 overflow-y-auto max-h-[250px] custom-scrollbar text-[11px]">
+                <div className="bg-white p-6 md:p-8 rounded-[32px] md:rounded-[40px] shadow-2xl shadow-blue-100 flex flex-col h-full border-2 border-blue-100">
+                  <h3 className="text-[10px] md:text-[11px] font-black uppercase tracking-widest mb-6 text-blue-600 flex items-center gap-2"><Home size={14}/> Logements</h3>
+                  <div className="space-y-3 mb-8 flex-1 overflow-y-auto max-h-[250px] custom-scrollbar">
                     {properties.map(p => (
-                        <div key={p.id} className="flex justify-between items-start bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-2xl hover:shadow-lg transition-all border border-blue-100/50">
+                        <div key={p.id} className="flex justify-between items-start bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-2xl border border-blue-100/50">
                           <div className="flex-1 min-w-0">
-                            <p className="font-black text-slate-900 truncate uppercase tracking-tighter leading-tight">{p.name}</p>
-                            <p className="text-[10px] text-slate-500 truncate mt-1">{p.address}</p>
+                            <p className="font-black text-slate-900 truncate uppercase tracking-tighter text-[11px]">{p.name}</p>
+                            <p className="text-[9px] text-slate-500 truncate">{p.address}</p>
                           </div>
-                          <button onClick={async () => { if(window.confirm("Supprimer ce bien ?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', p.id)) }} className="text-slate-300 hover:text-rose-500 p-1 ml-2"><Trash2 size={16} /></button>
+                          <button onClick={async () => { if(window.confirm("Supprimer ce bien ?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', p.id)) }} className="text-slate-300 hover:text-rose-500 ml-2 shrink-0"><Trash2 size={16} /></button>
                         </div>
                       ))}
                   </div>
@@ -852,10 +829,10 @@ const App = () => {
                       setInputProp({ name: '', address: '' });
                     }
                   }} className="space-y-2 pt-4 border-t border-blue-50">
-                    <input required value={inputProp.name} onChange={e => setInputProp({...inputProp, name: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-xs outline-none focus:border-blue-300 transition-all shadow-inner" placeholder="Nom du bien" />
+                    <input required value={inputProp.name} onChange={e => setInputProp({...inputProp, name: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-xs outline-none focus:border-blue-300 shadow-inner" placeholder="Nom du bien" />
                     <div className="flex gap-2">
-                      <input value={inputProp.address} onChange={e => setInputProp({...inputProp, address: e.target.value})} className="flex-1 px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-xs outline-none focus:border-blue-300 transition-all shadow-inner" placeholder="Adresse" />
-                      <button type="submit" className="bg-blue-600 text-white p-3 rounded-2xl hover:scale-105 active:scale-95 shadow-xl shadow-blue-200"><Plus size={18} /></button>
+                      <input value={inputProp.address} onChange={e => setInputProp({...inputProp, address: e.target.value})} className="flex-1 px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-xs outline-none w-0" placeholder="Adresse" />
+                      <button type="submit" className="bg-blue-600 text-white p-3 rounded-2xl hover:scale-105 transition-all shrink-0 shadow-lg"><Plus size={18} /></button>
                     </div>
                   </form>
                 </div>
@@ -865,41 +842,41 @@ const App = () => {
         </div>
       </main>
 
-      {/* MODALE RÉSERVATION */}
+      {/* MODALE RÉSERVATION (Mobile-Ready) */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
-          <div className="bg-white rounded-[60px] shadow-[0_35px_100px_-15px_rgba(0,0,0,0.3)] w-full max-w-3xl max-h-[95vh] flex flex-col scale-in-center overflow-hidden border border-slate-100">
-            <div className="p-10 border-b border-slate-50 flex justify-between items-center bg-white sticky top-0 z-10 text-xs">
+          <div className="bg-white rounded-[40px] md:rounded-[60px] shadow-2xl w-full max-w-3xl max-h-[95vh] flex flex-col scale-in-center overflow-hidden border border-slate-100">
+            <div className="p-6 md:p-10 border-b border-slate-50 flex justify-between items-center bg-white sticky top-0 z-10">
               <div className="flex items-center gap-4 text-blue-600">
-                <div className="bg-blue-50 p-3 rounded-2xl"><CalendarCheck size={28} /></div>
-                <div><h3 className="font-black text-2xl tracking-tight text-slate-900">Réservation</h3><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Édition en temps réel</p></div>
+                <div className="bg-blue-50 p-2 md:p-3 rounded-2xl"><CalendarCheck size={24} /></div>
+                <div><h3 className="font-black text-xl md:text-2xl tracking-tight text-slate-900 leading-none">Réservation</h3></div>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="p-3 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900 hover:rotate-90 transition-all duration-300"><X size={28} /></button>
+              <button onClick={() => setIsModalOpen(false)} className="p-3 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900 transition-all"><X size={24} /></button>
             </div>
-            <form onSubmit={saveRes} className="p-10 space-y-8 overflow-y-auto flex-1 custom-scrollbar text-xs">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-1"><label className="text-[10px] font-black uppercase ml-3 text-slate-400 tracking-widest">Bien</label><select required value={formData.propertyId} onChange={e => setFormData({ ...formData, propertyId: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-black shadow-inner outline-none focus:border-blue-300">{properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
-                <div className="space-y-1"><label className="text-[10px] font-black uppercase ml-3 text-slate-400 tracking-widest">Voyageur</label><input required placeholder="Nom complet" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-black shadow-inner outline-none focus:border-blue-300" /></div>
-                <div className="space-y-1"><label className="text-[10px] font-black uppercase ml-3 text-slate-400 tracking-widest">Arrivée</label><input type="date" required value={formData.startDate} onChange={e => setFormData({ ...formData, startDate: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-black shadow-inner outline-none" /></div>
-                <div className="space-y-1"><label className="text-[10px] font-black uppercase ml-3 text-slate-400 tracking-widest">Départ</label><input type="date" required value={formData.endDate} onChange={e => setFormData({ ...formData, endDate: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-black shadow-inner outline-none" /></div>
-                <div className="space-y-1 md:col-span-2"><label className="text-[10px] font-black uppercase ml-3 text-slate-400 tracking-widest">Notes</label><textarea placeholder="Notes particulières..." value={formData.comment} onChange={e => setFormData({ ...formData, comment: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-bold shadow-inner outline-none focus:border-blue-300 min-h-[80px] resize-none" /></div>
+            <form onSubmit={saveRes} className="p-6 md:p-10 space-y-8 overflow-y-auto flex-1 custom-scrollbar text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+                <div className="space-y-1"><label className="text-[10px] font-black uppercase ml-3 text-slate-400">Bien</label><select required value={formData.propertyId} onChange={e => setFormData({ ...formData, propertyId: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-black outline-none focus:border-blue-300">{properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+                <div className="space-y-1"><label className="text-[10px] font-black uppercase ml-3 text-slate-400">Voyageur</label><input required placeholder="Nom complet" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-black outline-none" /></div>
+                <div className="space-y-1"><label className="text-[10px] font-black uppercase ml-3 text-slate-400">Arrivée</label><input type="date" required value={formData.startDate} onChange={e => setFormData({ ...formData, startDate: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-black outline-none" /></div>
+                <div className="space-y-1"><label className="text-[10px] font-black uppercase ml-3 text-slate-400">Départ</label><input type="date" required value={formData.endDate} onChange={e => setFormData({ ...formData, endDate: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-black outline-none" /></div>
+                <div className="space-y-1 md:col-span-2"><label className="text-[10px] font-black uppercase ml-3 text-slate-400">Notes</label><textarea placeholder="Notes particulières..." value={formData.comment} onChange={e => setFormData({ ...formData, comment: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-bold outline-none focus:border-blue-300 min-h-[80px] resize-none" /></div>
               </div>
 
-              <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-8 rounded-[40px] border border-blue-50 space-y-6 shadow-inner">
-                <div className="flex justify-between items-center font-black text-[11px] uppercase tracking-widest text-blue-900 pb-2 border-b border-blue-100">
+              <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-6 md:p-8 rounded-[40px] border border-blue-50 space-y-6">
+                <div className="flex justify-between items-center font-black text-[11px] uppercase text-blue-900 border-b border-blue-100 pb-2">
                   <div className="flex items-center gap-2"><Euro size={16}/> Finances</div>
                   <select value={formData.platform} onChange={e => setFormData({ ...formData, platform: e.target.value })} className="bg-white border border-blue-100 rounded-xl px-3 py-1.5 text-blue-600 shadow-sm outline-none">
                     {availablePlatforms.map(p => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
                 {formData.platform === 'Booking' || formData.platform === 'Abritel' ? (
-                  <div className="grid grid-cols-2 gap-4 text-[11px]">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px]">
                     <div><label className="font-black uppercase text-slate-400 ml-1">Prix Client</label><input type="number" step="0.01" value={formData.displayedAmount} onChange={e => setFormData({ ...formData, displayedAmount: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl font-black" /></div>
                     <div><label className="font-black uppercase text-rose-400 ml-1">Taxe Séjour</label><input type="number" step="0.01" value={formData.cityTax} onChange={e => setFormData({ ...formData, cityTax: e.target.value })} className="w-full p-3 border border-rose-100 rounded-xl font-black text-rose-500 bg-rose-50/20" /></div>
-                    <div className="col-span-2 flex justify-between bg-slate-900 p-3 rounded-xl text-white font-black uppercase"><span>Brut URSSAF</span><span>{(parseFloat(formData.displayedAmount) - (parseFloat(formData.cityTax) || 0)).toFixed(2)}€</span></div>
+                    <div className="md:col-span-2 flex justify-between bg-slate-900 p-3 rounded-xl text-white font-black uppercase"><span>Brut URSSAF</span><span>{(parseFloat(formData.displayedAmount) - (parseFloat(formData.cityTax) || 0)).toFixed(2)}€</span></div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-4 text-[11px]">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px]">
                     <div><label className="font-black uppercase text-slate-400 ml-1">Brut URSSAF</label><input type="number" step="0.01" value={formData.grossAmount} onChange={e => setFormData({ ...formData, grossAmount: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl font-black" /></div>
                     <div><label className="font-black uppercase text-slate-400 ml-1">Comm. plateforme</label><input type="number" step="0.01" value={formData.platformFees} onChange={e => setFormData({ ...formData, platformFees: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl font-black" /></div>
                   </div>
@@ -909,52 +886,49 @@ const App = () => {
 
               <div className="space-y-6">
                 <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                  <span className="text-[11px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2"><UserCheck size={16}/> Prestations Externes</span>
-                  <button type="button" onClick={() => setFormData({ ...formData, resExpenses: [...formData.resExpenses, { id: Date.now().toString(), person: availableProviders[0] || '', type: availableServiceTypes[0] || '', amount: 0, paymentDate: '' }] })} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-md hover:scale-105 transition-all">+ Ajouter Frais</button>
+                  <span className="text-[11px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2"><UserCheck size={16}/> Prestations</span>
+                  <button type="button" onClick={() => setFormData({ ...formData, resExpenses: [...formData.resExpenses, { id: Date.now().toString(), person: availableProviders[0] || '', type: availableServiceTypes[0] || '', amount: 0, paymentDate: '' }] })} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-md hover:scale-105 transition-all">+ Ajouter</button>
                 </div>
                 <div className="space-y-3">
                    {formData.resExpenses.map(exp => (
                     <div key={exp.id} className="flex flex-col bg-slate-50 p-4 rounded-3xl border border-slate-100 space-y-3">
                       <div className="flex gap-3 items-center">
-                        <select value={exp.person} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, person: e.target.value } : x) })} className="flex-1 p-2 border border-slate-200 rounded-xl text-[10px] font-black uppercase bg-white">
+                        <select value={exp.person} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, person: e.target.value } : x) })} className="flex-1 p-2 border border-slate-200 rounded-xl text-[10px] font-black uppercase bg-white w-0 shrink">
                           {availableProviders.map(p => <option key={p} value={p}>{p}</option>)}
                         </select>
-                        <select value={exp.type} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, type: e.target.value } : x) })} className="flex-1 p-2 border border-slate-200 rounded-xl text-[10px] font-black uppercase bg-white">
+                        <select value={exp.type} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, type: e.target.value } : x) })} className="flex-1 p-2 border border-slate-200 rounded-xl text-[10px] font-black uppercase bg-white w-0 shrink">
                           {availableServiceTypes.map(p => <option key={p} value={p}>{p}</option>)}
                         </select>
-                        <div className="flex items-center gap-2 bg-white px-2 py-1.5 rounded-xl border border-slate-200">
-                          <input type="number" value={exp.amount} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, amount: e.target.value } : x) })} className="w-12 font-black text-right text-xs outline-none" />
+                        <div className="flex items-center gap-1 bg-white px-2 py-1.5 rounded-xl border border-slate-200 shrink-0">
+                          <input type="number" value={exp.amount} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, amount: e.target.value } : x) })} className="w-10 font-black text-right text-xs outline-none" />
                           <span className="text-slate-300 font-bold">€</span>
                         </div>
-                        <button type="button" onClick={() => setFormData({ ...formData, resExpenses: formData.resExpenses.filter(x => x.id !== exp.id) })} className="text-slate-300 hover:text-rose-500"><Trash2 size={18} /></button>
+                        <button type="button" onClick={() => setFormData({ ...formData, resExpenses: formData.resExpenses.filter(x => x.id !== exp.id) })} className="text-slate-300 hover:text-rose-500 shrink-0"><Trash2 size={18} /></button>
                       </div>
-                      <div className="flex items-center gap-4 border-t border-slate-200/50 pt-2">
-                         <div className="flex items-center gap-2">
-                            <CreditCard size={14} className={exp.paymentDate ? "text-emerald-500" : "text-slate-300"}/>
-                            <span className="text-[9px] font-black uppercase text-slate-400">Réglé le :</span>
-                         </div>
-                         <input type="date" value={exp.paymentDate || ''} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, paymentDate: e.target.value } : x) })} className="p-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-black outline-none focus:border-blue-300" />
+                      <div className="flex items-center gap-3 border-t border-slate-200/50 pt-2">
+                         <span className="text-[9px] font-black uppercase text-slate-400 shrink-0">Réglé :</span>
+                         <input type="date" value={exp.paymentDate || ''} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, paymentDate: e.target.value } : x) })} className="flex-1 p-2 bg-white border border-slate-200 rounded-lg text-[10px] font-black outline-none w-0" />
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div className={`p-8 rounded-[40px] border-2 flex items-center justify-between transition-all shadow-xl ${formData.paymentDate ? 'bg-emerald-50/50 border-emerald-100' : 'bg-orange-50 border-orange-100'}`}>
-                <div><h4 className="text-xs font-black uppercase tracking-widest text-slate-900 leading-none">Paiement Global Reçu</h4><p className="text-[9px] font-bold text-slate-400 uppercase mt-1.5">Date en banque</p></div>
-                <input type="date" value={formData.paymentDate} onChange={e => setFormData({ ...formData, paymentDate: e.target.value })} className="p-3 border border-slate-200 rounded-[15px] font-black bg-white shadow-lg outline-none" />
+              <div className={`p-6 md:p-8 rounded-[32px] md:rounded-[40px] border-2 flex flex-col md:flex-row items-center justify-between transition-all shadow-xl gap-4 ${formData.paymentDate ? 'bg-emerald-50/50 border-emerald-100' : 'bg-orange-50 border-orange-100'}`}>
+                <div className="text-center md:text-left"><h4 className="text-[10px] md:text-xs font-black uppercase tracking-widest text-slate-900 leading-none">Paiement Global Reçu</h4><p className="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase mt-1.5">Date en banque</p></div>
+                <input type="date" value={formData.paymentDate} onChange={e => setFormData({ ...formData, paymentDate: e.target.value })} className="w-full md:w-auto p-3 border border-slate-200 rounded-[15px] font-black bg-white shadow-lg outline-none" />
               </div>
 
               <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-slate-100 gap-6">
                 <div className="text-center md:text-left">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 leading-none mb-2">Profit Net Estimé</p>
-                  <p className="text-3xl font-black text-blue-600 tracking-tighter">
+                  <p className="text-2xl md:text-3xl font-black text-blue-600 tracking-tighter">
                     {(nModale - curChargesModale - (formData.isUrssaf ? ((formData.platform === 'Booking' || formData.platform === 'Abritel' ? (parseFloat(formData.displayedAmount) - (parseFloat(formData.cityTax) || 0)) : parseFloat(formData.grossAmount) || 0) * 0.077) : 0)).toFixed(2)}€
                   </p>
                 </div>
                 <div className="flex gap-3 w-full md:w-auto">
                   {editingResId && <button type="button" onClick={() => deleteRes(editingResId)} className="flex-1 md:flex-none px-6 py-4 text-rose-500 font-black text-[10px] uppercase tracking-widest hover:bg-rose-50 rounded-[20px] transition-colors">Supprimer</button>}
-                  <button type="submit" className="flex-1 md:flex-none bg-slate-900 text-white px-10 py-4 rounded-[20px] font-black shadow-2xl hover:bg-blue-600 uppercase tracking-widest text-[10px] transition-all">Enregistrer</button>
+                  <button type="submit" className="flex-1 md:flex-none bg-slate-900 text-white px-8 md:px-10 py-4 rounded-[20px] font-black shadow-2xl hover:bg-blue-600 uppercase tracking-widest text-[10px] transition-all">Enregistrer</button>
                 </div>
               </div>
             </form>
