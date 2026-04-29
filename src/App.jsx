@@ -9,26 +9,21 @@ import {
   UserCheck, PlusCircle, TrendingUp, Info, ChevronUp, ChevronDown, Filter, Loader2
 } from 'lucide-react';
 
-// --- CONFIGURATION FIREBASE ---
-let firebaseConfig;
-if (typeof __firebase_config !== 'undefined') {
-  firebaseConfig = JSON.parse(__firebase_config);
-} else {
-  firebaseConfig = {
-    apiKey: "AIzaSyDJYT5L0A9f1YdRgEcvdk4iyoKgcfrBGWw",
-    authDomain: "immogerer-7f706.firebaseapp.com",
-    projectId: "immogerer-7f706",
-    storageBucket: "immogerer-7f706.firebasestorage.app",
-    messagingSenderId: "703084929054",
-    appId: "1:703084929054:web:313fae5f706e4dba4fce0f",
-    measurementId: "G-QQE1Q309TB"
-  };
-}
+// --- CONFIGURATION FIREBASE EXACTE ---
+const firebaseConfig = {
+  apiKey: "AIzaSyDJYT5L0A9f1YdRGEcvdk4iyoKgcfrBGWw",
+  authDomain: "immogerer-7f706.firebaseapp.com",
+  projectId: "immogerer-7f706",
+  storageBucket: "immogerer-7f706.firebasestorage.app",
+  messagingSenderId: "703084929054",
+  appId: "1:703084929054:web:313fae5f706e4dba4fce0f",
+  measurementId: "G-QQE1Q309TB"
+};
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? String(__app_id).replace(/[^a-zA-Z0-9_-]/g, '_') : 'immogerer-prod-final';
+const appId = 'immogerer-prod-final';
 
 // --- COMPOSANT GRAPHIQUE ---
 const DonutChart = ({ data, title }) => {
@@ -107,7 +102,7 @@ const App = () => {
   const [activeTab, setActiveTab] = useState('planning');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [planningViewMode, setPlanningViewMode] = useState('list');
-  const [viewDate, setViewDate] = useState(new Date(2026, 4, 1));
+  const [viewDate, setViewDate] = useState(new Date());
   
   const [properties, setProperties] = useState([]);
   const [tenants, setTenants] = useState([]);
