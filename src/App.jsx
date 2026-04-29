@@ -7,7 +7,7 @@ import {
   Menu, X, CalendarCheck, CheckCircle, Clock, PieChart as PieChartIcon,
   ChevronLeft, ChevronRight, BarChart3, List, Wallet, Settings, Calculator,
   UserCheck, PlusCircle, TrendingUp, Info, ChevronUp, ChevronDown, Filter, Loader2,
-  Building2, Globe, CalendarRange, MessageSquare
+  Building2, Globe, CalendarRange, MessageSquare, CreditCard
 } from 'lucide-react';
 
 // --- CONFIGURATION FIREBASE EXACTE ---
@@ -137,6 +137,7 @@ const App = () => {
   const [filterMonth, setFilterMonth] = useState(new Date().getMonth().toString());
   const [filterProp, setFilterProp] = useState('all');
   const [filterPlat, setFilterPlat] = useState('all');
+  const [filterProv, setFilterProv] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -241,9 +242,10 @@ const App = () => {
       const matchMonth = filterMonth === 'all' || dateRef.getMonth() === parseInt(filterMonth);
       const matchProp = filterProp === 'all' || t.propertyId === filterProp;
       const matchPlat = filterPlat === 'all' || t.platform === filterPlat;
-      return matchYear && matchMonth && matchProp && matchPlat;
+      const matchProv = filterProv === 'all' || (t.resExpenses && t.resExpenses.some(exp => exp.person === filterProv));
+      return matchYear && matchMonth && matchProp && matchPlat && matchProv;
     });
-  }, [tenants, filterYear, filterMonth, filterProp, filterPlat]);
+  }, [tenants, filterYear, filterMonth, filterProp, filterPlat, filterProv]);
 
   // --- CALCULS LOGIQUES ---
   const financials = useMemo(() => {
@@ -389,6 +391,12 @@ const App = () => {
           {availablePlatforms.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
       </div>
+      <div className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+        <select value={filterProv} onChange={e => setFilterProv(e.target.value)} className="text-[10px] font-black uppercase bg-transparent cursor-pointer outline-none text-slate-600">
+          <option value="all">Prestataires</option>
+          {availableProviders.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+      </div>
       {(activeTab === 'reservations' || activeTab === 'agenda') && (
         <div className="flex items-center gap-1.5 px-3 py-2 bg-blue-50/50 rounded-2xl border border-blue-100 ml-auto">
           <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="text-[10px] font-black uppercase bg-transparent text-blue-600 cursor-pointer outline-none">
@@ -445,7 +453,7 @@ const App = () => {
       </div>
 
       <main className="flex-1 p-6 md:p-12 overflow-y-auto h-screen custom-scrollbar">
-        <div className="max-w-6xl mx-auto pb-24">
+        <div className="max-w-7xl mx-auto pb-24">
           
           <RenderFilters />
 
@@ -473,13 +481,14 @@ const App = () => {
                       <th className="p-6">Bien / Plateforme</th>
                       <th className="p-6">Client / Voyageur</th>
                       <th className="p-6 text-center">Dates séjour</th>
+                      <th className="p-6">Prestations</th>
                       <th className="p-6 text-right">Net Perçu</th>
                       <th className="p-6 text-center">État Paiement</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 font-bold">
                     {reservationsList.length === 0 ? (
-                      <tr><td colSpan="5" className="p-20 text-center text-slate-300 font-medium italic text-sm">Aucune réservation ne correspond à vos critères.</td></tr>
+                      <tr><td colSpan="6" className="p-20 text-center text-slate-300 font-medium italic text-sm">Aucune réservation ne correspond à vos critères.</td></tr>
                     ) : (
                       reservationsList.map(t => (
                         <tr key={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="hover:bg-slate-50/80 cursor-pointer transition-all group">
@@ -494,6 +503,25 @@ const App = () => {
                           </td>
                           <td className="p-6 font-black text-slate-900 text-sm">{t.name}</td>
                           <td className="p-6 text-center text-slate-500 font-medium whitespace-nowrap bg-slate-50/30 group-hover:bg-blue-50/20 transition-colors">{t.startDate} <span className="mx-2 text-slate-300">➔</span> {t.endDate}</td>
+                          <td className="p-6">
+                             <div className="space-y-2">
+                                {t.resExpenses && t.resExpenses.length > 0 ? (
+                                    t.resExpenses.map((exp, idx) => (
+                                        <div key={idx} className="flex flex-col">
+                                            <div className="flex items-center gap-2">
+                                                <span className={`text-[10px] font-black uppercase tracking-tighter ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>
+                                                    {exp.person} : {exp.amount}€
+                                                </span>
+                                                {exp.paymentDate ? <CheckCircle size={10} className="text-emerald-500" /> : <Clock size={10} className="text-orange-400" />}
+                                            </div>
+                                            {exp.paymentDate && <span className="text-[8px] text-slate-400 font-bold uppercase">{exp.paymentDate}</span>}
+                                        </div>
+                                    ))
+                                ) : (
+                                    <span className="text-slate-300 italic text-[10px]">Aucune</span>
+                                )}
+                             </div>
+                          </td>
                           <td className="p-6 text-right font-black text-slate-900 text-sm tabular-nums">{t.netAmount.toFixed(2)}€</td>
                           <td className="p-6 text-center">
                             <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
@@ -518,7 +546,6 @@ const App = () => {
                         <h2 className="text-3xl font-black uppercase tracking-tighter">Agenda Visuel</h2>
                         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Occupation par logement</p>
                     </div>
-                    {/* Navigation du mois */}
                     <div className="flex items-center gap-4 bg-white px-6 py-3 rounded-[24px] shadow-lg shadow-slate-100 border border-slate-50">
                         <button onClick={() => handleMonthChange('prev')} className="p-2 hover:bg-slate-50 rounded-xl transition-colors text-blue-600"><ChevronLeft size={24}/></button>
                         <div className="text-center min-w-[140px]">
@@ -529,7 +556,6 @@ const App = () => {
                     </div>
                 </div>
 
-                {/* Légende des Logements */}
                 <div className="bg-white/50 p-4 rounded-[32px] border border-white flex flex-wrap gap-4 justify-center md:justify-start">
                     {properties.map((p, idx) => (
                         <div key={p.id} className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-full shadow-sm border border-slate-50">
@@ -537,34 +563,26 @@ const App = () => {
                             <span className="text-[10px] font-black uppercase text-slate-600 tracking-tighter">{p.name}</span>
                         </div>
                     ))}
-                    {properties.length === 0 && <p className="text-[10px] text-slate-400 italic">Aucun logement enregistré pour la légende.</p>}
                 </div>
 
                 <div className="bg-white p-6 md:p-10 rounded-[48px] border border-slate-50 shadow-2xl shadow-slate-200/40">
-                    {/* En-tête des jours */}
-                    <div className="grid grid-cols-7 mb-6 border-b border-slate-100 pb-6">
-                        {['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'].map(d => (
-                            <div key={d} className="text-center text-[11px] font-black uppercase text-slate-300 tracking-widest">{d}</div>
-                        ))}
+                    <div className="grid grid-cols-7 mb-6 border-b border-slate-100 pb-6 text-center text-[11px] font-black uppercase text-slate-300 tracking-widest">
+                        {['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'].map(d => <div key={d}>{d}</div>)}
                     </div>
 
-                    {/* Grille du calendrier */}
                     <div className="grid grid-cols-7 gap-2 md:gap-3">
                         {agendaDays.map((item, idx) => {
                             if (item.empty) return <div key={`empty-${idx}`} className="h-24 md:h-36 bg-slate-50/20 rounded-3xl"></div>;
 
                             const isToday = item.dateStr === todayStr;
-                            const dayReservations = reservationsList.filter(res => {
-                                return item.dateStr >= res.startDate && item.dateStr <= res.endDate;
-                            });
+                            const dayReservations = reservationsList.filter(res => item.dateStr >= res.startDate && item.dateStr <= res.endDate);
 
                             return (
                                 <div key={item.dateStr} className={`h-24 md:h-36 bg-white border ${isToday ? 'border-blue-400 ring-2 ring-blue-50 shadow-blue-100' : 'border-slate-100'} rounded-[24px] p-3 relative group overflow-hidden hover:border-blue-200 transition-all flex flex-col`}>
                                     <div className="flex justify-between items-center mb-2">
-                                        <span className={`text-[11px] font-black ${isToday ? 'text-blue-600' : 'text-slate-300'} group-hover:text-blue-400 transition-colors`}>{item.day}</span>
+                                        <span className={`text-[11px] font-black ${isToday ? 'text-blue-600' : 'text-slate-300'}`}>{item.day}</span>
                                         {isToday && <div className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-ping"></div>}
                                     </div>
-                                    
                                     <div className="flex-1 space-y-1.5 overflow-y-auto no-scrollbar pb-2">
                                         {dayReservations.map((res) => {
                                             const propIdx = properties.findIndex(p => p.id === res.propertyId);
@@ -574,7 +592,7 @@ const App = () => {
                                                 <div 
                                                     key={res.id} 
                                                     onClick={(e) => { e.stopPropagation(); setEditingResId(res.id); setFormData(res); setIsModalOpen(true); }}
-                                                    className={`h-4 md:h-5 rounded-lg text-[8px] md:text-[9px] font-black text-white px-2 flex items-center truncate cursor-pointer hover:scale-105 active:scale-95 transition-all shadow-sm ${isStart ? 'ring-2 ring-white/50' : ''}`}
+                                                    className={`h-4 md:h-5 rounded-lg text-[8px] md:text-[9px] font-black text-white px-2 flex items-center truncate cursor-pointer hover:scale-105 transition-all shadow-sm ${isStart ? 'ring-2 ring-white/50' : ''}`}
                                                     style={{ backgroundColor: color }}
                                                 >
                                                     {isStart && <span className="mr-1 opacity-60">●</span>}
@@ -649,34 +667,29 @@ const App = () => {
           {activeTab === 'finances' && (
             <div className="space-y-10 animate-in fade-in">
               <h2 className="text-3xl font-black uppercase tracking-tighter">Comptabilité Détaillée</h2>
-              
               <div className="bg-white rounded-[40px] border border-slate-50 shadow-2xl shadow-slate-200/50 overflow-hidden text-xs">
-                <div className="p-8 bg-slate-900 text-white font-black uppercase text-[11px] tracking-widest flex justify-between items-center border-b border-white/5">
+                <div className="p-8 bg-slate-900 text-white font-black uppercase text-[11px] tracking-widest flex justify-between items-center">
                    <div className="flex items-center gap-3"><Calculator size={20} className="text-blue-400"/> Bilan Direct & URSSAF</div>
                    <span className="opacity-40 font-bold">Base Taxes 7.7%</span>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
-                    <thead className="bg-slate-50/50 font-black uppercase tracking-widest border-b border-slate-100 text-[10px] text-slate-400">
+                    <thead className="bg-slate-50 font-black uppercase tracking-widest border-b text-[10px] text-slate-400">
                       <tr><th className="p-6">Période</th><th className="p-6 text-right text-indigo-600 font-black">Banque</th><th className="p-6 text-right">Base URSSAF</th><th className="p-6 text-right text-rose-500">Provision Taxes</th><th className="p-6 text-right">Charges Svc.</th><th className="p-6 text-right font-black">Profit Réel</th></tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-50 font-bold">
-                      {monthlyRecapData.length === 0 ? (
-                        <tr><td colSpan="6" className="p-20 text-center text-slate-300 font-medium italic">Aucune donnée comptable.</td></tr>
-                      ) : (
-                        monthlyRecapData.map(([m, d]) => (
-                          <tr key={m} className="hover:bg-slate-50 transition-all">
-                            <td className="p-6 capitalize font-black text-slate-900">{formatMonthYear(m)}</td>
-                            <td className="p-6 text-right font-black text-indigo-600 tabular-nums">{d.totalBank.toLocaleString('fr-FR')}€</td>
-                            <td className="p-6 text-right text-slate-500 tabular-nums">{d.urssafGross.toLocaleString('fr-FR')}€</td>
-                            <td className="p-6 text-right text-rose-500 tabular-nums">-{d.taxes.toFixed(2)}€</td>
-                            <td className="p-6 text-right text-slate-500 tabular-nums">-{d.charges.toLocaleString('fr-FR')}€</td>
-                            <td className={`p-6 text-right font-black text-sm tabular-nums ${d.totalBank - d.taxes - d.charges >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{(d.totalBank - d.taxes - d.charges).toLocaleString('fr-FR')}€</td>
-                          </tr>
-                        ))
-                      )}
+                    <tbody className="divide-y divide-slate-50 font-bold text-slate-900">
+                      {monthlyRecapData.map(([m, d]) => (
+                        <tr key={m} className="hover:bg-slate-50 transition-all">
+                          <td className="p-6 capitalize font-black text-slate-900">{formatMonthYear(m)}</td>
+                          <td className="p-6 text-right font-black text-indigo-600 tabular-nums">{d.totalBank.toLocaleString('fr-FR')}€</td>
+                          <td className="p-6 text-right text-slate-500 tabular-nums">{d.urssafGross.toLocaleString('fr-FR')}€</td>
+                          <td className="p-6 text-right text-rose-500 tabular-nums">-{d.taxes.toFixed(2)}€</td>
+                          <td className="p-6 text-right text-slate-500 tabular-nums">-{d.charges.toLocaleString('fr-FR')}€</td>
+                          <td className={`p-6 text-right font-black text-sm tabular-nums ${d.totalBank - d.taxes - d.charges >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{(d.totalBank - d.taxes - d.charges).toLocaleString('fr-FR')}€</td>
+                        </tr>
+                      ))}
                     </tbody>
-                    <tfoot className="bg-indigo-600 text-white font-black border-t-2 border-indigo-700">
+                    <tfoot className="bg-indigo-600 text-white font-black">
                       <tr>
                         <td className="p-8 uppercase text-[11px] tracking-widest">TOTAUX FILTRÉS</td>
                         <td className="p-8 text-right tabular-nums text-lg">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0).toLocaleString('fr-FR')}€</td>
@@ -687,39 +700,6 @@ const App = () => {
                       </tr>
                     </tfoot>
                   </table>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-[40px] border border-slate-50 shadow-2xl shadow-slate-200/50 overflow-hidden text-xs">
-                <div className="p-8 bg-slate-900 text-white font-black flex justify-between items-center uppercase tracking-widest border-b border-white/5">
-                   <div className="flex items-center gap-3"><UserCheck className="text-indigo-400" size={20}/> Frais Prestataires</div>
-                   <span className="opacity-40 font-bold">Récapitulatif Dû</span>
-                </div>
-                <div className="overflow-x-auto text-xs">
-                   <table className="w-full text-left">
-                      <thead className="bg-slate-50 font-black uppercase tracking-widest border-b border-slate-100 text-[10px] text-slate-400">
-                         <tr><th className="p-6">Période</th><th className="p-6">Prestataire Service</th><th className="p-6 text-right font-black">Total à verser</th></tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50 font-bold text-slate-600">
-                         {providerRecap.length === 0 ? (
-                           <tr><td colSpan="3" className="p-20 text-center text-slate-300 font-medium italic text-sm">Aucune dépense prestataire enregistrée.</td></tr>
-                         ) : (
-                           providerRecap.map((item, idx) => (
-                             <tr key={idx} className="hover:bg-slate-50 transition-all">
-                                <td className="p-6 capitalize font-bold text-slate-900">{formatMonthYear(item.month)}</td>
-                                <td className="p-6 text-blue-600 font-black uppercase text-[10px] tracking-widest">{item.person}</td>
-                                <td className="p-6 text-right font-black text-slate-900 text-sm tabular-nums">{item.total.toLocaleString('fr-FR')} €</td>
-                             </tr>
-                           ))
-                         )}
-                      </tbody>
-                      <tfoot className="bg-slate-800 text-white font-black border-t-2">
-                        <tr>
-                          <td colSpan="2" className="p-8 uppercase text-[11px] tracking-widest">TOTAL PRESTATAIRES</td>
-                          <td className="p-8 text-right text-2xl tracking-tighter tabular-nums">{providerRecap.reduce((acc, curr) => acc + curr.total, 0).toLocaleString('fr-FR')}€</td>
-                        </tr>
-                      </tfoot>
-                   </table>
                 </div>
               </div>
             </div>
@@ -783,19 +763,15 @@ const App = () => {
                   <div className="absolute -top-3 -right-3 bg-blue-600 text-white px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest shadow-lg">Actifs</div>
                   <h3 className="text-[11px] font-black uppercase tracking-widest mb-6 text-blue-600 flex items-center gap-2"><Home size={14}/> Votre Parc</h3>
                   <div className="space-y-3 mb-8 flex-1 overflow-y-auto max-h-[250px] custom-scrollbar text-[11px]">
-                    {properties.length === 0 ? (
-                      <p className="text-[10px] text-slate-400 italic text-center p-4">Aucun bien enregistré.</p>
-                    ) : (
-                      properties.map(p => (
-                        <div key={p.id} className="flex justify-between items-start bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-2xl hover:shadow-lg hover:shadow-blue-100 transition-all border border-blue-100/50">
+                    {properties.map(p => (
+                        <div key={p.id} className="flex justify-between items-start bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-2xl hover:shadow-lg transition-all border border-blue-100/50">
                           <div className="flex-1 min-w-0">
                             <p className="font-black text-slate-900 truncate uppercase tracking-tighter leading-tight">{p.name}</p>
                             <p className="text-[10px] text-slate-500 truncate mt-1">{p.address}</p>
                           </div>
                           <button onClick={async () => { if(window.confirm("Supprimer ce bien ?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', p.id)) }} className="text-slate-300 hover:text-rose-500 p-1 ml-2"><Trash2 size={16} /></button>
                         </div>
-                      ))
-                    )}
+                      ))}
                   </div>
                   <form onSubmit={async (e) => { 
                     e.preventDefault(); 
@@ -804,10 +780,10 @@ const App = () => {
                       setInputProp({ name: '', address: '' });
                     }
                   }} className="space-y-2 pt-4 border-t border-blue-50">
-                    <input required value={inputProp.name} onChange={e => setInputProp({...inputProp, name: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-xs outline-none focus:border-blue-300 transition-all shadow-inner" placeholder="Nom du bien (ex: Villa...)" />
+                    <input required value={inputProp.name} onChange={e => setInputProp({...inputProp, name: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-xs outline-none focus:border-blue-300 transition-all shadow-inner" placeholder="Nom du bien" />
                     <div className="flex gap-2">
                       <input value={inputProp.address} onChange={e => setInputProp({...inputProp, address: e.target.value})} className="flex-1 px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-xs outline-none focus:border-blue-300 transition-all shadow-inner" placeholder="Adresse" />
-                      <button type="submit" className="bg-blue-600 text-white p-3 rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-xl shadow-blue-200"><Plus size={18} /></button>
+                      <button type="submit" className="bg-blue-600 text-white p-3 rounded-2xl hover:scale-105 active:scale-95 shadow-xl shadow-blue-200"><Plus size={18} /></button>
                     </div>
                   </form>
                 </div>
@@ -821,125 +797,92 @@ const App = () => {
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
           <div className="bg-white rounded-[60px] shadow-[0_35px_100px_-15px_rgba(0,0,0,0.3)] w-full max-w-3xl max-h-[95vh] flex flex-col scale-in-center overflow-hidden border border-slate-100">
-            <div className="p-12 border-b border-slate-50 flex justify-between items-center bg-white sticky top-0 z-10">
+            <div className="p-10 border-b border-slate-50 flex justify-between items-center bg-white sticky top-0 z-10 text-xs">
               <div className="flex items-center gap-4 text-blue-600">
                 <div className="bg-blue-50 p-3 rounded-2xl"><CalendarCheck size={28} /></div>
-                <div>
-                  <h3 className="font-black text-2xl tracking-tight text-slate-900">Détails Réservation</h3>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Édition en temps réel</p>
-                </div>
+                <div><h3 className="font-black text-2xl tracking-tight text-slate-900">Réservation</h3><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Édition en temps réel</p></div>
               </div>
               <button onClick={() => setIsModalOpen(false)} className="p-3 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900 hover:rotate-90 transition-all duration-300"><X size={28} /></button>
             </div>
-            <form onSubmit={saveRes} className="p-12 space-y-10 overflow-y-auto flex-1 custom-scrollbar text-xs">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase ml-3 text-slate-400 tracking-widest">Choisir le logement</label>
-                  <select required value={formData.propertyId} onChange={e => setFormData({ ...formData, propertyId: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black shadow-inner outline-none focus:border-blue-300">
-                    <option value="" disabled>Liste des biens...</option>
-                    {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase ml-3 text-slate-400 tracking-widest">Nom du Voyageur</label>
-                  <input required placeholder="Nom complet..." value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black shadow-inner outline-none focus:border-blue-300 text-sm" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase ml-3 text-slate-400 tracking-widest">Date d'Arrivée</label>
-                  <input type="date" required value={formData.startDate} onChange={e => setFormData({ ...formData, startDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black shadow-inner outline-none" />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase ml-3 text-slate-400 tracking-widest">Date de Départ</label>
-                  <input type="date" required value={formData.endDate} onChange={e => setFormData({ ...formData, endDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black shadow-inner outline-none" />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <label className="text-[10px] font-black uppercase ml-3 text-slate-400 tracking-widest flex items-center gap-2"><MessageSquare size={12}/> Commentaire / Notes Voyageur</label>
-                  <textarea 
-                    placeholder="Notez ici les particularités (ex: lit bébé, arrivée tardive...)" 
-                    value={formData.comment} 
-                    onChange={e => setFormData({ ...formData, comment: e.target.value })} 
-                    className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-bold shadow-inner outline-none focus:border-blue-300 min-h-[100px] resize-none"
-                  />
-                </div>
+            <form onSubmit={saveRes} className="p-10 space-y-8 overflow-y-auto flex-1 custom-scrollbar text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-1"><label className="text-[10px] font-black uppercase ml-3 text-slate-400 tracking-widest">Bien</label><select required value={formData.propertyId} onChange={e => setFormData({ ...formData, propertyId: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-black shadow-inner outline-none focus:border-blue-300">{properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+                <div className="space-y-1"><label className="text-[10px] font-black uppercase ml-3 text-slate-400 tracking-widest">Voyageur</label><input required placeholder="Nom complet" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-black shadow-inner outline-none focus:border-blue-300" /></div>
+                <div className="space-y-1"><label className="text-[10px] font-black uppercase ml-3 text-slate-400 tracking-widest">Arrivée</label><input type="date" required value={formData.startDate} onChange={e => setFormData({ ...formData, startDate: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-black shadow-inner outline-none" /></div>
+                <div className="space-y-1"><label className="text-[10px] font-black uppercase ml-3 text-slate-400 tracking-widest">Départ</label><input type="date" required value={formData.endDate} onChange={e => setFormData({ ...formData, endDate: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-black shadow-inner outline-none" /></div>
+                <div className="space-y-1 md:col-span-2"><label className="text-[10px] font-black uppercase ml-3 text-slate-400 tracking-widest">Notes</label><textarea placeholder="Notes particulières..." value={formData.comment} onChange={e => setFormData({ ...formData, comment: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-bold shadow-inner outline-none focus:border-blue-300 min-h-[80px] resize-none" /></div>
               </div>
 
-              <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-10 rounded-[48px] border border-blue-50 space-y-8 shadow-inner">
-                <div className="flex justify-between items-center font-black text-[11px] uppercase tracking-widest text-blue-900 border-b border-blue-100 pb-4">
-                  <div className="flex items-center gap-2"><Euro size={16}/> Données Financières</div>
-                  <select value={formData.platform} onChange={e => setFormData({ ...formData, platform: e.target.value })} className="bg-white border border-blue-100 rounded-xl px-4 py-2 text-blue-600 shadow-sm outline-none">
+              <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-8 rounded-[40px] border border-blue-50 space-y-6 shadow-inner">
+                <div className="flex justify-between items-center font-black text-[11px] uppercase tracking-widest text-blue-900 pb-2 border-b border-blue-100">
+                  <div className="flex items-center gap-2"><Euro size={16}/> Finances</div>
+                  <select value={formData.platform} onChange={e => setFormData({ ...formData, platform: e.target.value })} className="bg-white border border-blue-100 rounded-xl px-3 py-1.5 text-blue-600 shadow-sm outline-none">
                     {availablePlatforms.map(p => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
                 {formData.platform === 'Booking' || formData.platform === 'Abritel' ? (
-                  <div className="grid grid-cols-2 gap-6 text-[11px]">
-                    <div className="space-y-1.5"><label className="font-black uppercase text-slate-400">Total payé par Client</label><input type="number" step="0.01" value={formData.displayedAmount} onChange={e => setFormData({ ...formData, displayedAmount: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black text-sm" /></div>
-                    <div className="space-y-1.5"><label className="font-black uppercase text-rose-400">Taxe Séjour à reverser</label><input type="number" step="0.01" value={formData.cityTax} onChange={e => setFormData({ ...formData, cityTax: e.target.value })} className="w-full p-4 border border-rose-100 rounded-2xl font-black text-sm text-rose-500 bg-rose-50/30" /></div>
-                    <div className="col-span-2 flex justify-between bg-slate-900 p-5 rounded-2xl text-white font-black uppercase tracking-widest shadow-xl"><span>Base Calcul URSSAF (Brut)</span><span className="text-blue-400">{(parseFloat(formData.displayedAmount) - (parseFloat(formData.cityTax) || 0)).toFixed(2)}€</span></div>
-                    <div className="space-y-1.5"><label className="font-black uppercase text-slate-400">Commission Plateforme</label><input type="number" step="0.01" value={formData.platformFees} onChange={e => setFormData({ ...formData, platformFees: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black text-sm" /></div>
-                    <div className="space-y-1.5"><label className="font-black uppercase text-slate-400">Frais Bancaires / Stripe</label><input type="number" step="0.01" value={formData.bankFees} onChange={e => setFormData({ ...formData, bankFees: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black text-sm" /></div>
+                  <div className="grid grid-cols-2 gap-4 text-[11px]">
+                    <div><label className="font-black uppercase text-slate-400 ml-1">Prix Client</label><input type="number" step="0.01" value={formData.displayedAmount} onChange={e => setFormData({ ...formData, displayedAmount: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl font-black" /></div>
+                    <div><label className="font-black uppercase text-rose-400 ml-1">Taxe Séjour</label><input type="number" step="0.01" value={formData.cityTax} onChange={e => setFormData({ ...formData, cityTax: e.target.value })} className="w-full p-3 border border-rose-100 rounded-xl font-black text-rose-500 bg-rose-50/20" /></div>
+                    <div className="col-span-2 flex justify-between bg-slate-900 p-3 rounded-xl text-white font-black uppercase"><span>Brut URSSAF</span><span>{(parseFloat(formData.displayedAmount) - (parseFloat(formData.cityTax) || 0)).toFixed(2)}€</span></div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-6 text-[11px]">
-                    <div className="space-y-1.5"><label className="font-black uppercase text-slate-400">Brut URSSAF déclaré</label><input type="number" step="0.01" value={formData.grossAmount} onChange={e => setFormData({ ...formData, grossAmount: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black text-sm" /></div>
-                    <div className="space-y-1.5"><label className="font-black uppercase text-slate-400">Frais / Com. plateforme</label><input type="number" step="0.01" value={formData.platformFees} onChange={e => setFormData({ ...formData, platformFees: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black text-sm" /></div>
+                  <div className="grid grid-cols-2 gap-4 text-[11px]">
+                    <div><label className="font-black uppercase text-slate-400 ml-1">Brut URSSAF</label><input type="number" step="0.01" value={formData.grossAmount} onChange={e => setFormData({ ...formData, grossAmount: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl font-black" /></div>
+                    <div><label className="font-black uppercase text-slate-400 ml-1">Comm. plateforme</label><input type="number" step="0.01" value={formData.platformFees} onChange={e => setFormData({ ...formData, platformFees: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl font-black" /></div>
                   </div>
                 )}
-                <div className="flex items-center gap-3 bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-                  <input type="checkbox" className="w-5 h-5 accent-blue-600 rounded-lg" checked={formData.isUrssaf} onChange={e => setFormData({ ...formData, isUrssaf: e.target.checked })} />
-                  <span className="text-[10px] font-black uppercase text-slate-600 tracking-widest">Provisionner taxes Auto-Entrep. (7.7%)</span>
-                </div>
+                <div className="flex items-center gap-3 bg-white p-3 rounded-2xl shadow-sm"><input type="checkbox" className="w-4 h-4 accent-blue-600 rounded" checked={formData.isUrssaf} onChange={e => setFormData({ ...formData, isUrssaf: e.target.checked })} /><span className="text-[10px] font-black uppercase text-slate-600">Provisionner taxes AE (7.7%)</span></div>
               </div>
 
               <div className="space-y-6">
-                <div className="flex justify-between items-center border-b border-slate-100 pb-4">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                   <span className="text-[11px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2"><UserCheck size={16}/> Prestations Externes</span>
-                  <button type="button" onClick={() => setFormData({ ...formData, resExpenses: [...formData.resExpenses, { id: Date.now().toString(), person: availableProviders[0] || '', type: availableServiceTypes[0] || '', amount: 0 }] })} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-md hover:scale-105 transition-all">+ Ajouter Frais</button>
+                  <button type="button" onClick={() => setFormData({ ...formData, resExpenses: [...formData.resExpenses, { id: Date.now().toString(), person: availableProviders[0] || '', type: availableServiceTypes[0] || '', amount: 0, paymentDate: '' }] })} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-md hover:scale-105 transition-all">+ Ajouter Frais</button>
                 </div>
                 <div className="space-y-3">
                    {formData.resExpenses.map(exp => (
-                    <div key={exp.id} className="flex gap-3 items-center bg-slate-50 p-4 rounded-3xl border border-slate-100 group">
-                      <select value={exp.person} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, person: e.target.value } : x) })} className="flex-1 p-3 border border-slate-200 rounded-xl text-[10px] font-black uppercase bg-white">
-                        {availableProviders.map(p => <option key={p} value={p}>{p}</option>)}
-                      </select>
-                      <select value={exp.type} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, type: e.target.value } : x) })} className="flex-1 p-3 border border-slate-200 rounded-xl text-[10px] font-black uppercase bg-white">
-                        {availableServiceTypes.map(p => <option key={p} value={p}>{p}</option>)}
-                      </select>
-                      <div className="flex items-center gap-2 bg-white px-3 py-1 rounded-xl border border-slate-200 shadow-inner">
-                        <input type="number" value={exp.amount} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, amount: e.target.value } : x) })} className="w-16 p-2 font-black text-right text-xs outline-none" />
-                        <span className="text-slate-400 font-bold text-[10px]">€</span>
+                    <div key={exp.id} className="flex flex-col bg-slate-50 p-4 rounded-3xl border border-slate-100 space-y-3">
+                      <div className="flex gap-3 items-center">
+                        <select value={exp.person} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, person: e.target.value } : x) })} className="flex-1 p-2 border border-slate-200 rounded-xl text-[10px] font-black uppercase bg-white">
+                          {availableProviders.map(p => <option key={p} value={p}>{p}</option>)}
+                        </select>
+                        <select value={exp.type} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, type: e.target.value } : x) })} className="flex-1 p-2 border border-slate-200 rounded-xl text-[10px] font-black uppercase bg-white">
+                          {availableServiceTypes.map(p => <option key={p} value={p}>{p}</option>)}
+                        </select>
+                        <div className="flex items-center gap-2 bg-white px-2 py-1.5 rounded-xl border border-slate-200">
+                          <input type="number" value={exp.amount} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, amount: e.target.value } : x) })} className="w-12 font-black text-right text-xs outline-none" />
+                          <span className="text-slate-300 font-bold">€</span>
+                        </div>
+                        <button type="button" onClick={() => setFormData({ ...formData, resExpenses: formData.resExpenses.filter(x => x.id !== exp.id) })} className="text-slate-300 hover:text-rose-500"><Trash2 size={18} /></button>
                       </div>
-                      <button type="button" onClick={() => setFormData({ ...formData, resExpenses: formData.resExpenses.filter(x => x.id !== exp.id) })} className="text-slate-300 hover:text-rose-500 transition-colors group-hover:scale-110"><Trash2 size={20} /></button>
+                      <div className="flex items-center gap-4 border-t border-slate-200/50 pt-2">
+                         <div className="flex items-center gap-2">
+                            <CreditCard size={14} className={exp.paymentDate ? "text-emerald-500" : "text-slate-300"}/>
+                            <span className="text-[9px] font-black uppercase text-slate-400">Réglé le :</span>
+                         </div>
+                         <input type="date" value={exp.paymentDate || ''} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, paymentDate: e.target.value } : x) })} className="p-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-black outline-none focus:border-blue-300" />
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div className={`p-10 rounded-[48px] border-2 flex flex-col md:flex-row items-center justify-between transition-all gap-6 shadow-xl ${formData.paymentDate ? 'bg-emerald-50/50 border-emerald-100' : 'bg-orange-50 border-orange-100 shadow-inner'}`}>
-                <div>
-                  <h4 className="text-xs font-black uppercase tracking-widest text-slate-900">Validation du Paiement</h4>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Date de réception en banque</p>
-                </div>
-                <input type="date" value={formData.paymentDate} onChange={e => setFormData({ ...formData, paymentDate: e.target.value })} className="w-full md:w-auto p-4 border border-slate-200 rounded-[20px] font-black bg-white shadow-lg focus:ring-2 focus:ring-blue-200 outline-none" />
+              <div className={`p-8 rounded-[40px] border-2 flex items-center justify-between transition-all shadow-xl ${formData.paymentDate ? 'bg-emerald-50/50 border-emerald-100' : 'bg-orange-50 border-orange-100'}`}>
+                <div><h4 className="text-xs font-black uppercase tracking-widest text-slate-900 leading-none">Paiement Global Reçu</h4><p className="text-[9px] font-bold text-slate-400 uppercase mt-1.5">Date en banque</p></div>
+                <input type="date" value={formData.paymentDate} onChange={e => setFormData({ ...formData, paymentDate: e.target.value })} className="p-3 border border-slate-200 rounded-[15px] font-black bg-white shadow-lg outline-none" />
               </div>
 
-              {editingResId && (
-                <div className="pt-4">
-                   <a href={getGoogleCalendarUrl(formData, properties.find(p => p.id === formData.propertyId))} target="_blank" rel="noreferrer" className="w-full bg-blue-50 text-blue-700 p-6 rounded-[32px] font-black text-[11px] uppercase tracking-[2px] flex items-center justify-center gap-3 hover:bg-blue-600 hover:text-white transition-all shadow-xl shadow-blue-100 border-2 border-white">
-                    <CalendarIcon size={22}/> Synchroniser avec Google Agenda
-                   </a>
-                </div>
-              )}
-
-              <div className="flex flex-col md:flex-row justify-between items-center pt-12 border-t border-slate-100 gap-8">
+              <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-slate-100 gap-6">
                 <div className="text-center md:text-left">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 leading-none mb-2">Estimation Bénéfice Net</p>
-                  <p className="text-4xl font-black text-blue-600 tracking-tighter leading-none shadow-blue-100 drop-shadow-sm">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 leading-none mb-2">Profit Net Estimé</p>
+                  <p className="text-3xl font-black text-blue-600 tracking-tighter">
                     {(nModale - curChargesModale - (formData.isUrssaf ? ((formData.platform === 'Booking' || formData.platform === 'Abritel' ? (parseFloat(formData.displayedAmount) - (parseFloat(formData.cityTax) || 0)) : parseFloat(formData.grossAmount) || 0) * 0.077) : 0)).toFixed(2)}€
                   </p>
                 </div>
-                <div className="flex gap-4 w-full md:w-auto">
-                  {editingResId && <button type="button" onClick={() => deleteRes(editingResId)} className="flex-1 md:flex-none px-8 py-5 text-rose-500 font-black text-[11px] uppercase tracking-widest hover:bg-rose-50 rounded-[24px] transition-colors border-2 border-transparent hover:border-rose-100">Supprimer</button>}
-                  <button type="submit" className="flex-1 md:flex-none bg-slate-900 text-white px-12 py-5 rounded-[24px] font-black shadow-2xl shadow-slate-300 hover:bg-blue-600 hover:-translate-y-1 active:translate-y-0 uppercase tracking-widest text-[11px] transition-all">Enregistrer</button>
+                <div className="flex gap-3 w-full md:w-auto">
+                  {editingResId && <button type="button" onClick={() => deleteRes(editingResId)} className="flex-1 md:flex-none px-6 py-4 text-rose-500 font-black text-[10px] uppercase tracking-widest hover:bg-rose-50 rounded-[20px] transition-colors">Supprimer</button>}
+                  <button type="submit" className="flex-1 md:flex-none bg-slate-900 text-white px-10 py-4 rounded-[20px] font-black shadow-2xl hover:bg-blue-600 uppercase tracking-widest text-[10px] transition-all">Enregistrer</button>
                 </div>
               </div>
             </form>
