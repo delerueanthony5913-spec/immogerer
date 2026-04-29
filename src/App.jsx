@@ -15,15 +15,24 @@ if (typeof __firebase_config !== 'undefined') {
   firebaseConfig = JSON.parse(__firebase_config);
 } else {
   // 👇 REMPLACE CES CLÉS PAR CELLES DE TON PROJET FIREBASE PLUS TARD 👇
-  firebaseConfig = {
-    apiKey: "AIzaSyAs-v0Xexample-key-replace-this",
-    authDomain: "immogerer-prod.firebaseapp.com",
-    projectId: "immogerer-prod",
-    storageBucket: "immogerer-prod.appspot.com",
-    messagingSenderId: "1234567890",
-    appId: "1:1234567890:web:abcdef123456"
-  };
-}
+const firebaseConfig = {
+
+  apiKey: "AIzaSyDJYT5L0A9f1YdRGEcvdk4iyoKgcfrBGWw",
+
+  authDomain: "immogerer-7f706.firebaseapp.com",
+
+  projectId: "immogerer-7f706",
+
+  storageBucket: "immogerer-7f706.firebasestorage.app",
+
+  messagingSenderId: "703084929054",
+
+  appId: "1:703084929054:web:313fae5f706e4dba4fce0f",
+
+  measurementId: "G-QQE1Q309TB"
+
+};
+
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
