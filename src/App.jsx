@@ -263,7 +263,6 @@ const App = () => {
   const [inputSvc, setInputSvc] = useState('');
   const [inputProp, setInputProp] = useState({ name: '', address: '' });
   
-  // --- NOUVEAUX ETATS POUR L'IMPORTATION MULTI-PLATEFORMES ---
   const [importSource, setImportSource] = useState('Airbnb');
   const [importText, setImportText] = useState('');
   const [importStatus, setImportStatus] = useState('');
@@ -498,37 +497,68 @@ const App = () => {
 
   const startReview = () => {
     if (!importText.trim()) return;
+    const lines = importText.split('\n'); 
+    const newList = [];
 
-    if (importSource === 'Booking') {
-       alert("Pour configurer l'importation Booking, j'ai besoin de voir à quoi ressemble votre fichier CSV !\n\nPouvez-vous coller quelques lignes (avec l'en-tête) dans la discussion avec l'assistant ?");
-       return;
-    }
-
-    // --- LOGIQUE AIRBNB ---
-    const lines = importText.split('\n'); const newList = [];
     lines.forEach((line, index) => {
-        if (line.toLowerCase().includes('date') || line.trim() === '') return;
+        if (line.trim() === '') return;
         const parts = parseCSVLine(line);
         if (parts.length < 10) return;
-        const typeIndex = parts.findIndex(p => p.toLowerCase().includes('réservation') || p.toLowerCase().includes('reservation'));
-        if (typeIndex === -1) return;
-        let guestName, rawStart, rawEnd, listingName, grossStr, serviceFeeStr;
-        if (typeIndex === 2) {
-            rawStart = parts[5]?.trim(); rawEnd = parts[6]?.trim(); guestName = parts[8]?.trim(); listingName = parts[9]?.trim();
-            grossStr = parts[18]?.trim() || parts[13]?.trim(); serviceFeeStr = parts[15]?.trim();
-        } else if (typeIndex === 1) {
-            rawStart = parts[4]?.trim(); rawEnd = parts[5]?.trim(); guestName = parts[7]?.trim(); listingName = parts[8]?.trim();
-            grossStr = parts[15]?.trim() || parts[12]?.trim(); serviceFeeStr = parts[13]?.trim();
-        } else return;
-        const formatDateStr = (raw) => { if(!raw) return ''; const [m, d, y] = raw.split('/'); return (m && d && y) ? `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}` : ''; };
-        const startDate = formatDateStr(rawStart); const endDate = formatDateStr(rawEnd);
-        if (!startDate || !endDate) return;
-        const gross = parseFloat(grossStr?.replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
-        const fees = parseFloat(serviceFeeStr?.replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
+
+        let guestName, startDate, endDate, listingName;
+        let gross = 0, fees = 0, cityTax = 0, bankFees = 0, dispAmount = 0, net = 0;
+
+        if (importSource === 'Airbnb') {
+            const typeIndex = parts.findIndex(p => p.toLowerCase().includes('réservation') || p.toLowerCase().includes('reservation'));
+            if (typeIndex === -1) return;
+            let rawStart, rawEnd, grossStr, serviceFeeStr;
+            if (typeIndex === 2) {
+                rawStart = parts[5]?.trim(); rawEnd = parts[6]?.trim(); guestName = parts[8]?.trim(); listingName = parts[9]?.trim();
+                grossStr = parts[18]?.trim() || parts[13]?.trim(); serviceFeeStr = parts[15]?.trim();
+            } else if (typeIndex === 1) {
+                rawStart = parts[4]?.trim(); rawEnd = parts[5]?.trim(); guestName = parts[7]?.trim(); listingName = parts[8]?.trim();
+                grossStr = parts[15]?.trim() || parts[12]?.trim(); serviceFeeStr = parts[13]?.trim();
+            } else return;
+
+            const formatDateStr = (raw) => { if(!raw) return ''; const [m, d, y] = raw.split('/'); return (m && d && y) ? `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}` : ''; };
+            startDate = formatDateStr(rawStart); endDate = formatDateStr(rawEnd);
+            if (!startDate || !endDate) return;
+
+            gross = parseFloat(grossStr?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
+            fees = Math.abs(parseFloat(serviceFeeStr?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
+            dispAmount = gross;
+            net = gross - fees;
+        } 
+        else if (importSource === 'Booking') {
+            const typeCol = parts[0]?.toLowerCase() || '';
+            if (!typeCol.includes('rã©servation') && !typeCol.includes('réservation') && !typeCol.includes('reservation')) return;
+
+            guestName = `Réf: ${parts[2]?.trim()}`; 
+            startDate = parts[3]?.trim(); 
+            endDate = parts[4]?.trim();   
+            listingName = parts[10]?.trim();
+
+            if (!startDate || !endDate) return;
+
+            dispAmount = parseFloat(parts[15]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
+            cityTax = Math.abs(parseFloat(parts[16]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
+            fees = Math.abs(parseFloat(parts[17]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
+            bankFees = Math.abs(parseFloat(parts[19]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
+
+            gross = dispAmount - cityTax;
+            net = gross - fees - bankFees;
+        }
+
         const matchedProp = properties.find(p => listingName && p.name && (listingName.toLowerCase().includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(listingName.toLowerCase())));
-        const isDuplicate = tenants.some(t => t.name === guestName && t.startDate === startDate);
+        const isDuplicate = tenants.some(t => t.startDate === startDate && t.propertyId === (matchedProp?.id || 'none'));
         const hasProperty = !!matchedProp;
-        newList.push({ id: index, propertyId: matchedProp?.id || '', propertyName: matchedProp?.name || listingName || 'Inconnu', name: guestName || 'Client Inconnu', startDate, endDate, grossAmount: gross, platformFees: fees, netAmount: gross - fees, isDuplicate, hasProperty, selected: !isDuplicate && hasProperty });
+
+        newList.push({ 
+            id: index, propertyId: matchedProp?.id || '', propertyName: matchedProp?.name || listingName || 'Inconnu', 
+            name: guestName || 'Client Inconnu', startDate, endDate, grossAmount: gross, platformFees: fees, 
+            displayedAmount: dispAmount, cityTax: cityTax, bankFees: bankFees,
+            netAmount: net, isDuplicate, hasProperty, selected: !isDuplicate && hasProperty 
+        });
     });
     setReviewList(newList);
   };
