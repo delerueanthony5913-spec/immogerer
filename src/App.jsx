@@ -200,7 +200,6 @@ const ComparisonChart = ({ data, year1, year2 }) => {
         )}
       </div>
 
-      {/* TOTAUX ANNUELS */}
       <div className="grid grid-cols-2 gap-6 mt-8">
         <div className="bg-rose-50/50 border border-rose-100 p-6 rounded-3xl text-center shadow-sm">
           <p className="text-[10px] font-black uppercase text-rose-400 tracking-widest mb-1">Total Global {year1}</p>
@@ -268,20 +267,32 @@ const App = () => {
       if (u) { setUser(u); setLoading(false); }
       else signInAnonymously(auth);
     });
-    const unsubProps = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'properties'), (snap) => setProperties(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+
+    const unsubProps = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'properties'), (snap) => {
+      setProperties(snap.docs.map(d => {
+        const data = d.data();
+        delete data.id; // Sécurité maximale
+        return { ...data, id: d.id };
+      }));
+    });
+
     const unsubTenants = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), (snap) => {
       setTenants(snap.docs.map(d => {
         const data = d.data();
+        delete data.id; // LA CORRECTION DU BUG SILENCIEUX EST ICI !
         const year = data.startDate ? parseInt(data.startDate.split('-')[0], 10) : 0;
+        
+        // Auto-validation historique 2022-2025
         if (year >= 2022 && year <= 2025) {
           if (!data.paymentDate) data.paymentDate = data.endDate || `${year}-12-31`;
           if (data.resExpenses) {
             data.resExpenses = data.resExpenses.map(exp => ({ ...exp, paymentDate: exp.paymentDate || data.endDate || `${year}-12-31` }));
           }
         }
-        return { id: d.id, ...data };
+        return { ...data, id: d.id };
       }));
     });
+
     const unsubSettings = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), (snap) => {
       if (snap.exists()) {
         const d = snap.data();
@@ -290,6 +301,7 @@ const App = () => {
         if (d.services) setAvailableServiceTypes(d.services);
       }
     });
+
     return () => { unsubAuth(); unsubProps(); unsubTenants(); unsubSettings(); };
   }, []);
 
@@ -300,23 +312,51 @@ const App = () => {
 
   const saveRes = async (e) => {
     e.preventDefault();
-    // ALERTES CLAIRES EN CAS D'OUBLI
-    if (!formData.propertyId) { alert("⚠️ Vous devez sélectionner un Logement pour enregistrer."); return; }
+    
+    // Alertes claires en cas d'erreur de saisie
+    if (!formData.propertyId) { alert("⚠️ Vous devez sélectionner un Logement."); return; }
     if (!formData.name) { alert("⚠️ Vous devez indiquer le nom du Voyageur."); return; }
-    if (!formData.startDate || !formData.endDate) { alert("⚠️ Les dates de début et de fin sont obligatoires."); return; }
+    if (!formData.startDate || !formData.endDate) { alert("⚠️ Les dates de séjour sont obligatoires."); return; }
 
     const isC = formData.platform === 'Booking' || formData.platform === 'Abritel';
-    const g = isC ? (parseFloat(formData.displayedAmount || 0) - (parseFloat(formData.cityTax || 0))) : parseFloat(formData.grossAmount || 0);
-    const n = isC ? g - (parseFloat(formData.platformFees || 0) + (parseFloat(formData.bankFees || 0))) : g - parseFloat(formData.platformFees || 0);
-    const d = { ...formData, grossAmount: g, netAmount: n, resExpenses: (formData.resExpenses || []).map(r => ({ ...r, amount: parseFloat(r.amount) || 0 })) };
     
-    if (editingResId) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', editingResId), d);
-    else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), d);
-    setIsModalOpen(false);
+    // Nettoyage des valeurs pour éviter le NaN (Not a Number) qui bloque Firebase
+    const disp = parseFloat(formData.displayedAmount) || 0;
+    const city = parseFloat(formData.cityTax) || 0;
+    const plat = parseFloat(formData.platformFees) || 0;
+    const bank = parseFloat(formData.bankFees) || 0;
+    const gross = parseFloat(formData.grossAmount) || 0;
+
+    const g = isC ? (disp - city) : gross;
+    const n = isC ? (g - plat - bank) : (g - plat);
+    
+    const d = { 
+      ...formData, 
+      grossAmount: g, 
+      netAmount: n, 
+      platformFees: plat,
+      bankFees: bank,
+      cityTax: city,
+      displayedAmount: disp,
+      resExpenses: (formData.resExpenses || []).map(r => ({ ...r, amount: parseFloat(r.amount) || 0 })) 
+    };
+    
+    delete d.id; // Pour ne jamais écraser l'ID de Firebase
+
+    try {
+      if (editingResId) {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', editingResId), d);
+      } else {
+        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), d);
+      }
+      setIsModalOpen(false);
+    } catch (error) {
+      alert("Erreur technique lors de la sauvegarde : " + error.message);
+    }
   };
 
   const deleteRes = async (id) => {
-    if(window.confirm("Supprimer cette réservation ?")) {
+    if(window.confirm("Supprimer définitivement cette réservation ?")) {
       await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', id));
       setIsModalOpen(false);
     }
@@ -344,10 +384,9 @@ const App = () => {
             const newExpenses = tenant.resExpenses.map(exp => exp.id === expId ? { ...exp, paymentDate: '' } : exp);
             await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', tenant.id), { resExpenses: newExpenses }, { merge: true });
           }
-        } catch (err) { console.error(err); }
+        } catch (err) { alert("Erreur: " + err.message); }
       }
     } else {
-      // Ouvre le mini calendrier avec la date du jour par défaut
       setQuickPayConfig({ tenant, type, expId, date: new Date().toISOString().split('T')[0] });
     }
   };
@@ -362,7 +401,7 @@ const App = () => {
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', quickPayConfig.tenant.id), { resExpenses: newExpenses }, { merge: true });
       }
       setQuickPayConfig(null);
-    } catch (err) { console.error(err); }
+    } catch (err) { alert("Erreur d'encaissement: " + err.message); }
   };
 
   const filteredData = useMemo(() => {
@@ -437,6 +476,7 @@ const App = () => {
   }, [filterYear, filterMonth]);
 
   const todayStr = new Date().toISOString().split('T')[0];
+  
   const yearsAvailable = useMemo(() => {
     const years = tenants.map(t => t.startDate ? new Date(t.startDate).getFullYear() : null).filter(Boolean);
     return [...new Set([...years, new Date().getFullYear()])].sort((a,b) => b-a);
@@ -486,7 +526,9 @@ const App = () => {
   const confirmImport = async () => {
       const toImport = reviewList.filter(i => i.selected && i.hasProperty);
       for (let item of toImport) {
-          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), { ...item, platform: 'Airbnb', isUrssaf: true, comment: 'Importé via CSV', resExpenses: [] });
+          // EXCLUSION du champ ID pour ne pas bugger la base de données
+          const { id, selected, isDuplicate, hasProperty, propertyName, ...cleanItem } = item;
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), { ...cleanItem, platform: 'Airbnb', isUrssaf: true, comment: 'Importé via CSV', resExpenses: [], paymentDate: '' });
       }
       setReviewList([]); setImportText(''); setImportStatus(`${toImport.length} réservation(s) importée(s) !`);
       setTimeout(() => setImportStatus(''), 5000);
@@ -723,8 +765,9 @@ const App = () => {
 
       {/* MODALE DE RESERVATION SECURISEE */}
       {isModalOpen && formData && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
-          <div className="bg-white rounded-[40px] md:rounded-[60px] shadow-2xl w-full max-w-3xl max-h-[95vh] flex flex-col border border-slate-100 overflow-hidden"><div className="p-6 md:p-10 border-b flex justify-between items-center bg-white sticky top-0 z-10"><div className="flex items-center gap-4 text-blue-600 font-black uppercase leading-none"><CalendarCheck size={28} /> Détails</div><button onClick={() => setIsModalOpen(false)} className="p-3 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900 transition-all duration-300"><X size={28} /></button></div><form onSubmit={saveRes} className="p-6 md:p-10 space-y-8 overflow-y-auto flex-1 custom-scrollbar text-xs"><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Logement<select value={formData.propertyId || ''} onChange={e => setFormData({ ...formData, propertyId: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900"><option value="">-- Choisir un logement --</option>{(properties || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Voyageur<input value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" placeholder="Nom du client" /></div><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Début<input type="date" value={formData.startDate || ''} onChange={e => setFormData({ ...formData, startDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Fin<input type="date" value={formData.endDate || ''} onChange={e => setFormData({ ...formData, endDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div></div><div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-8 rounded-[48px] border border-blue-50 space-y-6"><div className="flex justify-between font-black uppercase text-blue-900 border-b border-blue-100 pb-3 text-[11px] tracking-widest">Plateforme<select value={formData.platform || ''} onChange={e => setFormData({ ...formData, platform: e.target.value })} className="bg-white border rounded-xl px-4 py-1 text-blue-600">{(availablePlatforms || []).map(p => <option key={p} value={p}>{p}</option>)}</select></div>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
+          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setIsModalOpen(false)}></div>
+          <div className="bg-white rounded-[40px] md:rounded-[60px] shadow-2xl w-full max-w-3xl max-h-[95vh] flex flex-col border border-slate-100 overflow-hidden relative z-10"><div className="p-6 md:p-10 border-b flex justify-between items-center bg-white sticky top-0 z-10"><div className="flex items-center gap-4 text-blue-600 font-black uppercase leading-none"><CalendarCheck size={28} /> Détails</div><button type="button" onClick={() => setIsModalOpen(false)} className="p-3 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900 transition-all duration-300"><X size={28} /></button></div><form onSubmit={saveRes} className="p-6 md:p-10 space-y-8 overflow-y-auto flex-1 custom-scrollbar text-xs"><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Logement<select value={formData.propertyId || ''} onChange={e => setFormData({ ...formData, propertyId: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900"><option value="">-- Choisir un logement --</option>{(properties || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Voyageur<input value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" placeholder="Nom du client" /></div><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Début<input type="date" value={formData.startDate || ''} onChange={e => setFormData({ ...formData, startDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Fin<input type="date" value={formData.endDate || ''} onChange={e => setFormData({ ...formData, endDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div></div><div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-8 rounded-[48px] border border-blue-50 space-y-6"><div className="flex justify-between font-black uppercase text-blue-900 border-b border-blue-100 pb-3 text-[11px] tracking-widest">Plateforme<select value={formData.platform || ''} onChange={e => setFormData({ ...formData, platform: e.target.value })} className="bg-white border rounded-xl px-4 py-1 text-blue-600">{(availablePlatforms || []).map(p => <option key={p} value={p}>{p}</option>)}</select></div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {isCplxFormModale ? (
                 <><div><label className="text-[10px] font-black uppercase text-slate-400">Brut Client</label><input type="number" step="0.01" value={formData.displayedAmount || ''} onChange={e => setFormData({ ...formData, displayedAmount: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black" /></div><div><label className="text-[10px] font-black uppercase text-rose-400">Taxe Séjour</label><input type="number" step="0.01" value={formData.cityTax || ''} onChange={e => setFormData({ ...formData, cityTax: e.target.value })} className="w-full p-4 border border-rose-100 rounded-2xl font-black bg-rose-50/30 text-rose-500" /></div></>
@@ -743,7 +786,6 @@ const App = () => {
                 ))}
             </div>
             
-            {/* BLOC DE PAIEMENT GLOBAL RESTAURÉ */}
             <div className={`p-6 md:p-8 rounded-[32px] md:rounded-[40px] border-2 flex flex-col md:flex-row items-center justify-between transition-all shadow-xl gap-4 ${formData.paymentDate ? 'bg-emerald-50/50 border-emerald-100' : 'bg-orange-50 border-orange-100'}`}>
                 <div className="text-center md:text-left">
                     <h4 className="text-[10px] md:text-xs font-black uppercase tracking-widest text-slate-900 leading-none">Paiement Global Reçu</h4>
