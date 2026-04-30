@@ -216,11 +216,28 @@ const ComparisonChart = ({ data, year1, year2 }) => {
 
 // --- COMPOSANT PRINCIPAL ---
 const App = () => {
+  // HELPERS (Dates)
   const formatMonthYear = (m) => {
     if (!m) return "";
     const [year, month] = m.split('-');
     const date = new Date(parseInt(year), parseInt(month) - 1);
     return date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase());
+  };
+
+  // Convertit "AAAA-MM-JJ" en "JJ/MM/AAAA" pour l'affichage visuel
+  const formatDateFr = (dateString) => {
+    if (!dateString) return '';
+    const parts = dateString.split('-');
+    if (parts.length !== 3) return dateString;
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  };
+
+  const getGoogleCalendarUrl = (res, prop) => {
+    if (!res.startDate || !res.endDate) return '#';
+    const text = encodeURIComponent(`Reservation: ${res.name} - ${prop?.name || ''}`);
+    const details = encodeURIComponent(`Client: ${res.name}\nLogement: ${prop?.name || ''}\nPlateforme: ${res.platform}\nNotes: ${res.comment || ''}`);
+    const dates = `${res.startDate.replace(/-/g, '')}/${res.endDate.replace(/-/g, '')}`;
+    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${details}`;
   };
 
   const [user, setUser] = useState(null);
@@ -271,7 +288,7 @@ const App = () => {
     const unsubProps = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'properties'), (snap) => {
       setProperties(snap.docs.map(d => {
         const data = d.data();
-        delete data.id; // Sécurité maximale
+        delete data.id; 
         return { ...data, id: d.id };
       }));
     });
@@ -279,10 +296,9 @@ const App = () => {
     const unsubTenants = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), (snap) => {
       setTenants(snap.docs.map(d => {
         const data = d.data();
-        delete data.id; // LA CORRECTION DU BUG SILENCIEUX EST ICI !
+        delete data.id; 
         const year = data.startDate ? parseInt(data.startDate.split('-')[0], 10) : 0;
         
-        // Auto-validation historique 2022-2025
         if (year >= 2022 && year <= 2025) {
           if (!data.paymentDate) data.paymentDate = data.endDate || `${year}-12-31`;
           if (data.resExpenses) {
@@ -312,15 +328,11 @@ const App = () => {
 
   const saveRes = async (e) => {
     e.preventDefault();
-    
-    // Alertes claires en cas d'erreur de saisie
     if (!formData.propertyId) { alert("⚠️ Vous devez sélectionner un Logement."); return; }
     if (!formData.name) { alert("⚠️ Vous devez indiquer le nom du Voyageur."); return; }
     if (!formData.startDate || !formData.endDate) { alert("⚠️ Les dates de séjour sont obligatoires."); return; }
 
     const isC = formData.platform === 'Booking' || formData.platform === 'Abritel';
-    
-    // Nettoyage des valeurs pour éviter le NaN (Not a Number) qui bloque Firebase
     const disp = parseFloat(formData.displayedAmount) || 0;
     const city = parseFloat(formData.cityTax) || 0;
     const plat = parseFloat(formData.platformFees) || 0;
@@ -341,7 +353,7 @@ const App = () => {
       resExpenses: (formData.resExpenses || []).map(r => ({ ...r, amount: parseFloat(r.amount) || 0 })) 
     };
     
-    delete d.id; // Pour ne jamais écraser l'ID de Firebase
+    delete d.id;
 
     try {
       if (editingResId) {
@@ -362,7 +374,6 @@ const App = () => {
     }
   };
 
-  // --- LOGIQUE MINI CALENDRIER DE PAIEMENT RAPIDE ---
   const handleQuickPayToggle = async (e, tenant, type, expId = null) => {
     e.stopPropagation();
     e.preventDefault();
@@ -510,8 +521,8 @@ const App = () => {
             rawStart = parts[4]?.trim(); rawEnd = parts[5]?.trim(); guestName = parts[7]?.trim(); listingName = parts[8]?.trim();
             grossStr = parts[15]?.trim() || parts[12]?.trim(); serviceFeeStr = parts[13]?.trim();
         } else return;
-        const formatDate = (raw) => { if(!raw) return ''; const [m, d, y] = raw.split('/'); return (m && d && y) ? `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}` : ''; };
-        const startDate = formatDate(rawStart); const endDate = formatDate(rawEnd);
+        const formatDateStr = (raw) => { if(!raw) return ''; const [m, d, y] = raw.split('/'); return (m && d && y) ? `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}` : ''; };
+        const startDate = formatDateStr(rawStart); const endDate = formatDateStr(rawEnd);
         if (!startDate || !endDate) return;
         const gross = parseFloat(grossStr?.replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
         const fees = parseFloat(serviceFeeStr?.replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
@@ -526,7 +537,6 @@ const App = () => {
   const confirmImport = async () => {
       const toImport = reviewList.filter(i => i.selected && i.hasProperty);
       for (let item of toImport) {
-          // EXCLUSION du champ ID pour ne pas bugger la base de données
           const { id, selected, isDuplicate, hasProperty, propertyName, ...cleanItem } = item;
           await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), { ...cleanItem, platform: 'Airbnb', isUrssaf: true, comment: 'Importé via CSV', resExpenses: [], paymentDate: '' });
       }
@@ -580,7 +590,6 @@ const App = () => {
 
       <main className="flex-1 p-4 md:p-12 overflow-y-auto h-screen custom-scrollbar relative">
         
-        {/* MINI MODALE DE PAIEMENT RAPIDE (DESSUS LE RESTE) */}
         {quickPayConfig && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
              <div className="bg-white p-8 rounded-[40px] shadow-2xl max-w-sm w-full border border-slate-100 flex flex-col gap-6 animate-in zoom-in-95">
@@ -605,7 +614,6 @@ const App = () => {
             <div className="space-y-8 animate-in fade-in">
               <div className="flex justify-between items-center"><h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2><button onClick={() => { setEditingResId(null); setFormData({ propertyId: properties[0]?.id || '', name: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '' }); setIsModalOpen(true); }} className="bg-blue-600 text-white px-8 py-4 rounded-[24px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button></div>
               
-              {/* MOBILE RESERVATIONS */}
               <div className="grid grid-cols-1 gap-4 md:hidden">
                 {(reservationsList || []).map(t => (
                   <div key={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="bg-white p-6 rounded-[32px] shadow-lg border border-slate-50 cursor-pointer">
@@ -618,9 +626,8 @@ const App = () => {
                         {t.paymentDate ? 'Payé' : 'Dû'}
                       </span>
                     </div>
-                    <div className="bg-slate-50 p-3 rounded-2xl flex justify-between font-black text-xs mb-3"><span>{t.startDate}</span><ArrowRight size={14} className="text-slate-300"/><span>{t.endDate}</span></div>
+                    <div className="bg-slate-50 p-3 rounded-2xl flex justify-between font-black text-xs mb-3"><span>{formatDateFr(t.startDate)}</span><ArrowRight size={14} className="text-slate-300"/><span>{formatDateFr(t.endDate)}</span></div>
                     
-                    {/* Prestations Mobile */}
                     {t.resExpenses && t.resExpenses.length > 0 && (
                       <div className="space-y-1.5 border-t border-slate-50 pt-3 mb-3">
                         {(t.resExpenses || []).map((exp, idx) => (
@@ -636,7 +643,6 @@ const App = () => {
                 ))}
               </div>
 
-              {/* DESKTOP RESERVATIONS */}
               <div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 font-black uppercase border-b text-slate-400">
@@ -647,7 +653,7 @@ const App = () => {
                       <tr key={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="hover:bg-slate-50 cursor-pointer">
                         <td className="p-6 uppercase">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}<div className="text-blue-600 text-[10px]">{t.platform}</div></td>
                         <td className="p-6">{t.name}</td>
-                        <td className="p-6 text-center text-slate-500">{t.startDate} ➔ {t.endDate}</td>
+                        <td className="p-6 text-center text-slate-500">{formatDateFr(t.startDate)} ➔ {formatDateFr(t.endDate)}</td>
                         <td className="p-6">
                            <div className="space-y-1.5">
                               {(t.resExpenses || []).map((exp, idx) => (
@@ -708,7 +714,50 @@ const App = () => {
           )}
 
           {activeTab === 'finances' && (
-            <div className="space-y-10 animate-in fade-in"><h2 className="text-3xl font-black uppercase">Comptabilité</h2><div className="bg-white rounded-[40px] shadow-2xl overflow-hidden text-xs"><div className="p-8 bg-slate-900 text-white font-black uppercase flex justify-between items-center"><div>Bilan Global</div><span className="opacity-40 font-bold">Tax 7.7%</span></div><div className="overflow-x-auto"><table className="w-full text-left min-w-[700px]"><thead className="bg-slate-50 uppercase text-slate-400 border-b"><tr><th className="p-6">Période</th><th className="p-6 text-right">Banque</th><th className="p-6 text-right text-rose-500">Taxes</th><th className="p-6 text-right">Services</th><th className="p-6 text-right font-black">Profit Réel</th></tr></thead><tbody className="divide-y font-bold">{(monthlyRecapData || []).map(([m, d]) => (<tr key={m}><td className="p-6 capitalize">{formatMonthYear(m)}</td><td className="p-6 text-right text-indigo-600">{d.totalBank.toLocaleString('fr-FR')}€</td><td className="p-6 text-right text-rose-500">-{d.taxes.toFixed(2)}€</td><td className="p-6 text-right text-slate-500">-{d.charges.toLocaleString('fr-FR')}€</td><td className={`p-6 text-right font-black ${d.totalBank - d.taxes - d.charges >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{(d.totalBank - d.taxes - d.charges).toLocaleString('fr-FR')}€</td></tr>))}</tbody><tfoot className="bg-indigo-600 text-white font-black text-lg"><tr><td className="p-8 uppercase text-[10px]">TOTAL</td><td className="p-8 text-right">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0).toLocaleString('fr-FR')}€</td><td colSpan="2"></td><td className="p-8 text-right bg-indigo-700/50">{(monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0) - monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes + d.charges, 0)).toLocaleString('fr-FR')}€</td></tr></tfoot></table></div></div><div className="bg-white rounded-[40px] shadow-2xl overflow-hidden text-xs"><div className="p-8 bg-slate-900 text-white font-black uppercase flex justify-between">Suivi Prestataires</div><div className="overflow-x-auto"><table className="w-full text-left min-w-[700px]"><thead className="bg-slate-50 uppercase text-slate-400 border-b"><tr><th className="p-6">Date</th><th className="p-6">Logement</th><th className="p-6">Prestataire</th><th className="p-6 text-right">Montant</th><th className="p-6 text-center">Statut</th></tr></thead><tbody className="divide-y font-bold">{(detailedExpenses || []).map((exp) => (<tr key={exp.id}><td className="p-6">{exp.dateRes}</td><td className="p-6 uppercase">{exp.propertyName}</td><td className="p-6 text-blue-600 uppercase">{exp.person}</td><td className="p-6 text-right">{(exp.amount || 0).toLocaleString('fr-FR')}€</td><td className="p-6 text-center"><span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${exp.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>{exp.paymentDate || 'Attente'}</span></td></tr>))}</tbody></table></div></div></div>
+            <div className="space-y-10 animate-in fade-in">
+              <h2 className="text-3xl font-black uppercase">Comptabilité</h2>
+              <div className="bg-white rounded-[40px] shadow-2xl overflow-hidden text-xs">
+                <div className="p-8 bg-slate-900 text-white font-black uppercase flex justify-between items-center"><div>Bilan Global</div></div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left min-w-[700px]">
+                    <thead className="bg-slate-50 uppercase text-slate-400 border-b">
+                      <tr>
+                        <th className="p-6">Période</th>
+                        <th className="p-6 text-right">Brut URSSAF</th>
+                        <th className="p-6 text-right text-indigo-600">Virement Reçu</th>
+                        <th className="p-6 text-right text-slate-500">Prestations</th>
+                        <th className="p-6 text-right text-rose-500">Cotisations (7.7%)</th>
+                        <th className="p-6 text-right font-black">Profit Réel</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y font-bold">
+                      {(monthlyRecapData || []).map(([m, d]) => (
+                        <tr key={m}>
+                          <td className="p-6 capitalize">{formatMonthYear(m)}</td>
+                          <td className="p-6 text-right text-slate-500">{d.urssafGross.toLocaleString('fr-FR')}€</td>
+                          <td className="p-6 text-right text-indigo-600 font-black">{d.totalBank.toLocaleString('fr-FR')}€</td>
+                          <td className="p-6 text-right text-slate-500">-{d.charges.toLocaleString('fr-FR')}€</td>
+                          <td className="p-6 text-right text-rose-500">-{d.taxes.toFixed(2)}€</td>
+                          <td className={`p-6 text-right font-black ${d.totalBank - d.taxes - d.charges >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{(d.totalBank - d.taxes - d.charges).toLocaleString('fr-FR')}€</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-indigo-600 text-white font-black text-lg">
+                      <tr>
+                        <td className="p-8 uppercase text-[10px]">TOTAL</td>
+                        <td className="p-8 text-right opacity-80">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.urssafGross, 0).toLocaleString('fr-FR')}€</td>
+                        <td className="p-8 text-right">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0).toLocaleString('fr-FR')}€</td>
+                        <td className="p-8 text-right text-slate-300">-{monthlyRecapData.reduce((acc, [m, d]) => acc + d.charges, 0).toLocaleString('fr-FR')}€</td>
+                        <td className="p-8 text-right text-rose-300">-{monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes, 0).toLocaleString('fr-FR')}€</td>
+                        <td className="p-8 text-right bg-indigo-700/50">{(monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0) - monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes + d.charges, 0)).toLocaleString('fr-FR')}€</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-[40px] shadow-2xl overflow-hidden text-xs"><div className="p-8 bg-slate-900 text-white font-black uppercase flex justify-between">Suivi Prestataires</div><div className="overflow-x-auto"><table className="w-full text-left min-w-[700px]"><thead className="bg-slate-50 uppercase text-slate-400 border-b"><tr><th className="p-6">Date</th><th className="p-6">Logement</th><th className="p-6">Prestataire</th><th className="p-6 text-right">Montant</th><th className="p-6 text-center">Statut</th></tr></thead><tbody className="divide-y font-bold">{(detailedExpenses || []).map((exp) => (<tr key={exp.id}><td className="p-6">{formatDateFr(exp.dateRes)}</td><td className="p-6 uppercase">{exp.propertyName}</td><td className="p-6 text-blue-600 uppercase">{exp.person}</td><td className="p-6 text-right">{(exp.amount || 0).toLocaleString('fr-FR')}€</td><td className="p-6 text-center"><span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${exp.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>{exp.paymentDate ? 'Payé' : 'Attente'}</span></td></tr>))}</tbody></table></div></div>
+            </div>
           )}
 
           {activeTab === 'settings' && (
@@ -731,7 +780,7 @@ const App = () => {
                         {reviewList.map(item => (
                           <tr key={item.id} className={`border-b ${!item.hasProperty ? 'bg-rose-50' : item.isDuplicate ? 'bg-orange-50' : ''}`}>
                             <td className="p-3"><input type="checkbox" checked={item.selected} disabled={!item.hasProperty} onChange={()=>setReviewList(reviewList.map(r=>r.id===item.id?{...r,selected:!r.selected}:r))} /></td>
-                            <td className="p-3">{item.name}<div className="text-slate-400">{item.startDate}</div></td>
+                            <td className="p-3">{item.name}<div className="text-slate-400">{formatDateFr(item.startDate)}</div></td>
                             <td className="p-3 uppercase">{item.propertyName}</td>
                             <td className="p-3 uppercase">
                               {!item.hasProperty ? <span className="text-rose-600 flex items-center gap-1"><AlertTriangle size={10}/> Logement Inconnu</span> : item.isDuplicate ? <span className="text-orange-600 flex items-center gap-1"><AlertTriangle size={10}/> Doublon</span> : <span className="text-emerald-600 flex items-center gap-1"><Check size={10}/> Nouveau</span>}
