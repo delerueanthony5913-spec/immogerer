@@ -81,25 +81,21 @@ const DonutChart = ({ data, title }) => {
   );
 };
 
-// GRAPHIQUE MULTI-COURBES DYNAMIQUE (Moteur "Classic" compatible + Info Bulles flottantes)
 const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
   const currentYear = new Date().getFullYear().toString();
   const currentMonth = new Date().getMonth();
   
-  const [mode, setMode] = useState('years'); // 'years', 'properties', 'platforms'
-  const [metric, setMetric] = useState('net'); // 'net', 'gross', 'expenses'
+  const [mode, setMode] = useState('years'); 
+  const [metric, setMetric] = useState('net'); 
   
-  // Tableau des éléments cochés
   const [selectedKeys, setSelectedKeys] = useState([]);
 
-  // Contextes (Filtres globaux de la carte)
   const [contextYear, setContextYear] = useState(currentYear);
   const [contextProp, setContextProp] = useState('all');
   const [contextPlat, setContextPlat] = useState('all');
 
   const safeData = Array.isArray(data) ? data : [];
 
-  // Initialiser les clés sélectionnées quand le mode change
   useEffect(() => {
     if (mode === 'years') setSelectedKeys(yearsAvailable.slice(0, 3)); 
     if (mode === 'properties') setSelectedKeys(properties.map(p => p.id).slice(0, 4)); 
@@ -114,7 +110,6 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
     );
   };
 
-  // Moteur de génération des courbes
   const buildSeriesFor = (targetYear, targetProp, targetPlat) => {
       const res = Array(12).fill(0);
       safeData.forEach(t => {
@@ -170,7 +165,6 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
       return res.map(val => isNaN(val) ? 0 : val);
   };
 
-  // Construction des N séries
   const series = selectedKeys.map((key, index) => {
       let dataArr = [];
       let label = '';
@@ -190,7 +184,6 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
           isPastCurrentYear = parseInt(contextYear) < parseInt(currentYear);
       }
 
-      // Détermine où la courbe passe en "pointillés"
       let splitIndex = 11;
       if (!isPastCurrentYear) {
          if (mode === 'years' && parseInt(key) > parseInt(currentYear)) splitIndex = -1; 
@@ -212,7 +205,6 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
   const [hoveredMonth, setHoveredMonth] = useState(null);
   const months = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
 
-  // SOLUTION "CLASSIQUE" (Remplacement du .flat())
   const allDataValues = series.reduce((acc, currentSeries) => {
       return acc.concat(currentSeries.data);
   }, []);
@@ -220,7 +212,6 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
   const maxValRaw = Math.max(...allDataValues, 100);
   const maxVal = (!isFinite(maxValRaw) || maxValRaw <= 0) ? 100 : maxValRaw * 1.15;
 
-  // Ajustement des marges pour laisser de la place aux chiffres
   const w = 900, h = 300, padX = 60, padY = 30; 
   
   const getX = (i) => padX + (i * (w - 2 * padX) / 11);
@@ -244,7 +235,6 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
 
   const yTicks = [0, maxVal * 0.33, maxVal * 0.66, maxVal];
 
-  // Options dispo pour les boutons de sélection
   const availableOptions = mode === 'years' 
      ? yearsAvailable.map(y => ({ id: y, label: y }))
      : mode === 'properties'
@@ -252,7 +242,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
         : platforms.map(p => ({ id: p, label: p }));
 
   return (
-    <div className="w-full bg-white p-6 md:p-8 rounded-[48px] shadow-2xl border border-slate-50 animate-in fade-in relative">
+    <div className="w-full bg-white p-6 md:p-8 rounded-[48px] shadow-2xl border border-slate-50 animate-in fade-in relative mt-8">
       
       {/* 1. SELECTION DU MODE */}
       <div className="flex bg-slate-100 p-1.5 rounded-[20px] w-max mb-6">
@@ -263,7 +253,6 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
 
       {/* 2. BOUTONS DE SELECTION MULTIPLE + FILTRES */}
       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6 mb-8 bg-slate-50 p-4 md:p-6 rounded-3xl border border-slate-100">
-         
          <div className="flex-1">
             <span className="text-[10px] font-black uppercase text-slate-400 mb-3 block">Que voulez-vous afficher ? (Cochez)</span>
             <div className="flex flex-wrap gap-2">
@@ -279,9 +268,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
                })}
             </div>
          </div>
-
          <div className="w-full lg:w-px h-px lg:h-auto bg-slate-200"></div>
-
          <div className="flex flex-col gap-3 min-w-[200px]">
              <div className="flex items-center gap-2">
                 <span className="text-[10px] font-black uppercase text-slate-400 w-16">Analyser :</span>
@@ -291,19 +278,16 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
                    <option value="expenses">Coût Prestations</option>
                 </select>
              </div>
-             
              <div className="flex items-center gap-2">
                 <Filter size={12} className="text-slate-400" />
                 <span className="text-[10px] font-black uppercase text-slate-400">Filtres :</span>
              </div>
-             
              <div className="flex flex-col gap-2 pl-5">
                 {mode !== 'years' && <select value={contextYear} onChange={e=>setContextYear(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none cursor-pointer text-slate-700">{yearsAvailable.map(y=><option key={y} value={y}>Année {y}</option>)}</select>}
                 {mode !== 'properties' && <select value={contextProp} onChange={e=>setContextProp(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none cursor-pointer text-slate-700 truncate"><option value="all">Tous Logements</option>{properties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>}
                 {mode !== 'platforms' && <select value={contextPlat} onChange={e=>setContextPlat(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none cursor-pointer text-slate-700 truncate"><option value="all">Toutes Plateformes</option>{platforms.map(p=><option key={p} value={p}>{p}</option>)}</select>}
              </div>
          </div>
-
       </div>
 
       {/* 3. LE GRAPHIQUE */}
@@ -317,7 +301,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
                 {yTicks.map((tick, i) => (
                   <g key={`grid-${i}`}>
                     <line x1={padX} y1={getY(tick)} x2={w - padX} y2={getY(tick)} stroke="#F1F5F9" strokeWidth="2" />
-                    <text x={w - padX + 8} y={getY(tick) + 4} fill="#64748B" fontSize="11" fontFamily="sans-serif" fontWeight="900">{tick >= 1000 ? (tick / 1000).toFixed(1) + 'k€' : Math.round(tick) + '€'}</text>
+                    <text x={w - padX + 8} y={getY(tick) + 4} fill="#475569" fontSize="11" fontFamily="sans-serif" fontWeight="900">{tick >= 1000 ? (tick / 1000).toFixed(1) + 'k€' : Math.round(tick) + '€'}</text>
                   </g>
                 ))}
 
@@ -326,7 +310,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
                     <line x1={getX(hoveredMonth)} y1={padY} x2={getX(hoveredMonth)} y2={h - padY} stroke="#CBD5E1" strokeWidth="2" strokeDasharray="4 4" />
                 )}
                 
-                {/* Lignes de mois (verticales invisibles pour le hover) */}
+                {/* Lignes de mois */}
                 {months.map((m, i) => (
                   <text key={m} x={getX(i)} y={h - 5} fill={hoveredMonth === i ? "#0F172A" : "#94A3B8"} fontSize="12" fontFamily="sans-serif" fontWeight="900" textAnchor="middle" className="transition-colors cursor-pointer" onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)}>{m}</text>
                 ))}
@@ -350,7 +334,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
                 ))}
               </svg>
 
-              {/* TOOLTIP INTERACTIF AU SURVOL (Directement sur le graphique) */}
+              {/* TOOLTIP INTERACTIF AU SURVOL */}
               {hoveredMonth !== null && series.length > 0 && (
                 <div 
                   className="absolute z-20 bg-slate-900/95 backdrop-blur-sm text-white p-4 rounded-2xl shadow-2xl pointer-events-none transition-all duration-200 min-w-[160px] border border-slate-700"
@@ -968,6 +952,56 @@ const App = () => {
       setTimeout(() => setImportStatus(''), 5000);
   };
 
+  const importSpecial2025 = async () => {
+      if(!window.confirm("Créer automatiquement les 10 réservations En direct de 2025 ?")) return;
+      
+      const propId = properties[0]?.id || 'default';
+      
+      const dataToImport = [
+        { name: "LOLA DROIN", startDate: "2025-03-21", endDate: "2025-03-23", amount: 1450 },
+        { name: "NELLY JEAN-MARIE", startDate: "2025-04-30", endDate: "2025-05-04", amount: 3800 },
+        { name: "WINDED", startDate: "2025-06-15", endDate: "2025-06-20", amount: 3000 },
+        { name: "ANTOINE ET ELODIE", startDate: "2025-07-04", endDate: "2025-07-06", amount: 2700 },
+        { name: "Severine BRISSON", startDate: "2025-07-12", endDate: "2025-08-02", amount: 14000 },
+        { name: "Anais FLORE", startDate: "2025-08-02", endDate: "2025-08-09", amount: 4500 },
+        { name: "MATTHIEU MECHAT", startDate: "2025-08-09", endDate: "2025-08-23", amount: 7500 },
+        { name: "BLANDINE DUHAMEL", startDate: "2025-09-19", endDate: "2025-09-21", amount: 1900 },
+        { name: "PHILIPPE VINCENT", startDate: "2025-12-27", endDate: "2025-12-29", amount: 1800 },
+        { name: "MACIE CLAUDE", startDate: "2025-12-28", endDate: "2026-01-02", amount: 2900 }
+      ];
+
+      try {
+        for (let item of dataToImport) {
+            const payload = {
+              propertyId: propId,
+              name: item.name,
+              startDate: item.startDate,
+              endDate: item.endDate,
+              platform: 'En direct',
+              isUrssaf: true,
+              grossAmount: item.amount,
+              netAmount: item.amount,
+              platformFees: 0,
+              bankFees: 0,
+              cityTax: 0,
+              displayedAmount: 0,
+              acompte1Amount: 0,
+              acompte1Date: '',
+              acompte2Amount: 0,
+              acompte2Date: '',
+              soldeAmount: item.amount,
+              soldeDate: item.endDate, // Payé le jour du départ
+              resExpenses: [],
+              comment: 'Import automatique Excel 2025'
+            };
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), payload);
+        }
+        alert('Les 10 réservations de 2025 ont été importées avec succès !');
+      } catch (e) {
+        alert("Erreur lors de l'import : " + e.message);
+      }
+  };
+
   const RenderFilters = () => (
     <div className="flex flex-wrap items-center gap-2 bg-white/70 backdrop-blur-md p-3 rounded-[28px] border border-white shadow-xl mb-6 md:mb-8">
       <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
@@ -1229,7 +1263,7 @@ const App = () => {
                   </div>
                 </div>
 
-                {/* GRAPHIQUE MULTI-COURBES */}
+                {/* GRAPHIQUE MULTI-COURBES DYNAMIQUE */}
                 <ComparisonChart data={baseTenants} properties={properties} platforms={availablePlatforms} yearsAvailable={yearsAvailable} />
 
                 {/* ROSACES DE REPARTITION */}
@@ -1308,9 +1342,19 @@ const App = () => {
             <div className="space-y-10 animate-in fade-in">
               <h2 className="text-3xl font-black uppercase">Paramètres</h2>
               
+              <div className="bg-emerald-50 p-6 md:p-8 rounded-[40px] border border-emerald-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
+                <div>
+                  <h4 className="font-black text-emerald-800 uppercase text-lg tracking-tighter">Action Spéciale</h4>
+                  <p className="text-[10px] text-emerald-600 font-bold mt-1 uppercase tracking-widest">Injection automatique de vos 10 réservations Excel de 2025</p>
+                </div>
+                <button onClick={importSpecial2025} className="w-full md:w-auto bg-emerald-600 text-white px-8 py-4 rounded-[24px] font-black uppercase text-[11px] shadow-xl shadow-emerald-200 hover:bg-emerald-700 hover:-translate-y-1 transition-all">
+                  Importer les 10 réservations 2025
+                </button>
+              </div>
+              
               <div className="bg-white p-8 rounded-[40px] border-2 border-dashed shadow-xl flex flex-col items-center justify-center text-center">
                 <UploadCloud size={40} className="text-blue-600 mb-4"/>
-                <h3 className="text-xl font-black uppercase">Importation de Réservations</h3>
+                <h3 className="text-xl font-black uppercase">Importation de Réservations (CSV)</h3>
                 <p className="text-xs text-slate-400 mt-2 mb-6">Sélectionnez la plateforme source et collez votre export CSV (gère les colonnes automatiquement).</p>
                 
                 <div className="flex items-center gap-4 bg-slate-50 p-2 rounded-2xl shadow-inner border border-slate-100">
