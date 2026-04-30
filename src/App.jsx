@@ -310,7 +310,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
                     <line x1={getX(hoveredMonth)} y1={padY} x2={getX(hoveredMonth)} y2={h - padY} stroke="#CBD5E1" strokeWidth="2" strokeDasharray="4 4" />
                 )}
                 
-                {/* Lignes de mois */}
+                {/* Lignes de mois (verticales invisibles pour le hover) */}
                 {months.map((m, i) => (
                   <text key={m} x={getX(i)} y={h - 5} fill={hoveredMonth === i ? "#0F172A" : "#94A3B8"} fontSize="12" fontFamily="sans-serif" fontWeight="900" textAnchor="middle" className="transition-colors cursor-pointer" onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)}>{m}</text>
                 ))}
@@ -334,7 +334,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
                 ))}
               </svg>
 
-              {/* TOOLTIP INTERACTIF AU SURVOL */}
+              {/* TOOLTIP INTERACTIF AU SURVOL (Directement sur le graphique) */}
               {hoveredMonth !== null && series.length > 0 && (
                 <div 
                   className="absolute z-20 bg-slate-900/95 backdrop-blur-sm text-white p-4 rounded-2xl shadow-2xl pointer-events-none transition-all duration-200 min-w-[160px] border border-slate-700"
@@ -446,6 +446,77 @@ const App = () => {
 
   const [quickPayConfig, setQuickPayConfig] = useState(null); 
   const [statsDetailConfig, setStatsDetailConfig] = useState(null);
+
+  // LOGIQUE D'INJECTION AUTOMATIQUE DE VOS 10 RESERVATIONS VILLA CADELIA 2025
+  useEffect(() => {
+    if (!user || loading) return;
+    
+    // Sécurité pour ne pas boucler indéfiniment. 
+    // S'il l'a déjà fait une fois dans la session, il s'arrête.
+    const isAlreadyInjected = sessionStorage.getItem('cadel_injected_2025_auto');
+    if (isAlreadyInjected === 'true') return;
+
+    // On attend que les données soient bien chargées
+    if (properties.length === 0 && tenants.length === 0) return;
+
+    const runInjection = async () => {
+        sessionStorage.setItem('cadel_injected_2025_auto', 'true');
+        
+        // 1. Assurer que la VILLA CADELIA existe (la créer sinon)
+        let targetProp = properties.find(p => p.name.toUpperCase().includes('CADELIA'));
+        if (!targetProp) {
+            try {
+                const propRef = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'properties'), { name: 'VILLA CADELIA', address: '' });
+                targetProp = { id: propRef.id, name: 'VILLA CADELIA' };
+            } catch(e) { console.error(e); return; }
+        }
+
+        // 2. Vérifier que la première réservation "LOLA DROIN" n'y est pas déjà
+        const hasLola = tenants.some(t => t.name.toUpperCase().includes("LOLA DROIN"));
+        if (!hasLola) {
+            const dataToImport = [
+                { name: "LOLA DROIN", startDate: "2025-03-21", endDate: "2025-03-23", amount: 1450 },
+                { name: "NELLY JEAN-MARIE", startDate: "2025-04-30", endDate: "2025-05-04", amount: 3800 },
+                { name: "WINDED", startDate: "2025-06-06", endDate: "2025-06-09", amount: 3000 },
+                { name: "ANTOINE ET ELODIE", startDate: "2025-07-04", endDate: "2025-07-06", amount: 2700 },
+                { name: "Severine BRISSON", startDate: "2025-07-12", endDate: "2025-08-02", amount: 14000 },
+                { name: "Anais FLORE", startDate: "2025-08-02", endDate: "2025-08-09", amount: 4500 },
+                { name: "MATTHIEU MECHAT", startDate: "2025-08-09", endDate: "2025-08-23", amount: 7500 },
+                { name: "BLANDINE DUHAMEL", startDate: "2025-09-19", endDate: "2025-09-21", amount: 1900 },
+                { name: "PHILIPPE VINCENT", startDate: "2025-12-27", endDate: "2025-12-29", amount: 1800 },
+                { name: "MACIE CLAUDE", startDate: "2025-12-30", endDate: "2026-01-02", amount: 2900 }
+            ];
+            
+            // 3. Injecter les 10 réservations
+            dataToImport.forEach(item => {
+                 addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), {
+                      propertyId: targetProp.id,
+                      name: item.name,
+                      startDate: item.startDate,
+                      endDate: item.endDate,
+                      platform: 'En direct',
+                      isUrssaf: true,
+                      grossAmount: item.amount,
+                      netAmount: item.amount,
+                      platformFees: 0,
+                      bankFees: 0,
+                      cityTax: 0,
+                      displayedAmount: 0,
+                      acompte1Amount: 0,
+                      acompte1Date: '',
+                      acompte2Amount: 0,
+                      acompte2Date: '',
+                      soldeAmount: item.amount,
+                      soldeDate: item.endDate, // SOLDE AU JOUR DU DEPART
+                      resExpenses: [],
+                      comment: 'Import automatique VILLA CADELIA'
+                 });
+            });
+        }
+    };
+    
+    runInjection();
+  }, [user, loading, properties, tenants, db]);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
@@ -857,183 +928,6 @@ const App = () => {
     return [...new Set([...years, new Date().getFullYear()])].sort((a,b) => b-a);
   }, [tenants]);
 
-  const parseCSVLine = (text) => {
-    const result = []; let current = '', inQuotes = false;
-    for (let i = 0; i < text.length; i++) {
-        const char = text[i];
-        if (char === '"') inQuotes = !inQuotes;
-        else if (char === ',' && !inQuotes) { result.push(current); current = ''; }
-        else current += char;
-    }
-    result.push(current); return result;
-  };
-
-  const startReview = () => {
-    if (!importText.trim()) return;
-    const lines = importText.split('\n').filter(l => l.trim() !== ''); 
-    if (lines.length < 2) return;
-
-    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
-    const voyageurIdx = headers.findIndex(h => h.includes('voyageur') || h.includes('client') || h.includes('nom'));
-    
-    const newList = [];
-    
-    lines.forEach((line, index) => {
-        if (index === 0) return; 
-        const parts = parseCSVLine(line);
-        if (parts.length < 5) return;
-
-        let guestName, startDate, endDate, listingName;
-        let gross = 0, fees = 0, cityTax = 0, bankFees = 0, dispAmount = 0, net = 0;
-
-        if (importSource === 'Airbnb') {
-            const typeIndex = parts.findIndex(p => p.toLowerCase().includes('réservation') || p.toLowerCase().includes('reservation'));
-            if (typeIndex === -1) return;
-            let rawStart, rawEnd, grossStr, serviceFeeStr;
-            if (typeIndex === 2) {
-                rawStart = parts[5]?.trim(); rawEnd = parts[6]?.trim(); guestName = parts[8]?.trim(); listingName = parts[9]?.trim();
-                grossStr = parts[18]?.trim() || parts[13]?.trim(); serviceFeeStr = parts[15]?.trim();
-            } else if (typeIndex === 1) {
-                rawStart = parts[4]?.trim(); rawEnd = parts[5]?.trim(); guestName = parts[7]?.trim(); listingName = parts[8]?.trim();
-                grossStr = parts[15]?.trim() || parts[12]?.trim(); serviceFeeStr = parts[13]?.trim();
-            } else return;
-
-            const formatDateStr = (raw) => { if(!raw) return ''; const [m, d, y] = raw.split('/'); return (m && d && y) ? `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}` : ''; };
-            startDate = formatDateStr(rawStart); endDate = formatDateStr(rawEnd);
-            if (!startDate || !endDate) return;
-
-            gross = parseFloat(grossStr?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
-            fees = Math.abs(parseFloat(serviceFeeStr?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
-            dispAmount = gross;
-            net = gross - fees;
-        } 
-        else if (importSource === 'Booking') {
-            const typeCol = parts[0]?.toLowerCase() || '';
-            if (!typeCol.includes('rã©servation') && !typeCol.includes('réservation') && !typeCol.includes('reservation')) return;
-
-            guestName = voyageurIdx !== -1 && parts[voyageurIdx] ? parts[voyageurIdx].trim() : `Réf: ${parts[2]?.trim()}`; 
-            
-            startDate = parts[3]?.trim(); 
-            endDate = parts[4]?.trim();   
-            listingName = parts[10]?.trim();
-
-            if (!startDate || !endDate) return;
-
-            dispAmount = parseFloat(parts[15]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
-            cityTax = Math.abs(parseFloat(parts[16]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
-            fees = Math.abs(parseFloat(parts[17]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
-            bankFees = Math.abs(parseFloat(parts[19]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
-
-            gross = dispAmount - cityTax;
-            net = gross - fees - bankFees;
-        }
-
-        const matchedProp = properties.find(p => listingName && p.name && (listingName.toLowerCase().includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(listingName.toLowerCase())));
-        const isDuplicate = tenants.some(t => t.startDate === startDate && t.propertyId === (matchedProp?.id || 'none'));
-        const hasProperty = !!matchedProp;
-
-        newList.push({ 
-            id: index, propertyId: matchedProp?.id || '', propertyName: matchedProp?.name || listingName || 'Inconnu', 
-            name: guestName || 'Client Inconnu', startDate, endDate, grossAmount: gross, platformFees: fees, 
-            displayedAmount: dispAmount, cityTax: cityTax, bankFees: bankFees,
-            netAmount: net, isDuplicate, hasProperty, selected: !isDuplicate && hasProperty 
-        });
-    });
-    setReviewList(newList);
-  };
-
-  const confirmImport = async () => {
-      const toImport = reviewList.filter(i => i.selected && i.hasProperty);
-      for (let item of toImport) {
-          const { id, selected, isDuplicate, hasProperty, propertyName, ...cleanItem } = item;
-          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), { ...cleanItem, platform: importSource, isUrssaf: true, comment: `Importé via CSV ${importSource}`, resExpenses: [], paymentDate: '' });
-      }
-      setReviewList([]); setImportText(''); setImportStatus(`${toImport.length} réservation(s) importée(s) !`);
-      setTimeout(() => setImportStatus(''), 5000);
-  };
-
-  const importSpecial2025 = async () => {
-      if(!window.confirm("Créer automatiquement les 10 réservations En direct de 2025 ?")) return;
-      
-      const propId = properties[0]?.id || 'default';
-      
-      const dataToImport = [
-        { name: "LOLA DROIN", startDate: "2025-03-21", endDate: "2025-03-23", amount: 1450 },
-        { name: "NELLY JEAN-MARIE", startDate: "2025-04-30", endDate: "2025-05-04", amount: 3800 },
-        { name: "WINDED", startDate: "2025-06-15", endDate: "2025-06-20", amount: 3000 },
-        { name: "ANTOINE ET ELODIE", startDate: "2025-07-04", endDate: "2025-07-06", amount: 2700 },
-        { name: "Severine BRISSON", startDate: "2025-07-12", endDate: "2025-08-02", amount: 14000 },
-        { name: "Anais FLORE", startDate: "2025-08-02", endDate: "2025-08-09", amount: 4500 },
-        { name: "MATTHIEU MECHAT", startDate: "2025-08-09", endDate: "2025-08-23", amount: 7500 },
-        { name: "BLANDINE DUHAMEL", startDate: "2025-09-19", endDate: "2025-09-21", amount: 1900 },
-        { name: "PHILIPPE VINCENT", startDate: "2025-12-27", endDate: "2025-12-29", amount: 1800 },
-        { name: "MACIE CLAUDE", startDate: "2025-12-28", endDate: "2026-01-02", amount: 2900 }
-      ];
-
-      try {
-        for (let item of dataToImport) {
-            const payload = {
-              propertyId: propId,
-              name: item.name,
-              startDate: item.startDate,
-              endDate: item.endDate,
-              platform: 'En direct',
-              isUrssaf: true,
-              grossAmount: item.amount,
-              netAmount: item.amount,
-              platformFees: 0,
-              bankFees: 0,
-              cityTax: 0,
-              displayedAmount: 0,
-              acompte1Amount: 0,
-              acompte1Date: '',
-              acompte2Amount: 0,
-              acompte2Date: '',
-              soldeAmount: item.amount,
-              soldeDate: item.endDate, // Payé le jour du départ
-              resExpenses: [],
-              comment: 'Import automatique Excel 2025'
-            };
-            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), payload);
-        }
-        alert('Les 10 réservations de 2025 ont été importées avec succès !');
-      } catch (e) {
-        alert("Erreur lors de l'import : " + e.message);
-      }
-  };
-
-  const RenderFilters = () => (
-    <div className="flex flex-wrap items-center gap-2 bg-white/70 backdrop-blur-md p-3 rounded-[28px] border border-white shadow-xl mb-6 md:mb-8">
-      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-        <Filter size={12} className="text-slate-400" />
-        <select value={filterYear} onChange={e => setFilterYear(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer">
-          <option value="all">Années</option>{(yearsAvailable || []).map(y => <option key={y} value={y}>{y}</option>)}
-        </select>
-      </div>
-      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-        <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Mois (Tous)</option>{['Janv','Févr','Mars','Avril','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'].map((m,i)=><option key={i} value={i}>{m}</option>)}</select>
-      </div>
-      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-        <select value={filterProp} onChange={e => setFilterProp(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none max-w-[100px] md:max-w-[130px] cursor-pointer"><option value="all">Logements</option>{(properties || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
-      </div>
-      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-        <select value={filterPlat} onChange={e => setFilterPlat(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Plateformes</option>{(availablePlatforms || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
-      </div>
-    </div>
-  );
-
-  if (loading) return <div className="h-screen w-full flex items-center justify-center bg-slate-50 font-black uppercase text-xs"><Loader2 className="animate-spin text-blue-600 mr-2" /> CADEL MANAGER...</div>;
-
-  const curChargesModale = (formData?.resExpenses || []).reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
-  const isDirectFormModale = formData?.platform === 'En direct';
-  const isCplxFormModale = formData?.platform === 'Booking' || formData?.platform === 'Abritel';
-  
-  const nModale = isDirectFormModale 
-    ? (parseFloat(formData?.grossAmount) || 0) 
-    : isCplxFormModale 
-      ? (parseFloat(formData?.displayedAmount || 0) - parseFloat(formData?.cityTax || 0)) - (parseFloat(formData?.platformFees || 0) + parseFloat(formData?.bankFees || 0))
-      : (parseFloat(formData?.grossAmount || 0) - parseFloat(formData?.platformFees || 0));
-
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col md:flex-row font-sans text-slate-900 overflow-hidden">
       <aside className={`fixed md:sticky top-0 left-0 z-50 w-72 h-full md:h-screen bg-white border-r transform md:translate-x-0 transition-transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
@@ -1341,16 +1235,6 @@ const App = () => {
           {activeTab === 'settings' && (
             <div className="space-y-10 animate-in fade-in">
               <h2 className="text-3xl font-black uppercase">Paramètres</h2>
-              
-              <div className="bg-emerald-50 p-6 md:p-8 rounded-[40px] border border-emerald-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
-                <div>
-                  <h4 className="font-black text-emerald-800 uppercase text-lg tracking-tighter">Action Spéciale</h4>
-                  <p className="text-[10px] text-emerald-600 font-bold mt-1 uppercase tracking-widest">Injection automatique de vos 10 réservations Excel de 2025</p>
-                </div>
-                <button onClick={importSpecial2025} className="w-full md:w-auto bg-emerald-600 text-white px-8 py-4 rounded-[24px] font-black uppercase text-[11px] shadow-xl shadow-emerald-200 hover:bg-emerald-700 hover:-translate-y-1 transition-all">
-                  Importer les 10 réservations 2025
-                </button>
-              </div>
               
               <div className="bg-white p-8 rounded-[40px] border-2 border-dashed shadow-xl flex flex-col items-center justify-center text-center">
                 <UploadCloud size={40} className="text-blue-600 mb-4"/>
