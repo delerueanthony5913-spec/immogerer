@@ -29,9 +29,9 @@ const appId = 'immogerer-prod-final';
 
 const CHART_COLORS = ['#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#6366F1', '#F43F5E', '#06B6D4'];
 
-// --- COMPOSANT GRAPHIQUE ---
+// --- COMPOSANTS GRAPHIQUES ---
 const DonutChart = ({ data, title }) => {
-  const visibleData = (data || []).filter(d => d.value > 0);
+  const visibleData = (data || []).filter(d => d && d.value > 0);
   const displayTotal = visibleData.reduce((acc, curr) => acc + curr.value, 0);
   let cumulativePercent = 0;
 
@@ -125,6 +125,9 @@ const ComparisonChart = ({ data, year1, year2 }) => {
   const d2 = getDataForYear(year2);
   const maxVal = Math.max(...d1, ...d2, 1000) * 1.15; 
 
+  const total1 = d1.reduce((acc, val) => acc + val, 0);
+  const total2 = d2.reduce((acc, val) => acc + val, 0);
+
   const w = 900, h = 300, padX = 40, padY = 30;
   const getX = (i) => padX + (i * (w - 2 * padX) / 11);
   const getY = (val) => h - padY - ((val / maxVal) * (h - 2 * padY));
@@ -195,6 +198,18 @@ const ComparisonChart = ({ data, year1, year2 }) => {
         ) : (
           <div className="w-full text-center text-slate-300 font-black uppercase text-[10px] tracking-widest italic animate-in fade-in">Survolez le graphique pour comparer les détails mensuels</div>
         )}
+      </div>
+
+      {/* TOTAUX ANNUELS */}
+      <div className="grid grid-cols-2 gap-6 mt-8">
+        <div className="bg-rose-50/50 border border-rose-100 p-6 rounded-3xl text-center shadow-sm">
+          <p className="text-[10px] font-black uppercase text-rose-400 tracking-widest mb-1">Total Global {year1}</p>
+          <p className="text-2xl md:text-3xl font-black text-rose-600 tracking-tighter">{total1.toLocaleString('fr-FR')}€</p>
+        </div>
+        <div className="bg-purple-50/50 border border-purple-100 p-6 rounded-3xl text-center shadow-sm">
+          <p className="text-[10px] font-black uppercase text-purple-400 tracking-widest mb-1">Total Global {year2}</p>
+          <p className="text-2xl md:text-3xl font-black text-purple-600 tracking-tighter">{total2.toLocaleString('fr-FR')}€</p>
+        </div>
       </div>
     </div>
   );
@@ -292,13 +307,15 @@ const App = () => {
     setIsModalOpen(false);
   };
 
-  // --- NOUVEAU: TOGGLE STATUT PAIEMENT A LA VOLEE ---
+  // --- TOGGLE STATUT PAIEMENT AVEC CONFIRMATION ---
   const toggleStatus = async (e, tenant, type, expId = null) => {
-    e.stopPropagation(); // Empêche l'ouverture de la modale
+    e.stopPropagation();
+    e.preventDefault();
     if (!user || user.uid === 'local-test-user') return;
     
+    if (!window.confirm("Confirmez-vous le changement de statut de paiement ?")) return;
+
     const today = new Date().toISOString().split('T')[0];
-    
     try {
       if (type === 'global') {
         const newStatus = tenant.paymentDate ? '' : today;
@@ -310,7 +327,7 @@ const App = () => {
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', tenant.id), { resExpenses: newExpenses }, { merge: true });
       }
     } catch (error) {
-      console.error("Erreur lors de la mise à jour du statut", error);
+      console.error("Erreur mise à jour statut", error);
     }
   };
 
@@ -405,8 +422,7 @@ const App = () => {
 
   const startReview = () => {
     if (!importText.trim()) return;
-    const lines = importText.split('\n'); 
-    const newList = [];
+    const lines = importText.split('\n'); const newList = [];
     lines.forEach((line, index) => {
         if (line.toLowerCase().includes('date') || line.trim() === '') return;
         const parts = parseCSVLine(line);
@@ -417,16 +433,11 @@ const App = () => {
         if (typeIndex === 2) {
             rawStart = parts[5]?.trim(); rawEnd = parts[6]?.trim(); guestName = parts[8]?.trim(); listingName = parts[9]?.trim();
             grossStr = parts[18]?.trim() || parts[13]?.trim(); serviceFeeStr = parts[15]?.trim();
-        } 
-        else if (typeIndex === 1) {
+        } else if (typeIndex === 1) {
             rawStart = parts[4]?.trim(); rawEnd = parts[5]?.trim(); guestName = parts[7]?.trim(); listingName = parts[8]?.trim();
             grossStr = parts[15]?.trim() || parts[12]?.trim(); serviceFeeStr = parts[13]?.trim();
         } else return;
-        const formatDate = (raw) => { 
-            if(!raw) return ''; 
-            const [m, d, y] = raw.split('/'); 
-            return (m && d && y) ? `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}` : ''; 
-        };
+        const formatDate = (raw) => { if(!raw) return ''; const [m, d, y] = raw.split('/'); return (m && d && y) ? `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}` : ''; };
         const startDate = formatDate(rawStart); const endDate = formatDate(rawEnd);
         if (!startDate || !endDate) return;
         const gross = parseFloat(grossStr?.replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
@@ -453,27 +464,28 @@ const App = () => {
       <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
         <Filter size={12} className="text-slate-400" />
         <select value={filterYear} onChange={e => setFilterYear(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer">
-          <option value="all">Années</option>{yearsAvailable.map(y => <option key={y} value={y}>{y}</option>)}
+          <option value="all">Années</option>{(yearsAvailable || []).map(y => <option key={y} value={y}>{y}</option>)}
         </select>
       </div>
       <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
         <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Mois (Tous)</option>{['Janv','Févr','Mars','Avril','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'].map((m,i)=><option key={i} value={i}>{m}</option>)}</select>
       </div>
       <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-        <select value={filterProp} onChange={e => setFilterProp(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none max-w-[100px] md:max-w-[130px] cursor-pointer"><option value="all">Logements</option>{properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+        <select value={filterProp} onChange={e => setFilterProp(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none max-w-[100px] md:max-w-[130px] cursor-pointer"><option value="all">Logements</option>{(properties || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
       </div>
       <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-        <select value={filterPlat} onChange={e => setFilterPlat(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Plateformes</option>{availablePlatforms.map(p => <option key={p} value={p}>{p}</option>)}</select>
+        <select value={filterPlat} onChange={e => setFilterPlat(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Plateformes</option>{(availablePlatforms || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
       </div>
     </div>
   );
 
   if (loading) return <div className="h-screen w-full flex items-center justify-center bg-slate-50 font-black uppercase text-xs"><Loader2 className="animate-spin text-blue-600 mr-2" /> CADEL MANAGER...</div>;
 
-  const curChargesModale = (formData.resExpenses || []).reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
-  const nModale = formData.platform === 'Booking' || formData.platform === 'Abritel' 
-    ? (parseFloat(formData.displayedAmount || 0) - parseFloat(formData.cityTax || 0)) - (parseFloat(formData.platformFees || 0) + parseFloat(formData.bankFees || 0))
-    : (parseFloat(formData.grossAmount || 0) - parseFloat(formData.platformFees || 0));
+  const curChargesModale = (formData?.resExpenses || []).reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+  const isCplxFormModale = formData?.platform === 'Booking' || formData?.platform === 'Abritel';
+  const nModale = isCplxFormModale 
+    ? (parseFloat(formData?.displayedAmount || 0) - parseFloat(formData?.cityTax || 0)) - (parseFloat(formData?.platformFees || 0) + parseFloat(formData?.bankFees || 0))
+    : (parseFloat(formData?.grossAmount || 0) - parseFloat(formData?.platformFees || 0));
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col md:flex-row font-sans text-slate-900 overflow-hidden">
@@ -501,11 +513,11 @@ const App = () => {
               
               {/* MOBILE RESERVATIONS */}
               <div className="grid grid-cols-1 gap-4 md:hidden">
-                {reservationsList.map(t => (
+                {(reservationsList || []).map(t => (
                   <div key={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="bg-white p-6 rounded-[32px] shadow-lg border border-slate-50 cursor-pointer">
                     <div className="flex justify-between items-start mb-3">
                       <div>
-                        <h3 className="text-base font-black uppercase">{properties.find(p => p.id === t.propertyId)?.name || '--'}</h3>
+                        <h3 className="text-base font-black uppercase">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</h3>
                         <div className="flex gap-2 text-[10px] text-slate-400"><span>{t.platform}</span><span>{t.name}</span></div>
                       </div>
                       <span onClick={(e) => toggleStatus(e, t, 'global')} className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase cursor-pointer hover:scale-105 transition-transform ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
@@ -514,7 +526,7 @@ const App = () => {
                     </div>
                     <div className="bg-slate-50 p-3 rounded-2xl flex justify-between font-black text-xs mb-3"><span>{t.startDate}</span><ArrowRight size={14} className="text-slate-300"/><span>{t.endDate}</span></div>
                     
-                    {/* Prestations Mobile avec Clic Simple */}
+                    {/* Prestations Mobile */}
                     {t.resExpenses && t.resExpenses.length > 0 && (
                       <div className="space-y-1.5 border-t border-slate-50 pt-3 mb-3">
                         {(t.resExpenses || []).map((exp, idx) => (
@@ -537,9 +549,9 @@ const App = () => {
                     <tr><th className="p-6">Logement</th><th className="p-6">Client</th><th className="p-6 text-center">Dates</th><th className="p-6">Prestations</th><th className="p-6 text-right">Net</th><th className="p-6 text-center">État</th></tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 font-bold">
-                    {reservationsList.map(t => (
+                    {(reservationsList || []).map(t => (
                       <tr key={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="hover:bg-slate-50 cursor-pointer">
-                        <td className="p-6 uppercase">{properties.find(p => p.id === t.propertyId)?.name || '--'}<div className="text-blue-600 text-[10px]">{t.platform}</div></td>
+                        <td className="p-6 uppercase">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}<div className="text-blue-600 text-[10px]">{t.platform}</div></td>
                         <td className="p-6">{t.name}</td>
                         <td className="p-6 text-center text-slate-500">{t.startDate} ➔ {t.endDate}</td>
                         <td className="p-6">
@@ -572,7 +584,7 @@ const App = () => {
           {activeTab === 'agenda' && (
             <div className="space-y-8 animate-in fade-in">
               <div className="flex justify-between items-center"><div><h2 className="text-2xl font-black uppercase">Agenda</h2></div><div className="flex items-center gap-4 bg-white px-4 py-2 rounded-2xl shadow-lg"><button onClick={()=>handleMonthChange('prev')}><ChevronLeft/></button><div className="text-center font-black min-w-[120px] uppercase text-xs">{['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][filterMonth==='all'?new Date().getMonth():parseInt(filterMonth)]}</div><button onClick={()=>handleMonthChange('next')}><ChevronRight/></button></div></div>
-              <div className="bg-white p-6 rounded-[40px] shadow-2xl overflow-x-auto"><div className="min-w-[700px]"><div className="grid grid-cols-7 text-center font-black text-slate-300 text-[10px] uppercase mb-4">{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d=><div key={d}>{d}</div>)}</div><div className="grid grid-cols-7 gap-2">{agendaDays.map((item,idx)=>{ if(item.empty) return <div key={idx} className="h-24 bg-slate-50/30 rounded-2xl"></div>; const dayRes = reservationsList.filter(r=>item.dateStr>=r.startDate && item.dateStr<=r.endDate); return (<div key={item.dateStr} className={`h-24 md:h-32 border rounded-2xl p-2 relative flex flex-col ${item.dateStr===todayStr?'border-blue-500 bg-blue-50/10':'border-slate-100'}`}><span className="text-[10px] font-black text-slate-300">{item.day}</span><div className="flex-1 space-y-1 overflow-y-auto no-scrollbar">{dayRes.map(r=>(<div key={r.id} onClick={(e)=>{e.stopPropagation();setEditingResId(r.id);setFormData(r);setIsModalOpen(true)}} className="text-[8px] font-black text-white p-1 rounded truncate cursor-pointer" style={{backgroundColor: CHART_COLORS[properties.findIndex(p=>p.id===r.propertyId)%CHART_COLORS.length]}}>{r.name?.split(' ')[0]}</div>))}</div></div>);})}</div></div></div>
+              <div className="bg-white p-6 rounded-[40px] shadow-2xl overflow-x-auto"><div className="min-w-[700px]"><div className="grid grid-cols-7 text-center font-black text-slate-300 text-[10px] uppercase mb-4">{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d=><div key={d}>{d}</div>)}</div><div className="grid grid-cols-7 gap-2">{(agendaDays || []).map((item,idx)=>{ if(item.empty) return <div key={idx} className="h-24 bg-slate-50/30 rounded-2xl"></div>; const dayRes = (reservationsList || []).filter(r=>item.dateStr>=r.startDate && item.dateStr<=r.endDate); return (<div key={item.dateStr} className={`h-24 md:h-32 border rounded-2xl p-2 relative flex flex-col ${item.dateStr===todayStr?'border-blue-500 bg-blue-50/10':'border-slate-100'}`}><span className="text-[10px] font-black text-slate-300">{item.day}</span><div className="flex-1 space-y-1 overflow-y-auto no-scrollbar">{dayRes.map(r=>(<div key={r.id} onClick={(e)=>{e.stopPropagation();setEditingResId(r.id);setFormData(r);setIsModalOpen(true)}} className="text-[8px] font-black text-white p-1 rounded truncate cursor-pointer" style={{backgroundColor: CHART_COLORS[(properties || []).findIndex(p=>p.id===r.propertyId)%CHART_COLORS.length]}}>{r.name?.split(' ')[0]}</div>))}</div></div>);})}</div></div></div>
             </div>
           )}
 
@@ -597,12 +609,12 @@ const App = () => {
               <ComparisonChart data={tenants} year1={compYear1} year2={compYear2} />
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div className="bg-white p-8 rounded-[40px] shadow-xl"><p className="text-[10px] font-black text-slate-400 uppercase">Net Encaissé ({filterYear})</p><p className="text-3xl font-black text-indigo-600">{financials.netB.toLocaleString('fr-FR')}€</p></div><div className="bg-slate-900 p-8 rounded-[40px] shadow-2xl text-white"><p className="text-[10px] font-black uppercase">Profit Réel ({filterYear})</p><p className="text-3xl font-black">{Math.round(financials.profit).toLocaleString('fr-FR')}€</p></div><div className="bg-white p-8 rounded-[40px] shadow-xl"><p className="text-[10px] font-black text-slate-400 uppercase">À venir ({filterYear})</p><p className="text-3xl font-black text-blue-500">{Math.round(financials.netUpcoming).toLocaleString('fr-FR')}€</p></div></div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-10"><DonutChart title="Net par Logement" data={properties.map((p,idx)=>({label:p.name,value:tenants.filter(t=>t.propertyId===p.id&&!!t.paymentDate).reduce((acc,t)=>acc+((t.netAmount||0)-(t.resExpenses?.reduce((s,e)=>s+(parseFloat(e.amount)||0),0)||0)-(t.isUrssaf?(t.grossAmount||0)*0.077:0)),0),color:CHART_COLORS[idx%CHART_COLORS.length]}))} /><DonutChart title="Net par Plateforme" data={availablePlatforms.map((p,idx)=>({label:p,value:tenants.filter(t=>t.platform===p&&!!t.paymentDate).reduce((acc,t)=>acc+((t.netAmount||0)-(t.isUrssaf?(t.grossAmount||0)*0.077:0)),0),color:CHART_COLORS[(idx+4)%CHART_COLORS.length]}))} /></div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10"><DonutChart title="Net par Logement" data={(properties || []).map((p,idx)=>({label:p.name,value:(tenants || []).filter(t=>t.propertyId===p.id&&!!t.paymentDate).reduce((acc,t)=>acc+((t.netAmount||0)-(t.resExpenses?.reduce((s,e)=>s+(parseFloat(e.amount)||0),0)||0)-(t.isUrssaf?(t.grossAmount||0)*0.077:0)),0),color:CHART_COLORS[idx%CHART_COLORS.length]}))} /><DonutChart title="Net par Plateforme" data={(availablePlatforms || []).map((p,idx)=>({label:p,value:(tenants || []).filter(t=>t.platform===p&&!!t.paymentDate).reduce((acc,t)=>acc+((t.netAmount||0)-(t.isUrssaf?(t.grossAmount||0)*0.077:0)),0),color:CHART_COLORS[(idx+4)%CHART_COLORS.length]}))} /></div>
             </div>
           )}
 
           {activeTab === 'finances' && (
-            <div className="space-y-10 animate-in fade-in"><h2 className="text-3xl font-black uppercase">Comptabilité</h2><div className="bg-white rounded-[40px] shadow-2xl overflow-hidden text-xs"><div className="p-8 bg-slate-900 text-white font-black uppercase flex justify-between items-center"><div>Bilan Global</div><span className="opacity-40 font-bold">Tax 7.7%</span></div><div className="overflow-x-auto"><table className="w-full text-left min-w-[700px]"><thead className="bg-slate-50 uppercase text-slate-400 border-b"><tr><th className="p-6">Période</th><th className="p-6 text-right">Banque</th><th className="p-6 text-right text-rose-500">Taxes</th><th className="p-6 text-right">Services</th><th className="p-6 text-right font-black">Profit Réel</th></tr></thead><tbody className="divide-y font-bold">{monthlyRecapData.map(([m, d]) => (<tr key={m}><td className="p-6 capitalize">{formatMonthYear(m)}</td><td className="p-6 text-right text-indigo-600">{d.totalBank.toLocaleString('fr-FR')}€</td><td className="p-6 text-right text-rose-500">-{d.taxes.toFixed(2)}€</td><td className="p-6 text-right text-slate-500">-{d.charges.toLocaleString('fr-FR')}€</td><td className={`p-6 text-right font-black ${d.totalBank - d.taxes - d.charges >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{(d.totalBank - d.taxes - d.charges).toLocaleString('fr-FR')}€</td></tr>))}</tbody><tfoot className="bg-indigo-600 text-white font-black text-lg"><tr><td className="p-8 uppercase text-[10px]">TOTAL</td><td className="p-8 text-right">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0).toLocaleString('fr-FR')}€</td><td colSpan="2"></td><td className="p-8 text-right bg-indigo-700/50">{(monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0) - monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes + d.charges, 0)).toLocaleString('fr-FR')}€</td></tr></tfoot></table></div></div><div className="bg-white rounded-[40px] shadow-2xl overflow-hidden text-xs"><div className="p-8 bg-slate-900 text-white font-black uppercase flex justify-between">Suivi Prestataires</div><div className="overflow-x-auto"><table className="w-full text-left min-w-[700px]"><thead className="bg-slate-50 uppercase text-slate-400 border-b"><tr><th className="p-6">Date</th><th className="p-6">Logement</th><th className="p-6">Prestataire</th><th className="p-6 text-right">Montant</th><th className="p-6 text-center">Statut</th></tr></thead><tbody className="divide-y font-bold">{detailedExpenses.map((exp) => (<tr key={exp.id}><td className="p-6">{exp.dateRes}</td><td className="p-6 uppercase">{exp.propertyName}</td><td className="p-6 text-blue-600 uppercase">{exp.person}</td><td className="p-6 text-right">{(exp.amount || 0).toLocaleString('fr-FR')}€</td><td className="p-6 text-center"><span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${exp.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>{exp.paymentDate || 'Attente'}</span></td></tr>))}</tbody></table></div></div></div>
+            <div className="space-y-10 animate-in fade-in"><h2 className="text-3xl font-black uppercase">Comptabilité</h2><div className="bg-white rounded-[40px] shadow-2xl overflow-hidden text-xs"><div className="p-8 bg-slate-900 text-white font-black uppercase flex justify-between items-center"><div>Bilan Global</div><span className="opacity-40 font-bold">Tax 7.7%</span></div><div className="overflow-x-auto"><table className="w-full text-left min-w-[700px]"><thead className="bg-slate-50 uppercase text-slate-400 border-b"><tr><th className="p-6">Période</th><th className="p-6 text-right">Banque</th><th className="p-6 text-right text-rose-500">Taxes</th><th className="p-6 text-right">Services</th><th className="p-6 text-right font-black">Profit Réel</th></tr></thead><tbody className="divide-y font-bold">{(monthlyRecapData || []).map(([m, d]) => (<tr key={m}><td className="p-6 capitalize">{formatMonthYear(m)}</td><td className="p-6 text-right text-indigo-600">{d.totalBank.toLocaleString('fr-FR')}€</td><td className="p-6 text-right text-rose-500">-{d.taxes.toFixed(2)}€</td><td className="p-6 text-right text-slate-500">-{d.charges.toLocaleString('fr-FR')}€</td><td className={`p-6 text-right font-black ${d.totalBank - d.taxes - d.charges >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{(d.totalBank - d.taxes - d.charges).toLocaleString('fr-FR')}€</td></tr>))}</tbody><tfoot className="bg-indigo-600 text-white font-black text-lg"><tr><td className="p-8 uppercase text-[10px]">TOTAL</td><td className="p-8 text-right">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0).toLocaleString('fr-FR')}€</td><td colSpan="2"></td><td className="p-8 text-right bg-indigo-700/50">{(monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0) - monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes + d.charges, 0)).toLocaleString('fr-FR')}€</td></tr></tfoot></table></div></div><div className="bg-white rounded-[40px] shadow-2xl overflow-hidden text-xs"><div className="p-8 bg-slate-900 text-white font-black uppercase flex justify-between">Suivi Prestataires</div><div className="overflow-x-auto"><table className="w-full text-left min-w-[700px]"><thead className="bg-slate-50 uppercase text-slate-400 border-b"><tr><th className="p-6">Date</th><th className="p-6">Logement</th><th className="p-6">Prestataire</th><th className="p-6 text-right">Montant</th><th className="p-6 text-center">Statut</th></tr></thead><tbody className="divide-y font-bold">{(detailedExpenses || []).map((exp) => (<tr key={exp.id}><td className="p-6">{exp.dateRes}</td><td className="p-6 uppercase">{exp.propertyName}</td><td className="p-6 text-blue-600 uppercase">{exp.person}</td><td className="p-6 text-right">{(exp.amount || 0).toLocaleString('fr-FR')}€</td><td className="p-6 text-center"><span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${exp.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>{exp.paymentDate || 'Attente'}</span></td></tr>))}</tbody></table></div></div></div>
           )}
 
           {activeTab === 'settings' && (
@@ -617,7 +629,7 @@ const App = () => {
                 
                 {importStatus && <p className="mt-4 font-black text-emerald-600 uppercase">{importStatus}</p>}
                 
-                {reviewList.length>0 && (
+                {(reviewList || []).length > 0 && (
                   <div className="w-full mt-6 overflow-x-auto">
                     <table className="w-full text-left text-[10px] font-bold border-collapse">
                       <thead className="bg-slate-50 border-b text-slate-500"><tr><th className="p-3">Imp.</th><th className="p-3">Client</th><th className="p-3">Logement</th><th className="p-3">Statut</th></tr></thead>
@@ -647,19 +659,20 @@ const App = () => {
               </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full"><h3 className="text-[10px] font-black uppercase text-slate-400 mb-4">Plateformes</h3><div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">{availablePlatforms.map(p=>(<div key={p} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl"><span>{p}</span><button onClick={()=>{const n = availablePlatforms.filter(x=>x!==p); setAvailablePlatforms(n); updateSettings({platforms:n})}} className="text-slate-300 hover:text-rose-500"><X size={14}/></button></div>))}</div><form onSubmit={(e)=>{e.preventDefault(); if(inputPlat.trim()){const n = [...availablePlatforms, inputPlat.trim()]; setAvailablePlatforms(n); updateSettings({platforms:n}); setInputPlat('')}}} className="flex gap-2"><input value={inputPlat} onChange={e=>setInputPlat(e.target.value)} className="flex-1 p-2 bg-slate-50 border rounded-xl text-[10px]" /><button className="bg-slate-900 text-white p-2 rounded-xl">+</button></form></div>
-                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full"><h3 className="text-[10px] font-black uppercase text-slate-400 mb-4">Prestataires</h3><div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">{availableProviders.map(p=>(<div key={p} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl"><span>{p}</span><button onClick={()=>{const n = availableProviders.filter(x=>x!==p); setAvailableProviders(n); updateSettings({providers:n})}} className="text-slate-300 hover:text-rose-500"><X size={14}/></button></div>))}</div><form onSubmit={(e)=>{e.preventDefault(); if(inputProv.trim()){const n = [...availableProviders, inputProv.trim()]; setAvailableProviders(n); updateSettings({providers:n}); setInputProv('')}}} className="flex gap-2"><input value={inputProv} onChange={e=>setInputProv(e.target.value)} className="flex-1 p-2 bg-slate-50 border rounded-xl text-[10px]" /><button className="bg-slate-900 text-white p-2 rounded-xl">+</button></form></div>
-                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full"><h3 className="text-[10px] font-black uppercase text-slate-400 mb-4">Services</h3><div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">{availableServiceTypes.map(p=>(<div key={p} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl"><span>{p}</span><button onClick={()=>{const n = availableServiceTypes.filter(x=>x!==p); setAvailableServiceTypes(n); updateSettings({services:n})}} className="text-slate-300 hover:text-rose-500"><X size={14}/></button></div>))}</div><form onSubmit={(e)=>{e.preventDefault(); if(inputSvc.trim()){const n = [...availableServiceTypes, inputSvc.trim()]; setAvailableServiceTypes(n); updateSettings({services:n}); setInputSvc('')}}} className="flex gap-2"><input value={inputSvc} onChange={e=>setInputSvc(e.target.value)} className="flex-1 p-2 bg-slate-50 border rounded-xl text-[10px]" /><button className="bg-slate-900 text-white p-2 rounded-xl">+</button></form></div>
-                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full border-2 border-blue-50"><h3 className="text-[10px] font-black uppercase text-blue-600 mb-4">Logements</h3><div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">{properties.map(p=>(<div key={p.id} className="flex justify-between items-center p-3 bg-blue-50 rounded-xl"><span>{p.name}</span><button onClick={async()=>{if(window.confirm('Supprimer ?'))await deleteDoc(doc(db,'artifacts',appId,'public', 'data', 'properties', p.id))}} className="text-slate-300 hover:text-rose-500"><Trash2 size={14}/></button></div>))}</div><form onSubmit={async(e)=>{e.preventDefault(); if(inputProp.name.trim()){await addDoc(collection(db,'artifacts',appId,'public','data','properties'),{name:inputProp.name.trim(),address:inputProp.address.trim()}); setInputProp({name:'',address:''})}}} className="flex flex-col gap-2"><input required value={inputProp.name} onChange={e=>setInputProp({...inputProp,name:e.target.value})} className="p-3 bg-slate-50 rounded-xl text-[10px] outline-none" placeholder="Nom du bien" /><button type="submit" className="bg-blue-600 text-white p-3 rounded-xl font-black text-[10px] uppercase shadow-md">+ Ajouter</button></form></div>
+                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full"><h3 className="text-[10px] font-black uppercase text-slate-400 mb-4">Plateformes</h3><div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">{(availablePlatforms || []).map(p=>(<div key={p} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl"><span>{p}</span><button onClick={()=>{const n = availablePlatforms.filter(x=>x!==p); setAvailablePlatforms(n); updateSettings({platforms:n})}} className="text-slate-300 hover:text-rose-500"><X size={14}/></button></div>))}</div><form onSubmit={(e)=>{e.preventDefault(); if(inputPlat.trim()){const n = [...availablePlatforms, inputPlat.trim()]; setAvailablePlatforms(n); updateSettings({platforms:n}); setInputPlat('')}}} className="flex gap-2"><input value={inputPlat} onChange={e=>setInputPlat(e.target.value)} className="flex-1 p-2 bg-slate-50 border rounded-xl text-[10px]" /><button className="bg-slate-900 text-white p-2 rounded-xl">+</button></form></div>
+                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full"><h3 className="text-[10px] font-black uppercase text-slate-400 mb-4">Prestataires</h3><div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">{(availableProviders || []).map(p=>(<div key={p} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl"><span>{p}</span><button onClick={()=>{const n = availableProviders.filter(x=>x!==p); setAvailableProviders(n); updateSettings({providers:n})}} className="text-slate-300 hover:text-rose-500"><X size={14}/></button></div>))}</div><form onSubmit={(e)=>{e.preventDefault(); if(inputProv.trim()){const n = [...availableProviders, inputProv.trim()]; setAvailableProviders(n); updateSettings({providers:n}); setInputProv('')}}} className="flex gap-2"><input value={inputProv} onChange={e=>setInputProv(e.target.value)} className="flex-1 p-2 bg-slate-50 border rounded-xl text-[10px]" /><button className="bg-slate-900 text-white p-2 rounded-xl">+</button></form></div>
+                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full"><h3 className="text-[10px] font-black uppercase text-slate-400 mb-4">Services</h3><div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">{(availableServiceTypes || []).map(p=>(<div key={p} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl"><span>{p}</span><button onClick={()=>{const n = availableServiceTypes.filter(x=>x!==p); setAvailableServiceTypes(n); updateSettings({services:n})}} className="text-slate-300 hover:text-rose-500"><X size={14}/></button></div>))}</div><form onSubmit={(e)=>{e.preventDefault(); if(inputSvc.trim()){const n = [...availableServiceTypes, inputSvc.trim()]; setAvailableServiceTypes(n); updateSettings({services:n}); setInputSvc('')}}} className="flex gap-2"><input value={inputSvc} onChange={e=>setInputSvc(e.target.value)} className="flex-1 p-2 bg-slate-50 border rounded-xl text-[10px]" /><button className="bg-slate-900 text-white p-2 rounded-xl">+</button></form></div>
+                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full border-2 border-blue-50"><h3 className="text-[10px] font-black uppercase text-blue-600 mb-4">Logements</h3><div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">{(properties || []).map(p=>(<div key={p.id} className="flex justify-between items-center p-3 bg-blue-50 rounded-xl"><span>{p.name}</span><button onClick={async()=>{if(window.confirm('Supprimer ?'))await deleteDoc(doc(db,'artifacts',appId,'public', 'data', 'properties', p.id))}} className="text-slate-300 hover:text-rose-500"><Trash2 size={14}/></button></div>))}</div><form onSubmit={async(e)=>{e.preventDefault(); if(inputProp.name.trim()){await addDoc(collection(db,'artifacts',appId,'public','data','properties'),{name:inputProp.name.trim(),address:inputProp.address.trim()}); setInputProp({name:'',address:''})}}} className="flex flex-col gap-2"><input required value={inputProp.name} onChange={e=>setInputProp({...inputProp,name:e.target.value})} className="p-3 bg-slate-50 rounded-xl text-[10px] outline-none" placeholder="Nom du bien" /><button type="submit" className="bg-blue-600 text-white p-3 rounded-xl font-black text-[10px] uppercase shadow-md">+ Ajouter</button></form></div>
               </div>
             </div>
           )}
         </div>
       </main>
 
-      {isModalOpen && (
+      {/* MODALE DE RESERVATION SECURISEE */}
+      {isModalOpen && formData && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
-          <div className="bg-white rounded-[40px] md:rounded-[60px] shadow-2xl w-full max-w-3xl max-h-[95vh] flex flex-col border border-slate-100 overflow-hidden"><div className="p-6 md:p-10 border-b flex justify-between items-center bg-white sticky top-0 z-10"><div className="flex items-center gap-4 text-blue-600 font-black uppercase leading-none"><CalendarCheck size={28} /> Détails</div><button onClick={() => setIsModalOpen(false)} className="p-3 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900 transition-all duration-300"><X size={28} /></button></div><form onSubmit={saveRes} className="p-6 md:p-10 space-y-8 overflow-y-auto flex-1 custom-scrollbar text-xs"><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Logement<select required value={formData.propertyId} onChange={e => setFormData({ ...formData, propertyId: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900">{properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Voyageur<input required value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Début<input type="date" required value={formData.startDate || ''} onChange={e => setFormData({ ...formData, startDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Fin<input type="date" required value={formData.endDate || ''} onChange={e => setFormData({ ...formData, endDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div></div><div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-8 rounded-[48px] border border-blue-50 space-y-6"><div className="flex justify-between font-black uppercase text-blue-900 border-b border-blue-100 pb-3 text-[11px] tracking-widest">Plateforme<select value={formData.platform} onChange={e => setFormData({ ...formData, platform: e.target.value })} className="bg-white border rounded-xl px-4 py-1 text-blue-600">{availablePlatforms.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
+          <div className="bg-white rounded-[40px] md:rounded-[60px] shadow-2xl w-full max-w-3xl max-h-[95vh] flex flex-col border border-slate-100 overflow-hidden"><div className="p-6 md:p-10 border-b flex justify-between items-center bg-white sticky top-0 z-10"><div className="flex items-center gap-4 text-blue-600 font-black uppercase leading-none"><CalendarCheck size={28} /> Détails</div><button onClick={() => setIsModalOpen(false)} className="p-3 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900 transition-all duration-300"><X size={28} /></button></div><form onSubmit={saveRes} className="p-6 md:p-10 space-y-8 overflow-y-auto flex-1 custom-scrollbar text-xs"><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Logement<select required value={formData.propertyId || ''} onChange={e => setFormData({ ...formData, propertyId: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900">{(properties || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Voyageur<input required value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Début<input type="date" required value={formData.startDate || ''} onChange={e => setFormData({ ...formData, startDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Fin<input type="date" required value={formData.endDate || ''} onChange={e => setFormData({ ...formData, endDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div></div><div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-8 rounded-[48px] border border-blue-50 space-y-6"><div className="flex justify-between font-black uppercase text-blue-900 border-b border-blue-100 pb-3 text-[11px] tracking-widest">Plateforme<select value={formData.platform || ''} onChange={e => setFormData({ ...formData, platform: e.target.value })} className="bg-white border rounded-xl px-4 py-1 text-blue-600">{(availablePlatforms || []).map(p => <option key={p} value={p}>{p}</option>)}</select></div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {isCplxFormModale ? (
                 <><div><label className="text-[10px] font-black uppercase text-slate-400">Brut Client</label><input type="number" step="0.01" value={formData.displayedAmount || ''} onChange={e => setFormData({ ...formData, displayedAmount: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black" /></div><div><label className="text-[10px] font-black uppercase text-rose-400">Taxe Séjour</label><input type="number" step="0.01" value={formData.cityTax || ''} onChange={e => setFormData({ ...formData, cityTax: e.target.value })} className="w-full p-4 border border-rose-100 rounded-2xl font-black bg-rose-50/30 text-rose-500" /></div></>
@@ -667,13 +680,13 @@ const App = () => {
                 <><div><label className="text-[10px] font-black uppercase text-slate-400">Brut URSSAF</label><input type="number" step="0.01" value={formData.grossAmount || ''} onChange={e => setFormData({ ...formData, grossAmount: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black" /></div><div><label className="text-[10px] font-black uppercase text-slate-400">Commission</label><input type="number" step="0.01" value={formData.platformFees || ''} onChange={e => setFormData({ ...formData, platformFees: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black" /></div></>
               )}
             </div></div><div className="space-y-4">
-                <div className="flex justify-between font-black uppercase tracking-widest text-slate-400 text-[10px]">Prestations<button type="button" onClick={() => setFormData({ ...formData, resExpenses: [...(formData.resExpenses || []), { id: Date.now().toString(), person: availableProviders[0], type: availableServiceTypes[0], amount: 0, paymentDate: '' }] })} className="bg-slate-900 text-white px-4 py-2 rounded-xl">+ Ajouter</button></div>
+                <div className="flex justify-between font-black uppercase tracking-widest text-slate-400 text-[10px]">Prestations<button type="button" onClick={() => setFormData({ ...formData, resExpenses: [...(formData.resExpenses || []), { id: Date.now().toString(), person: availableProviders[0] || '', type: availableServiceTypes[0] || '', amount: 0, paymentDate: '' }] })} className="bg-slate-900 text-white px-4 py-2 rounded-xl">+ Ajouter</button></div>
                 {(formData.resExpenses || []).map(exp => (
                   <div key={exp.id} className="flex gap-2 bg-slate-50 p-4 rounded-[28px] border border-slate-100 items-center">
-                    <select value={exp.person} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, person: e.target.value } : x) })} className="flex-1 p-3 border rounded-xl font-black uppercase text-[10px]">{availableProviders.map(p => <option key={p} value={p}>{p}</option>)}</select>
-                    <select value={exp.type} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, type: e.target.value } : x) })} className="flex-1 p-3 border rounded-xl font-black uppercase text-[10px]">{availableServiceTypes.map(p => <option key={p} value={p}>{p}</option>)}</select>
-                    <input type="number" value={exp.amount || ''} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, amount: e.target.value } : x) })} className="w-20 p-3 border rounded-xl font-black text-right" />
-                    <button type="button" onClick={() => setFormData({ ...formData, resExpenses: formData.resExpenses.filter(x => x.id !== exp.id) })} className="text-rose-500 font-black px-2"><Trash2 size={18}/></button>
+                    <select value={exp.person || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, person: e.target.value } : x) })} className="flex-1 p-3 border rounded-xl font-black uppercase text-[10px]">{(availableProviders || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
+                    <select value={exp.type || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, type: e.target.value } : x) })} className="flex-1 p-3 border rounded-xl font-black uppercase text-[10px]">{(availableServiceTypes || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
+                    <input type="number" value={exp.amount || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, amount: e.target.value } : x) })} className="w-20 p-3 border rounded-xl font-black text-right" />
+                    <button type="button" onClick={() => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).filter(x => x.id !== exp.id) })} className="text-rose-500 font-black px-2"><Trash2 size={18}/></button>
                   </div>
                 ))}
             </div><div className="bg-slate-900 p-8 rounded-[48px] text-white flex flex-col md:flex-row justify-between items-center gap-6"><div className="text-center md:text-left leading-none"><p className="text-[10px] font-black uppercase text-slate-400 mb-2">Net Estimé</p><p className="text-4xl font-black text-blue-400 tracking-tighter">{(nModale - curChargesModale).toFixed(2)}€</p></div><button type="submit" className="w-full md:w-auto bg-blue-600 px-12 py-5 rounded-[24px] font-black uppercase tracking-[2px] shadow-xl hover:-translate-y-1 transition-all">Enregistrer</button></div></form></div></div>
