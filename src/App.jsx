@@ -199,195 +199,6 @@ const ComparisonChart = ({ data, year1, year2 }) => {
               <g key={`points-${i}`} onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)} className="cursor-pointer">
                 <rect x={getX(i) - 20} y={0} width="40" height={h} fill="transparent" />
                 <circle cx={getX(i)} cy={getY(d2[i])} r={hoveredMonth === i ? 7 : 5} fill={hoveredMonth === i ? "#9333EA" : "white"} stroke="#9333EA" strokeWidth="3" className="transition-all duration-200" />
-                <circle cx={getX(i)} cy={getY(d1C'est un excellent retour ! Vous mettez le doigt sur la règle d'or de la **comptabilité de trésorerie** : un encaissement doit être déclaré l'année et le mois précis où l'argent arrive sur le compte en banque, peu importe si le séjour a lieu 1 an plus tard.
-
-J'ai totalement réécrit le moteur de calcul du Tableau de bord et des Finances pour qu'il se base **exclusivement sur les dates de paiement** (les vôtres ou celles des plateformes) plutôt que sur les dates du séjour.
-Résultat : un acompte reçu en septembre 2025 ira bien gonfler votre tableau de 2025, même si les clients arrivent en janvier 2026. 
-
-J'ai également intégré la nouvelle colonne **"Direct (hors URSSAF)"** (en vert émeraude) dans votre grand tableau des finances, juste à côté de "Brut URSSAF".
-
-Voici votre application finalisée, 100% complète et sans aucune coupure :
-
-```react:CADEL MANAGER - Version Premium Finale:src/App.jsx
-import React, { useState, useMemo, useEffect } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc, addDoc, query } from 'firebase/firestore';
-import { 
-  Home, Euro, LayoutDashboard, Plus, Trash2, MapPin, Calendar as CalendarIcon,
-  Menu, X, CalendarCheck, CheckCircle, Clock, PieChart as PieChartIcon,
-  ChevronLeft, ChevronRight, BarChart3, List, Wallet, Settings, Calculator,
-  UserCheck, PlusCircle, TrendingUp, Info, Filter, Loader2,
-  Building2, CalendarRange, MessageSquare, CreditCard, Activity, ArrowRight,
-  User, Sparkles, Key, UploadCloud, AlertTriangle, Check
-} from 'lucide-react';
-
-// --- CONFIGURATION FIREBASE ---
-const firebaseConfig = {
-  apiKey: "AIzaSyDJYT5L0A9f1YdRGEcvdk4iyoKgcfrBGWw",
-  authDomain: "immogerer-7f706.firebaseapp.com",
-  projectId: "immogerer-7f706",
-  storageBucket: "immogerer-7f706.firebasestorage.app",
-  messagingSenderId: "703084929054",
-  appId: "1:703084929054:web:313fae5f706e4dba4fce0f",
-  measurementId: "G-QQE1Q309TB"
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = 'immogerer-prod-final';
-
-const CHART_COLORS = ['#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#6366F1', '#F43F5E', '#06B6D4'];
-
-// --- COMPOSANTS GRAPHIQUES ---
-const DonutChart = ({ data, title }) => {
-  const visibleData = (data || []).filter(d => d && d.value > 0);
-  const displayTotal = visibleData.reduce((acc, curr) => acc + curr.value, 0);
-  let cumulativePercent = 0;
-
-  if (!displayTotal) {
-    return (
-      <div className="bg-white p-6 rounded-[40px] border border-gray-100 flex flex-col items-center justify-center min-h-[300px] shadow-sm">
-        <PieChartIcon size="{24}" className="text-gray-200 mb-2"/>
-        <p className="text-gray-400 font-black text-[10px] uppercase tracking-widest text-center">{title}</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-white p-10 rounded-[48px] border border-gray-50 flex flex-col md:flex-row items-center gap-10 animate-in fade-in shadow-xl shadow-slate-200/50">
-      <div className="relative w-48 h-48 flex-shrink-0">
-        <svg viewBox="0 0 32 32" className="w-full h-full transform -rotate-90">
-          {visibleData.map((slice, i) => {
-            const percent = (slice.value / displayTotal) * 100;
-            const strokeDasharray = `${percent} ${100 - percent}`;
-            const strokeDashoffset = -cumulativePercent;
-            cumulativePercent += percent;
-            return (
-              <circle key={i} r="15.9155" cx="16" cy="16" fill="transparent" stroke={slice.color} strokeWidth="5" strokeDasharray={strokeDasharray} strokeDashoffset={strokeDashoffset} className="transition-all duration-1000" />
-            );
-          })}
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-          <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest leading-none mb-1">Total Net</span>
-          <span className="text-xl font-black text-slate-900">{Math.round(displayTotal).toLocaleString('fr-FR')}€</span>
-        </div>
-      </div>
-      <div className="flex-1 w-full space-y-3">
-        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">{title}</h3>
-        <div className="space-y-2">
-          {visibleData.map((slice, i) => (
-            <div key={i} className="flex items-center justify-between text-[11px] group">
-              <div className="flex items-center gap-3">
-                <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: slice.color }}></div>
-                <span className="font-bold text-slate-600 truncate max-w-[140px]">{slice.label}</span>
-              </div>
-              <span className="font-black text-slate-900 tabular-nums">{Math.round(slice.value).toLocaleString('fr-FR')} €</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const ComparisonChart = ({ data, year1, year2 }) => {
-  const [hoveredMonth, setHoveredMonth] = useState(null);
-  const months = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
-  const currentMonth = new Date().getMonth();
-  const currentYear = new Date().getFullYear().toString();
-
-  const safeData = Array.isArray(data) ? data : [];
-
-  const calcNet = (t) => {
-    const gross = parseFloat(t.grossAmount) || 0;
-    const fees = parseFloat(t.platformFees) || 0;
-    const isC = t.platform === 'Booking' || t.platform === 'Abritel';
-    let net = 0;
-    if (isC) {
-      const disp = parseFloat(t.displayedAmount) || 0;
-      const city = parseFloat(t.cityTax) || 0;
-      const bank = parseFloat(t.bankFees) || 0;
-      net = (disp - city) - (fees + bank);
-    } else {
-      net = gross - fees;
-    }
-    const exp = (t.resExpenses || []).reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
-    const urssaf = t.isUrssaf !== false ? gross * 0.077 : 0;
-    return net - exp - urssaf;
-  };
-
-  const getDataForYear = (yStr) => {
-    const res = Array(12).fill(0);
-    safeData.forEach(t => {
-      const dateRef = t.endDate || t.startDate;
-      if (!dateRef) return;
-      const [y, mStr] = dateRef.split('-');
-      if (y === yStr) {
-        const m = parseInt(mStr, 10) - 1;
-        if (m >= 0 && m <= 11) res[m] += calcNet(t);
-      }
-    });
-    return res;
-  };
-
-  const d1 = getDataForYear(year1);
-  const d2 = getDataForYear(year2);
-  const maxVal = Math.max(...d1, ...d2, 1000) * 1.15; 
-
-  const total1 = d1.reduce((acc, val) => acc + val, 0);
-  const total2 = d2.reduce((acc, val) => acc + val, 0);
-
-  const w = 900, h = 300, padX = 40, padY = 30;
-  const getX = (i) => padX + (i * (w - 2 * padX) / 11);
-  const getY = (val) => h - padY - ((val / maxVal) * (h - 2 * padY));
-
-  const buildPath = (dArr, start, end) => {
-    if (start > end || start < 0) return '';
-    let p = `M ${getX(start)},${getY(dArr[start])} `;
-    for (let i = start + 1; i <= end; i++) p += `L ${getX(i)},${getY(dArr[i])} `;
-    return p;
-  };
-
-  const getSplit = (yStr) => {
-    if (parseInt(yStr) < parseInt(currentYear)) return 11;
-    if (parseInt(yStr) > parseInt(currentYear)) return -1;
-    return currentMonth;
-  };
-
-  const split1 = getSplit(year1);
-  const path1Solid = buildPath(d1, 0, Math.max(0, split1));
-  const path1Dotted = buildPath(d1, Math.max(0, split1), 11);
-
-  const split2 = getSplit(year2);
-  const path2Solid = buildPath(d2, 0, Math.max(0, split2));
-  const path2Dotted = buildPath(d2, Math.max(0, split2), 11);
-
-  const yTicks = [0, maxVal * 0.33, maxVal * 0.66, maxVal];
-
-  return (
-    <div className="w-full bg-white p-8 rounded-[48px] shadow-xl shadow-slate-200/50 border border-slate-50 animate-in fade-in">
-      <div className="overflow-x-auto no-scrollbar">
-        <div className="min-w-[600px] relative">
-          <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
-            {yTicks.map((tick, i) => (
-              <g key={`grid-${i}`}>
-                <line x1={padX} y1={getY(tick)} x2={w - padX} y2={getY(tick)} stroke="#F8FAFC" strokeWidth="2" />
-                <text x={w - padX + 10} y={getY(tick) + 4} fill="#CBD5E1" fontSize="11" fontFamily="sans-serif" fontWeight="900">{(tick / 1000).toFixed(1)}k€</text>
-              </g>
-            ))}
-            {months.map((m, i) => (
-              <text key={m} x={getX(i)} y={h - 5} fill={hoveredMonth === i ? "#0F172A" : "#94A3B8"} fontSize="12" fontFamily="sans-serif" fontWeight="900" textAnchor="middle" className="transition-colors cursor-pointer" onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)}>{m}</text>
-            ))}
-            <path d={path2Solid} stroke="#9333EA" strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-            <path d={path2Dotted} stroke="#9333EA" strokeWidth="4" fill="none" strokeDasharray="6 8" strokeLinecap="round" strokeLinejoin="round" />
-            <path d={path1Solid} stroke="#F43F5E" strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-            <path d={path1Dotted} stroke="#F43F5E" strokeWidth="4" fill="none" strokeDasharray="6 8" strokeLinecap="round" strokeLinejoin="round" />
-            {months.map((_, i) => (
-              <g key={`points-${i}`} onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)} className="cursor-pointer">
-                <rect x={getX(i) - 20} y={0} width="40" height={h} fill="transparent" />
-                <circle cx={getX(i)} cy={getY(d2[i])} r={hoveredMonth === i ? 7 : 5} fill={hoveredMonth === i ? "#9333EA" : "white"} stroke="#9333EA" strokeWidth="3" className="transition-all duration-200" />
                 <circle cx={getX(i)} cy={getY(d1[i])} r={hoveredMonth === i ? 7 : 5} fill={hoveredMonth === i ? "#F43F5E" : "white"} stroke="#F43F5E" strokeWidth="3" className="transition-all duration-200" />
               </g>
             ))}
@@ -446,7 +257,7 @@ const App = () => {
     const text = encodeURIComponent(`Réservation : ${res.name} - ${prop?.name || ''}`);
     const details = encodeURIComponent(`Client : ${res.name}\nLogement : ${prop?.name || ''}\nPlateforme : ${res.platform}\nNotes : ${res.comment || ''}`);
     const dates = `${res.startDate.replace(/-/g, '')}/${res.endDate.replace(/-/g, '')}`;
-    return `[https://calendar.google.com/calendar/render?action=TEMPLATE&text=$](https://calendar.google.com/calendar/render?action=TEMPLATE&text=$){text}&dates=${dates}&details=${details}`;
+    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${details}`;
   };
 
   const getStatusProps = (t) => {
@@ -653,7 +464,6 @@ const App = () => {
     } catch (err) { alert("Erreur d'encaissement: " + err.message); }
   };
 
-  // --- FILTRES DE BASE POUR LA COMPTABILITE (Basés sur les selecteurs globaux) ---
   const baseTenants = useMemo(() => {
     return (tenants || []).filter(t => 
        (filterProp === 'all' || t.propertyId === filterProp) &&
@@ -661,7 +471,6 @@ const App = () => {
     );
   }, [tenants, filterProp, filterPlat]);
 
-  // Filtre classique par date de séjour (Pour Réservations et Agenda)
   const filteredData = useMemo(() => {
     return baseTenants.filter(t => {
       const dateRef = t.startDate ? new Date(t.startDate) : new Date();
@@ -679,7 +488,6 @@ const App = () => {
     }).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
   }, [filteredData, filterStatus]);
 
-  // Helper de filtrage strict par date de trésorerie (paiement)
   const checkDateFilter = (dateStr) => {
      if (!dateStr) return false;
      const [y, mo] = dateStr.split('-');
@@ -688,7 +496,6 @@ const App = () => {
      return true;
   };
 
-  // FINANCIALS : Totalement indépendant des dates de séjours, basé à 100% sur les dates de paiements
   const financials = useMemo(() => {
     let netB = 0;
     let grossUrssaf = 0;
@@ -723,7 +530,6 @@ const App = () => {
             }
         }
 
-        // Dépenses
         (t.resExpenses || []).forEach(e => {
             if (e.paymentDate) {
                 if (checkDateFilter(e.paymentDate)) {
@@ -739,7 +545,6 @@ const App = () => {
     return { netB, taxes, exp, profit: netB - exp - taxes, netUpcoming, grossUrssaf };
   }, [baseTenants, filterYear, filterMonth, filterProv]);
 
-  // RECAP MENSUEL : Totalement basé sur la date du flux d'argent
   const monthlyRecapData = useMemo(() => {
     const stats = {};
     
@@ -793,7 +598,6 @@ const App = () => {
           }
       }
       
-      // Expenses basées sur le paiement
       (t.resExpenses || []).forEach(exp => {
           if (exp.paymentDate && checkDateFilter(exp.paymentDate)) {
              if (filterProv !== 'all' && exp.person !== filterProv) return; 
@@ -974,7 +778,7 @@ const App = () => {
   const RenderFilters = () => (
     <div className="flex flex-wrap items-center gap-2 bg-white/70 backdrop-blur-md p-3 rounded-[28px] border border-white shadow-xl mb-6 md:mb-8">
       <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-        <Filter size="{12}" className="text-slate-400"/>
+        <Filter size={12} className="text-slate-400" />
         <select value={filterYear} onChange={e => setFilterYear(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer">
           <option value="all">Années</option>{(yearsAvailable || []).map(y => <option key={y} value={y}>{y}</option>)}
         </select>
@@ -991,7 +795,7 @@ const App = () => {
     </div>
   );
 
-  if (loading) return <div className="h-screen w-full flex items-center justify-center bg-slate-50 font-black uppercase text-xs"><Loader2 className="animate-spin text-blue-600 mr-2"/> CADEL MANAGER...</div>;
+  if (loading) return <div className="h-screen w-full flex items-center justify-center bg-slate-50 font-black uppercase text-xs"><Loader2 className="animate-spin text-blue-600 mr-2" /> CADEL MANAGER...</div>;
 
   const curChargesModale = (formData?.resExpenses || []).reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
   const isDirectFormModale = formData?.platform === 'En direct';
@@ -1007,17 +811,17 @@ const App = () => {
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col md:flex-row font-sans text-slate-900 overflow-hidden">
       <aside className={`fixed md:sticky top-0 left-0 z-50 w-72 h-full md:h-screen bg-white border-r transform md:translate-x-0 transition-transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-10 border-b flex flex-col items-center">
-          <div className="bg-gradient-to-tr from-blue-600 to-indigo-600 p-4 rounded-2xl text-white shadow-xl mb-2"><Building2 size="{28}"/></div>
+          <div className="bg-gradient-to-tr from-blue-600 to-indigo-600 p-4 rounded-2xl text-white shadow-xl mb-2"><Building2 size={28} /></div>
           <h1 className="font-black uppercase tracking-tighter text-2xl">CADEL</h1><h2 className="font-black uppercase tracking-[0.3em] text-[10px] text-blue-600">MANAGER</h2>
         </div>
         <nav className="flex-1 p-6 space-y-2 overflow-y-auto">
-          {[{ id: 'reservations', label: 'Réservations', icon: <List size="{18}"/> }, { id: 'agenda', label: 'Agenda', icon: <CalendarRange size="{18}"/> }, { id: 'dashboard', label: 'Tableau de bord', icon: <LayoutDashboard size="{18}"/> }, { id: 'finances', label: 'Finances', icon: <Calculator size="{18}"/> }, { id: 'settings', label: 'Paramètres', icon: <Settings size="{18}"/> }].map(item => (
+          {[{ id: 'reservations', label: 'Réservations', icon: <List size={18}/> }, { id: 'agenda', label: 'Agenda', icon: <CalendarRange size={18}/> }, { id: 'dashboard', label: 'Tableau de bord', icon: <LayoutDashboard size={18}/> }, { id: 'finances', label: 'Finances', icon: <Calculator size={18}/> }, { id: 'settings', label: 'Paramètres', icon: <Settings size={18}/> }].map(item => (
             <button key={item.id} onClick={() => { setActiveTab(item.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-5 py-4 rounded-[20px] font-black text-[11px] uppercase tracking-widest transition-all flex items-center gap-4 ${activeTab === item.id ? 'bg-slate-900 text-white shadow-2xl' : 'text-slate-400 hover:bg-slate-50'}`}>{item.icon} {item.label}</button>
           ))}
         </nav>
       </aside>
 
-      <div className="md:hidden flex justify-between p-5 bg-white border-b sticky top-0 z-40 shadow-sm"><div className="flex items-center gap-2"><div className="bg-blue-600 p-1.5 rounded-lg text-white"><Building2 size="{16}"/></div><h1 className="font-black text-sm uppercase">CADEL MANAGER</h1></div><button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2">{isMobileMenuOpen ? <X/> : <Menu/>}</button></div>
+      <div className="md:hidden flex justify-between p-5 bg-white border-b sticky top-0 z-40 shadow-sm"><div className="flex items-center gap-2"><div className="bg-blue-600 p-1.5 rounded-lg text-white"><Building2 size={16}/></div><h1 className="font-black text-sm uppercase">CADEL MANAGER</h1></div><button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2">{isMobileMenuOpen ? <X /> : <Menu />}</button></div>
 
       <main className="flex-1 p-4 md:p-12 overflow-y-auto h-screen custom-scrollbar relative">
         
@@ -1025,7 +829,7 @@ const App = () => {
           <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
              <div className="bg-white p-8 rounded-[40px] shadow-2xl max-w-sm w-full border border-slate-100 flex flex-col gap-6 animate-in zoom-in-95">
                 <div className="text-center">
-                  <div className="bg-emerald-50 text-emerald-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><Euro size="{32}"/></div>
+                  <div className="bg-emerald-50 text-emerald-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><Euro size={32}/></div>
                   <h3 className="font-black text-xl uppercase tracking-tighter">Valider le paiement</h3>
                   <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-2">Définit le mois URSSAF</p>
                 </div>
@@ -1039,7 +843,7 @@ const App = () => {
         )}
 
         <div className="max-w-7xl mx-auto pb-32">
-          <RenderFilters/>
+          <RenderFilters />
 
           {activeTab === 'reservations' && (
             <div className="space-y-8 animate-in fade-in">
@@ -1061,7 +865,7 @@ const App = () => {
                         {t.platform === 'En direct' && t.soldeDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.soldeDate)}</span>}
                       </div>
                     </div>
-                    <div className="bg-slate-50 p-3 rounded-2xl flex justify-between font-black text-xs mb-3"><span>{formatDateFr(t.startDate)}</span><ArrowRight size="{14}" className="text-slate-300"/><span>{formatDateFr(t.endDate)}</span></div>
+                    <div className="bg-slate-50 p-3 rounded-2xl flex justify-between font-black text-xs mb-3"><span>{formatDateFr(t.startDate)}</span><ArrowRight size={14} className="text-slate-300"/><span>{formatDateFr(t.endDate)}</span></div>
                     
                     {t.resExpenses && t.resExpenses.length > 0 && (
                       <div className="space-y-1.5 border-t border-slate-50 pt-3 mb-3">
@@ -1069,7 +873,7 @@ const App = () => {
                           <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-slate-50 p-2 rounded-xl cursor-pointer hover:bg-blue-50 transition-colors">
                             <span className="uppercase font-black text-slate-500">{exp.type} ({exp.person})</span>
                             <div className="text-right">
-                              <span className={`font-black flex items-center justify-end gap-1 ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€ {exp.paymentDate ? <CheckCircle size="{10}"/> : <Clock size="{10}"/>}</span>
+                              <span className={`font-black flex items-center justify-end gap-1 ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€ {exp.paymentDate ? <CheckCircle size={10}/> : <Clock size={10}/>}</span>
                               {exp.paymentDate && <div className="text-[8px] text-slate-400 mt-0.5">{formatDateFr(exp.paymentDate)}</div>}
                             </div>
                           </div>
@@ -1100,7 +904,7 @@ const App = () => {
                                   <div className="text-right">
                                     <div className="flex items-center justify-end gap-1.5">
                                         <span className={`font-black ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€</span>
-                                        {exp.paymentDate ? <CheckCircle size="{10}" className="text-emerald-500"/> : <Clock size="{10}" className="text-orange-400"/>}
+                                        {exp.paymentDate ? <CheckCircle size={10} className="text-emerald-500" /> : <Clock size={10} className="text-orange-400" />}
                                     </div>
                                     {exp.paymentDate && <div className="text-[8px] text-slate-400 mt-0.5 leading-none">{formatDateFr(exp.paymentDate)}</div>}
                                   </div>
@@ -1151,7 +955,7 @@ const App = () => {
                  </div>
               </div>
 
-              <ComparisonChart data="{baseTenants}" year1="{compYear1}" year2="{compYear2}"/>
+              <ComparisonChart data={baseTenants} year1={compYear1} year2={compYear2} />
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                 <div className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50">
@@ -1173,8 +977,8 @@ const App = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                 <DonutChart title="Net Reçu (Banque) par Logement" data="{(properties" ||>({label:p.name,value:(baseTenants || []).reduce((acc,t) => t.propertyId===p.id ? acc + getTenantProfitForFilters(t) : acc, 0),color:CHART_COLORS[idx%CHART_COLORS.length]}))} />
-                 <DonutChart title="Net Reçu (Banque) par Plateforme" data="{(availablePlatforms" ||>({label:p,value:(baseTenants || []).reduce((acc,t) => t.platform===p ? acc + getTenantProfitForFilters(t) : acc, 0),color:CHART_COLORS[(idx+4)%CHART_COLORS.length]}))} />
+                 <DonutChart title="Net Reçu (Banque) par Logement" data={(properties || []).map((p,idx)=>({label:p.name,value:(baseTenants || []).reduce((acc,t) => t.propertyId===p.id ? acc + getTenantProfitForFilters(t) : acc, 0),color:CHART_COLORS[idx%CHART_COLORS.length]}))} />
+                 <DonutChart title="Net Reçu (Banque) par Plateforme" data={(availablePlatforms || []).map((p,idx)=>({label:p,value:(baseTenants || []).reduce((acc,t) => t.platform===p ? acc + getTenantProfitForFilters(t) : acc, 0),color:CHART_COLORS[(idx+4)%CHART_COLORS.length]}))} />
               </div>
             </div>
           )}
@@ -1248,7 +1052,7 @@ const App = () => {
               <h2 className="text-3xl font-black uppercase">Paramètres</h2>
               
               <div className="bg-white p-8 rounded-[40px] border-2 border-dashed shadow-xl flex flex-col items-center justify-center text-center">
-                <UploadCloud size="{40}" className="text-blue-600 mb-4"/>
+                <UploadCloud size={40} className="text-blue-600 mb-4"/>
                 <h3 className="text-xl font-black uppercase">Importation de Réservations</h3>
                 <p className="text-xs text-slate-400 mt-2 mb-6">Sélectionnez la plateforme source et collez votre export CSV (gère les colonnes automatiquement).</p>
                 
@@ -1276,7 +1080,7 @@ const App = () => {
                             <td className="p-3">{item.name}<div className="text-slate-400">{formatDateFr(item.startDate)}</div></td>
                             <td className="p-3 uppercase">{item.propertyName}</td>
                             <td className="p-3 uppercase">
-                              {!item.hasProperty ? <span className="text-rose-600 flex items-center gap-1"><AlertTriangle size="{10}"/> Logement Inconnu</span> : item.isDuplicate ? <span className="text-orange-600 flex items-center gap-1"><AlertTriangle size="{10}"/> Doublon</span> : <span className="text-emerald-600 flex items-center gap-1"><Check size="{10}"/> Nouveau</span>}
+                              {!item.hasProperty ? <span className="text-rose-600 flex items-center gap-1"><AlertTriangle size={10}/> Logement Inconnu</span> : item.isDuplicate ? <span className="text-orange-600 flex items-center gap-1"><AlertTriangle size={10}/> Doublon</span> : <span className="text-emerald-600 flex items-center gap-1"><Check size={10}/> Nouveau</span>}
                             </td>
                           </tr>
                         ))}
@@ -1295,28 +1099,28 @@ const App = () => {
               </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full"><h3 className="text-[10px] font-black uppercase text-slate-400 mb-4">Plateformes</h3><div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">{(availablePlatforms || []).map(p=>(<div key={p} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl"><span>{p}</span><button onClick={()=>{const n = availablePlatforms.filter(x=>x!==p); setAvailablePlatforms(n); updateSettings({platforms:n})}} className="text-slate-300 hover:text-rose-500"><X size="{14}"/></button></div>))}</div><form onSubmit={(e)=>{e.preventDefault(); if(inputPlat.trim()){const n = [...availablePlatforms, inputPlat.trim()]; setAvailablePlatforms(n); updateSettings({platforms:n}); setInputPlat('')}}} className="flex gap-2"><input value={inputPlat} onChange={e=>setInputPlat(e.target.value)} className="flex-1 p-2 bg-slate-50 border rounded-xl text-[10px]" /><button className="bg-slate-900 text-white p-2 rounded-xl">+</button></form></div>
-                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full"><h3 className="text-[10px] font-black uppercase text-slate-400 mb-4">Prestataires</h3><div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">{(availableProviders || []).map(p=>(<div key={p} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl"><span>{p}</span><button onClick={()=>{const n = availableProviders.filter(x=>x!==p); setAvailableProviders(n); updateSettings({providers:n})}} className="text-slate-300 hover:text-rose-500"><X size="{14}"/></button></div>))}</div><form onSubmit={(e)=>{e.preventDefault(); if(inputProv.trim()){const n = [...availableProviders, inputProv.trim()]; setAvailableProviders(n); updateSettings({providers:n}); setInputProv('')}}} className="flex gap-2"><input value={inputProv} onChange={e=>setInputProv(e.target.value)} className="flex-1 p-2 bg-slate-50 border rounded-xl text-[10px]" /><button className="bg-slate-900 text-white p-2 rounded-xl">+</button></form></div>
-                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full"><h3 className="text-[10px] font-black uppercase text-slate-400 mb-4">Services</h3><div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">{(availableServiceTypes || []).map(p=>(<div key={p} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl"><span>{p}</span><button onClick={()=>{const n = availableServiceTypes.filter(x=>x!==p); setAvailableServiceTypes(n); updateSettings({services:n})}} className="text-slate-300 hover:text-rose-500"><X size="{14}"/></button></div>))}</div><form onSubmit={(e)=>{e.preventDefault(); if(inputSvc.trim()){const n = [...availableServiceTypes, inputSvc.trim()]; setAvailableServiceTypes(n); updateSettings({services:n}); setInputSvc('')}}} className="flex gap-2"><input value={inputSvc} onChange={e=>setInputSvc(e.target.value)} className="flex-1 p-2 bg-slate-50 border rounded-xl text-[10px]" /><button className="bg-slate-900 text-white p-2 rounded-xl">+</button></form></div>
-                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full border-2 border-blue-50"><h3 className="text-[10px] font-black uppercase text-blue-600 mb-4">Logements</h3><div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">{(properties || []).map(p=>(<div key={p.id} className="flex justify-between items-center p-3 bg-blue-50 rounded-xl"><span>{p.name}</span><button onClick={async()=>{if(window.confirm('Supprimer ?'))await deleteDoc(doc(db,'artifacts',appId,'public', 'data', 'properties', p.id))}} className="text-slate-300 hover:text-rose-500"><Trash2 size="{14}"/></button></div>))}</div><form onSubmit={async(e)=>{e.preventDefault(); if(inputProp.name.trim()){await addDoc(collection(db,'artifacts',appId,'public','data','properties'),{name:inputProp.name.trim(),address:inputProp.address.trim()}); setInputProp({name:'',address:''})}}} className="flex flex-col gap-2"><input required value={inputProp.name} onChange={e=>setInputProp({...inputProp,name:e.target.value})} className="p-3 bg-slate-50 rounded-xl text-[10px] outline-none" placeholder="Nom du bien" /><button type="submit" className="bg-blue-600 text-white p-3 rounded-xl font-black text-[10px] uppercase shadow-md">+ Ajouter</button></form></div>
+                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full"><h3 className="text-[10px] font-black uppercase text-slate-400 mb-4">Plateformes</h3><div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">{(availablePlatforms || []).map(p=>(<div key={p} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl"><span>{p}</span><button onClick={()=>{const n = availablePlatforms.filter(x=>x!==p); setAvailablePlatforms(n); updateSettings({platforms:n})}} className="text-slate-300 hover:text-rose-500"><X size={14}/></button></div>))}</div><form onSubmit={(e)=>{e.preventDefault(); if(inputPlat.trim()){const n = [...availablePlatforms, inputPlat.trim()]; setAvailablePlatforms(n); updateSettings({platforms:n}); setInputPlat('')}}} className="flex gap-2"><input value={inputPlat} onChange={e=>setInputPlat(e.target.value)} className="flex-1 p-2 bg-slate-50 border rounded-xl text-[10px]" /><button className="bg-slate-900 text-white p-2 rounded-xl">+</button></form></div>
+                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full"><h3 className="text-[10px] font-black uppercase text-slate-400 mb-4">Prestataires</h3><div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">{(availableProviders || []).map(p=>(<div key={p} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl"><span>{p}</span><button onClick={()=>{const n = availableProviders.filter(x=>x!==p); setAvailableProviders(n); updateSettings({providers:n})}} className="text-slate-300 hover:text-rose-500"><X size={14}/></button></div>))}</div><form onSubmit={(e)=>{e.preventDefault(); if(inputProv.trim()){const n = [...availableProviders, inputProv.trim()]; setAvailableProviders(n); updateSettings({providers:n}); setInputProv('')}}} className="flex gap-2"><input value={inputProv} onChange={e=>setInputProv(e.target.value)} className="flex-1 p-2 bg-slate-50 border rounded-xl text-[10px]" /><button className="bg-slate-900 text-white p-2 rounded-xl">+</button></form></div>
+                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full"><h3 className="text-[10px] font-black uppercase text-slate-400 mb-4">Services</h3><div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">{(availableServiceTypes || []).map(p=>(<div key={p} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl"><span>{p}</span><button onClick={()=>{const n = availableServiceTypes.filter(x=>x!==p); setAvailableServiceTypes(n); updateSettings({services:n})}} className="text-slate-300 hover:text-rose-500"><X size={14}/></button></div>))}</div><form onSubmit={(e)=>{e.preventDefault(); if(inputSvc.trim()){const n = [...availableServiceTypes, inputSvc.trim()]; setAvailableServiceTypes(n); updateSettings({services:n}); setInputSvc('')}}} className="flex gap-2"><input value={inputSvc} onChange={e=>setInputSvc(e.target.value)} className="flex-1 p-2 bg-slate-50 border rounded-xl text-[10px]" /><button className="bg-slate-900 text-white p-2 rounded-xl">+</button></form></div>
+                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full border-2 border-blue-50"><h3 className="text-[10px] font-black uppercase text-blue-600 mb-4">Logements</h3><div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">{(properties || []).map(p=>(<div key={p.id} className="flex justify-between items-center p-3 bg-blue-50 rounded-xl"><span>{p.name}</span><button onClick={async()=>{if(window.confirm('Supprimer ?'))await deleteDoc(doc(db,'artifacts',appId,'public', 'data', 'properties', p.id))}} className="text-slate-300 hover:text-rose-500"><Trash2 size={14}/></button></div>))}</div><form onSubmit={async(e)=>{e.preventDefault(); if(inputProp.name.trim()){await addDoc(collection(db,'artifacts',appId,'public','data','properties'),{name:inputProp.name.trim(),address:inputProp.address.trim()}); setInputProp({name:'',address:''})}}} className="flex flex-col gap-2"><input required value={inputProp.name} onChange={e=>setInputProp({...inputProp,name:e.target.value})} className="p-3 bg-slate-50 rounded-xl text-[10px] outline-none" placeholder="Nom du bien" /><button type="submit" className="bg-blue-600 text-white p-3 rounded-xl font-black text-[10px] uppercase shadow-md">+ Ajouter</button></form></div>
               </div>
             </div>
           )}
         </div>
       </main>
 
-      
+      {/* MODALE DE RESERVATION SECURISEE */}
       {isModalOpen && formData && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setIsModalOpen(false)}></div>
           <div className="bg-white rounded-[40px] md:rounded-[60px] shadow-2xl w-full max-w-3xl max-h-[95vh] flex flex-col border border-slate-100 overflow-hidden relative z-10">
             <div className="p-6 md:p-10 border-b flex justify-between items-center bg-white sticky top-0 z-10">
-               <div className="flex items-center gap-4 text-blue-600 font-black uppercase leading-none"><CalendarCheck size="{28}"/> Détails</div>
+               <div className="flex items-center gap-4 text-blue-600 font-black uppercase leading-none"><CalendarCheck size={28} /> Détails</div>
                <div className="flex items-center gap-2">
                  <a href={getGoogleCalendarUrl(formData, (properties || []).find(p => p.id === formData.propertyId))} target="_blank" rel="noopener noreferrer" title="Ajouter à Google Agenda" className="p-3 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-600 hover:text-white transition-all shadow-sm">
-                    <CalendarIcon size="{20}"/>
+                    <CalendarIcon size={20} />
                  </a>
-                 <button type="button" onClick={() => setIsModalOpen(false)} className="p-3 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900 transition-all duration-300"><X size="{20}"/></button>
+                 <button type="button" onClick={() => setIsModalOpen(false)} className="p-3 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900 transition-all duration-300"><X size={20} /></button>
                </div>
             </div>
             <form onSubmit={saveRes} className="p-6 md:p-10 space-y-8 overflow-y-auto flex-1 custom-scrollbar text-xs">
@@ -1390,7 +1194,7 @@ const App = () => {
                       <select value={exp.person || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, person: e.target.value } : x) })} className="flex-1 p-3 border rounded-xl font-black uppercase text-[10px] outline-none">{(availableProviders || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
                       <select value={exp.type || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, type: e.target.value } : x) })} className="flex-1 p-3 border rounded-xl font-black uppercase text-[10px] outline-none">{(availableServiceTypes || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
                       <input type="number" value={exp.amount || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, amount: e.target.value } : x) })} className="w-20 p-3 border rounded-xl font-black text-right outline-none" />
-                      <button type="button" onClick={() => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).filter(x => x.id !== exp.id) })} className="text-rose-500 font-black px-2"><Trash2 size="{18}"/></button>
+                      <button type="button" onClick={() => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).filter(x => x.id !== exp.id) })} className="text-rose-500 font-black px-2"><Trash2 size={18}/></button>
                     </div>
                   ))}
               </div>
@@ -1415,7 +1219,7 @@ const App = () => {
                     </p>
                  </div>
                  <div className="flex items-center gap-4 w-full md:w-auto">
-                   {editingResId && <button type="button" onClick={() => deleteRes(editingResId)} className="p-4 text-rose-500 bg-rose-50 rounded-[24px] hover:bg-rose-500 hover:text-white transition-colors"><Trash2 size="{24}"/></button>}
+                   {editingResId && <button type="button" onClick={() => deleteRes(editingResId)} className="p-4 text-rose-500 bg-rose-50 rounded-[24px] hover:bg-rose-500 hover:text-white transition-colors"><Trash2 size={24}/></button>}
                    <button type="submit" className="w-full md:w-auto bg-blue-600 px-12 py-5 rounded-[24px] font-black uppercase tracking-[2px] shadow-xl hover:-translate-y-1 transition-all">Enregistrer</button>
                  </div>
               </div>
