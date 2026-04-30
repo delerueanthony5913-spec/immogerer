@@ -81,7 +81,7 @@ const DonutChart = ({ data, title }) => {
   );
 };
 
-// GRAPHIQUE MULTI-COURBES DYNAMIQUE (Moteur "Classic" compatible)
+// GRAPHIQUE MULTI-COURBES DYNAMIQUE (Moteur "Classic" compatible + Info Bulles flottantes)
 const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
   const currentYear = new Date().getFullYear().toString();
   const currentMonth = new Date().getMonth();
@@ -220,7 +220,9 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
   const maxValRaw = Math.max(...allDataValues, 100);
   const maxVal = (!isFinite(maxValRaw) || maxValRaw <= 0) ? 100 : maxValRaw * 1.15;
 
-  const w = 900, h = 300, padX = 40, padY = 30;
+  // Ajustement des marges pour laisser de la place aux chiffres
+  const w = 900, h = 300, padX = 60, padY = 30; 
+  
   const getX = (i) => padX + (i * (w - 2 * padX) / 11);
   const getY = (val) => {
      if (isNaN(val) || !maxVal || maxVal === 0) return h - padY;
@@ -314,10 +316,15 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
                 {/* Lignes de grille horizontales */}
                 {yTicks.map((tick, i) => (
                   <g key={`grid-${i}`}>
-                    <line x1={padX} y1={getY(tick)} x2={w - padX} y2={getY(tick)} stroke="#F8FAFC" strokeWidth="2" />
-                    <text x={w - padX + 10} y={getY(tick) + 4} fill="#CBD5E1" fontSize="11" fontFamily="sans-serif" fontWeight="900">{(tick / 1000).toFixed(1)}k€</text>
+                    <line x1={padX} y1={getY(tick)} x2={w - padX} y2={getY(tick)} stroke="#F1F5F9" strokeWidth="2" />
+                    <text x={w - padX + 8} y={getY(tick) + 4} fill="#64748B" fontSize="11" fontFamily="sans-serif" fontWeight="900">{tick >= 1000 ? (tick / 1000).toFixed(1) + 'k€' : Math.round(tick) + '€'}</text>
                   </g>
                 ))}
+
+                {/* Highlight vertical line pour le survol */}
+                {hoveredMonth !== null && (
+                    <line x1={getX(hoveredMonth)} y1={padY} x2={getX(hoveredMonth)} y2={h - padY} stroke="#CBD5E1" strokeWidth="2" strokeDasharray="4 4" />
+                )}
                 
                 {/* Lignes de mois (verticales invisibles pour le hover) */}
                 {months.map((m, i) => (
@@ -342,30 +349,33 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
                   </g>
                 ))}
               </svg>
+
+              {/* TOOLTIP INTERACTIF AU SURVOL (Directement sur le graphique) */}
+              {hoveredMonth !== null && series.length > 0 && (
+                <div 
+                  className="absolute z-20 bg-slate-900/95 backdrop-blur-sm text-white p-4 rounded-2xl shadow-2xl pointer-events-none transition-all duration-200 min-w-[160px] border border-slate-700"
+                  style={{ 
+                    left: `${(getX(hoveredMonth) / w) * 100}%`, 
+                    top: '15%', 
+                    transform: hoveredMonth > 7 ? 'translateX(calc(-100% - 15px))' : hoveredMonth < 4 ? 'translateX(15px)' : 'translateX(-50%)' 
+                  }}
+                >
+                   <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-3 border-b border-slate-700 pb-2">{months[hoveredMonth]}</div>
+                   <div className="flex flex-col gap-2.5">
+                      {series.map(s => (
+                         <div key={`tt-${s.id}`} className="flex justify-between items-center gap-6">
+                            <div className="text-[10px] font-black uppercase flex items-center gap-2 truncate max-w-[120px]"><div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{backgroundColor: s.color}}></div>{s.label}</div>
+                            <div className="font-black text-sm">{s.data[hoveredMonth].toFixed(2)}€</div>
+                         </div>
+                      ))}
+                   </div>
+                </div>
+              )}
             </div>
           </div>
       )}
       
-      {/* 4. DETAILS DU MOIS AU SURVOL */}
-      <div className="mt-8 bg-slate-50 border border-slate-100 p-6 rounded-3xl min-h-[90px] transition-all overflow-hidden">
-        {hoveredMonth !== null && series.length > 0 ? (
-          <div className="animate-in slide-in-from-bottom-4 fade-in">
-             <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-3 border-b border-slate-200 pb-2">Détails pour {months[hoveredMonth]}</div>
-             <div className="flex flex-wrap gap-6">
-                {series.map(s => (
-                   <div key={`hover-${s.id}`} className="flex flex-col">
-                      <div className="text-xl font-black text-slate-800 tracking-tighter">{s.data[hoveredMonth].toFixed(2)}€</div>
-                      <div className="text-[9px] text-slate-500 font-black uppercase tracking-widest flex items-center gap-1.5 mt-0.5 truncate max-w-[150px]"><div className="w-2 h-2 rounded-full shadow-sm flex-shrink-0" style={{backgroundColor: s.color}}></div> {s.label}</div>
-                   </div>
-                ))}
-             </div>
-          </div>
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-slate-300 font-black uppercase text-[10px] tracking-widest italic">Survolez le graphique pour voir les détails mensuels</div>
-        )}
-      </div>
-
-      {/* 5. TOTAUX GLOBAUX */}
+      {/* 4. TOTAUX GLOBAUX */}
       {series.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
             {series.map(s => (
@@ -1219,7 +1229,7 @@ const App = () => {
                   </div>
                 </div>
 
-                {/* NOUVEAU GRAPHIQUE MULTI-COURBES */}
+                {/* GRAPHIQUE MULTI-COURBES */}
                 <ComparisonChart data={baseTenants} properties={properties} platforms={availablePlatforms} yearsAvailable={yearsAvailable} />
 
                 {/* ROSACES DE REPARTITION */}
