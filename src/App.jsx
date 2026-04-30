@@ -497,13 +497,18 @@ const App = () => {
 
   const startReview = () => {
     if (!importText.trim()) return;
-    const lines = importText.split('\n'); 
-    const newList = [];
+    const lines = importText.split('\n').filter(l => l.trim() !== ''); 
+    if (lines.length < 2) return;
 
+    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
+    const voyageurIdx = headers.findIndex(h => h.includes('voyageur') || h.includes('client') || h.includes('nom'));
+    
+    const newList = [];
+    
     lines.forEach((line, index) => {
-        if (line.trim() === '') return;
+        if (index === 0) return; // Skip l'en-tête
         const parts = parseCSVLine(line);
-        if (parts.length < 10) return;
+        if (parts.length < 5) return;
 
         let guestName, startDate, endDate, listingName;
         let gross = 0, fees = 0, cityTax = 0, bankFees = 0, dispAmount = 0, net = 0;
@@ -533,7 +538,9 @@ const App = () => {
             const typeCol = parts[0]?.toLowerCase() || '';
             if (!typeCol.includes('rã©servation') && !typeCol.includes('réservation') && !typeCol.includes('reservation')) return;
 
-            guestName = `Réf: ${parts[2]?.trim()}`; 
+            // Utilise l'index du voyageur s'il est trouvé dans l'en-tête, sinon utilise la référence
+            guestName = voyageurIdx !== -1 && parts[voyageurIdx] ? parts[voyageurIdx].trim() : `Réf: ${parts[2]?.trim()}`; 
+            
             startDate = parts[3]?.trim(); 
             endDate = parts[4]?.trim();   
             listingName = parts[10]?.trim();
@@ -856,13 +863,31 @@ const App = () => {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setIsModalOpen(false)}></div>
           <div className="bg-white rounded-[40px] md:rounded-[60px] shadow-2xl w-full max-w-3xl max-h-[95vh] flex flex-col border border-slate-100 overflow-hidden relative z-10"><div className="p-6 md:p-10 border-b flex justify-between items-center bg-white sticky top-0 z-10"><div className="flex items-center gap-4 text-blue-600 font-black uppercase leading-none"><CalendarCheck size={28} /> Détails</div><button type="button" onClick={() => setIsModalOpen(false)} className="p-3 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900 transition-all duration-300"><X size={28} /></button></div><form onSubmit={saveRes} className="p-6 md:p-10 space-y-8 overflow-y-auto flex-1 custom-scrollbar text-xs"><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Logement<select value={formData.propertyId || ''} onChange={e => setFormData({ ...formData, propertyId: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900"><option value="">-- Choisir un logement --</option>{(properties || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Voyageur<input value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" placeholder="Nom du client" /></div><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Début<input type="date" value={formData.startDate || ''} onChange={e => setFormData({ ...formData, startDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Fin<input type="date" value={formData.endDate || ''} onChange={e => setFormData({ ...formData, endDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div></div><div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-8 rounded-[48px] border border-blue-50 space-y-6"><div className="flex justify-between font-black uppercase text-blue-900 border-b border-blue-100 pb-3 text-[11px] tracking-widest">Plateforme<select value={formData.platform || ''} onChange={e => setFormData({ ...formData, platform: e.target.value })} className="bg-white border rounded-xl px-4 py-1 text-blue-600">{(availablePlatforms || []).map(p => <option key={p} value={p}>{p}</option>)}</select></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {isCplxFormModale ? (
-                <><div><label className="text-[10px] font-black uppercase text-slate-400">Brut Client</label><input type="number" step="0.01" value={formData.displayedAmount || ''} onChange={e => setFormData({ ...formData, displayedAmount: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black" /></div><div><label className="text-[10px] font-black uppercase text-rose-400">Taxe Séjour</label><input type="number" step="0.01" value={formData.cityTax || ''} onChange={e => setFormData({ ...formData, cityTax: e.target.value })} className="w-full p-4 border border-rose-100 rounded-2xl font-black bg-rose-50/30 text-rose-500" /></div></>
-              ) : (
-                <><div><label className="text-[10px] font-black uppercase text-slate-400">Brut URSSAF</label><input type="number" step="0.01" value={formData.grossAmount || ''} onChange={e => setFormData({ ...formData, grossAmount: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black" /></div><div><label className="text-[10px] font-black uppercase text-slate-400">Commission</label><input type="number" step="0.01" value={formData.platformFees || ''} onChange={e => setFormData({ ...formData, platformFees: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black" /></div></>
-              )}
-            </div></div><div className="space-y-4">
+            
+            {/* CHAMPS DYNAMIQUES SELON LA PLATEFORME */}
+            {isCplxFormModale ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div><label className="text-[10px] font-black uppercase text-slate-400">Total affiché appli</label><input type="number" step="0.01" value={formData.displayedAmount || ''} onChange={e => setFormData({ ...formData, displayedAmount: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black" /></div>
+                <div><label className="text-[10px] font-black uppercase text-rose-400">Taxe Séjour</label><input type="number" step="0.01" value={formData.cityTax || ''} onChange={e => setFormData({ ...formData, cityTax: e.target.value })} className="w-full p-4 border border-rose-100 rounded-2xl font-black bg-rose-50/30 text-rose-500" /></div>
+                <div><label className="text-[10px] font-black uppercase text-slate-400">Commission Plat.</label><input type="number" step="0.01" value={formData.platformFees || ''} onChange={e => setFormData({ ...formData, platformFees: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black" /></div>
+                <div><label className="text-[10px] font-black uppercase text-slate-400">Frais Bancaires</label><input type="number" step="0.01" value={formData.bankFees || ''} onChange={e => setFormData({ ...formData, bankFees: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black" /></div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div><label className="text-[10px] font-black uppercase text-slate-400">Brut URSSAF</label><input type="number" step="0.01" value={formData.grossAmount || ''} onChange={e => setFormData({ ...formData, grossAmount: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black" /></div>
+                <div><label className="text-[10px] font-black uppercase text-slate-400">Commission Plateforme</label><input type="number" step="0.01" value={formData.platformFees || ''} onChange={e => setFormData({ ...formData, platformFees: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black" /></div>
+              </div>
+            )}
+            
+            {/* ENCART BRUT URSSAF BOOKING */}
+            {isCplxFormModale && (
+              <div className="flex justify-between items-center bg-slate-900 text-white p-4 rounded-2xl mt-4 shadow-inner">
+                <span className="font-black uppercase text-[10px] tracking-widest text-slate-300">Brut URSSAF (Total - Taxe Séjour) :</span>
+                <span className="font-black text-lg text-emerald-400">{((parseFloat(formData.displayedAmount) || 0) - (parseFloat(formData.cityTax) || 0)).toFixed(2)}€</span>
+              </div>
+            )}
+
+            </div><div className="space-y-4">
                 <div className="flex justify-between font-black uppercase tracking-widest text-slate-400 text-[10px]">Prestations<button type="button" onClick={() => setFormData({ ...formData, resExpenses: [...(formData.resExpenses || []), { id: Date.now().toString(), person: availableProviders[0] || '', type: availableServiceTypes[0] || '', amount: 0, paymentDate: '' }] })} className="bg-slate-900 text-white px-4 py-2 rounded-xl">+ Ajouter</button></div>
                 {(formData.resExpenses || []).map(exp => (
                   <div key={exp.id} className="flex gap-2 bg-slate-50 p-4 rounded-[28px] border border-slate-100 items-center">
