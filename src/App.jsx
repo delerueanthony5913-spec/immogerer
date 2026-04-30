@@ -375,10 +375,11 @@ const App = () => {
     const a1 = parseFloat(formData.acompte1Amount) || 0;
     const a2 = parseFloat(formData.acompte2Amount) || 0;
     const s = parseFloat(formData.soldeAmount) || 0;
-    const gDirect = a1 + a2 + s;
 
-    const g = isDirect ? gDirect : (isC ? (disp - city) : gross);
-    const n = isDirect ? gDirect : (isC ? (g - plat - bank) : (g - plat));
+    // Pour "En direct", grossAmount est défini manuellement par l'utilisateur (Montant Global).
+    // g prendra la valeur grossAmount.
+    const g = isDirect ? gross : (isC ? (disp - city) : gross);
+    const n = isDirect ? gross : (isC ? (g - plat - bank) : (g - plat));
     
     const d = { 
       ...formData, 
@@ -802,7 +803,7 @@ const App = () => {
   const isCplxFormModale = formData?.platform === 'Booking' || formData?.platform === 'Abritel';
   
   const nModale = isDirectFormModale 
-    ? ((parseFloat(formData?.acompte1Amount) || 0) + (parseFloat(formData?.acompte2Amount) || 0) + (parseFloat(formData?.soldeAmount) || 0))
+    ? (parseFloat(formData?.grossAmount) || 0) 
     : isCplxFormModale 
       ? (parseFloat(formData?.displayedAmount || 0) - parseFloat(formData?.cityTax || 0)) - (parseFloat(formData?.platformFees || 0) + parseFloat(formData?.bankFees || 0))
       : (parseFloat(formData?.grossAmount || 0) - parseFloat(formData?.platformFees || 0));
@@ -1146,23 +1147,35 @@ const App = () => {
                    </label>
                 </div>
             
+                {/* CHAMPS DYNAMIQUES SELON LA PLATEFORME */}
                 {formData.platform === 'En direct' ? (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                     <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
-                         <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">Acompte 1</label>
-                         <input type="number" step="0.01" value={formData.acompte1Amount || ''} onChange={e => setFormData({ ...formData, acompte1Amount: e.target.value })} placeholder="Montant €" className="w-full p-3 border border-slate-100 rounded-xl font-black mb-2 text-slate-700 outline-none" />
-                         <input type="date" value={formData.acompte1Date || ''} onChange={e => setFormData({ ...formData, acompte1Date: e.target.value })} className="w-full p-3 border border-slate-100 rounded-xl font-black text-slate-500 outline-none cursor-pointer" />
-                     </div>
-                     <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
-                         <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">Acompte 2</label>
-                         <input type="number" step="0.01" value={formData.acompte2Amount || ''} onChange={e => setFormData({ ...formData, acompte2Amount: e.target.value })} placeholder="Montant €" className="w-full p-3 border border-slate-100 rounded-xl font-black mb-2 text-slate-700 outline-none" />
-                         <input type="date" value={formData.acompte2Date || ''} onChange={e => setFormData({ ...formData, acompte2Date: e.target.value })} className="w-full p-3 border border-slate-100 rounded-xl font-black text-slate-500 outline-none cursor-pointer" />
-                     </div>
-                     <div className="bg-emerald-50/50 p-4 rounded-3xl border border-emerald-100 shadow-sm">
-                         <label className="text-[10px] font-black uppercase text-emerald-600 mb-2 block">Solde (Validation)</label>
-                         <input type="number" step="0.01" value={formData.soldeAmount || ''} onChange={e => setFormData({ ...formData, soldeAmount: e.target.value })} placeholder="Montant €" className="w-full p-3 border border-emerald-200 rounded-xl font-black mb-2 text-emerald-700 outline-none bg-white" />
-                         <input type="date" value={formData.soldeDate || ''} onChange={e => setFormData({ ...formData, soldeDate: e.target.value })} className="w-full p-3 border border-emerald-200 rounded-xl font-black text-emerald-700 outline-none cursor-pointer bg-white" />
-                     </div>
+                  <div className="space-y-4">
+                    <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+                        <div className="w-full md:w-1/2">
+                            <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">Montant Global de la réservation</label>
+                            <input type="number" step="0.01" value={formData.grossAmount || ''} onChange={e => setFormData({ ...formData, grossAmount: e.target.value })} placeholder="Montant total €" className="w-full p-3 border border-slate-200 rounded-xl font-black text-slate-700 outline-none text-lg" />
+                        </div>
+                        <div className="w-full md:w-1/2 text-right">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Les acomptes et le solde ci-dessous correspondent au paiement de ce montant global.</p>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                       <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
+                           <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">Acompte 1</label>
+                           <input type="number" step="0.01" value={formData.acompte1Amount || ''} onChange={e => setFormData({ ...formData, acompte1Amount: e.target.value })} placeholder="Montant €" className="w-full p-3 border border-slate-100 rounded-xl font-black mb-2 text-slate-700 outline-none" />
+                           <input type="date" value={formData.acompte1Date || ''} onChange={e => setFormData({ ...formData, acompte1Date: e.target.value })} className="w-full p-3 border border-slate-100 rounded-xl font-black text-slate-500 outline-none cursor-pointer" />
+                       </div>
+                       <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
+                           <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">Acompte 2</label>
+                           <input type="number" step="0.01" value={formData.acompte2Amount || ''} onChange={e => setFormData({ ...formData, acompte2Amount: e.target.value })} placeholder="Montant €" className="w-full p-3 border border-slate-100 rounded-xl font-black mb-2 text-slate-700 outline-none" />
+                           <input type="date" value={formData.acompte2Date || ''} onChange={e => setFormData({ ...formData, acompte2Date: e.target.value })} className="w-full p-3 border border-slate-100 rounded-xl font-black text-slate-500 outline-none cursor-pointer" />
+                       </div>
+                       <div className="bg-emerald-50/50 p-4 rounded-3xl border border-emerald-100 shadow-sm">
+                           <label className="text-[10px] font-black uppercase text-emerald-600 mb-2 block">Solde (Validation)</label>
+                           <input type="number" step="0.01" value={formData.soldeAmount || ''} onChange={e => setFormData({ ...formData, soldeAmount: e.target.value })} placeholder="Montant €" className="w-full p-3 border border-emerald-200 rounded-xl font-black mb-2 text-emerald-700 outline-none bg-white" />
+                           <input type="date" value={formData.soldeDate || ''} onChange={e => setFormData({ ...formData, soldeDate: e.target.value })} className="w-full p-3 border border-emerald-200 rounded-xl font-black text-emerald-700 outline-none cursor-pointer bg-white" />
+                       </div>
+                    </div>
                   </div>
                 ) : isCplxFormModale ? (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -1178,6 +1191,7 @@ const App = () => {
                   </div>
                 )}
                 
+                {/* ENCART BRUT URSSAF BOOKING */}
                 {isCplxFormModale && (
                   <div className="flex justify-between items-center bg-slate-900 text-white p-4 rounded-2xl mt-4 shadow-inner">
                     <span className="font-black uppercase text-[10px] tracking-widest text-slate-300">Brut URSSAF (Total - Taxe Séjour) :</span>
@@ -1214,7 +1228,7 @@ const App = () => {
                     <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Net Estimé</p>
                     <p className="text-4xl font-black text-blue-400 tracking-tighter">
                       {formData.platform === 'En direct' 
-                        ? ((parseFloat(formData?.acompte1Amount) || 0) + (parseFloat(formData?.acompte2Amount) || 0) + (parseFloat(formData?.soldeAmount) || 0)).toFixed(2)
+                        ? (parseFloat(formData?.grossAmount) || 0).toFixed(2)
                         : (nModale - curChargesModale).toFixed(2)}€
                     </p>
                  </div>
