@@ -8,7 +8,7 @@ import {
   ChevronLeft, ChevronRight, BarChart3, List, Wallet, Settings, Calculator,
   UserCheck, PlusCircle, TrendingUp, Info, Filter, Loader2,
   Building2, CalendarRange, MessageSquare, CreditCard, Activity, ArrowRight,
-  User, Sparkles, Key, UploadCloud, AlertTriangle, Check
+  User, Sparkles, Key, UploadCloud, AlertTriangle, Check, TrendingDown
 } from 'lucide-react';
 
 // --- CONFIGURATION FIREBASE ---
@@ -624,44 +624,69 @@ const App = () => {
     return list.sort((a, b) => b.dateRes.localeCompare(a.dateRes));
   }, [baseTenants, properties, filterProv, filterYear, filterMonth]);
 
-  // CALCULS STATISTIQUES DETAILLES (Onglet Statistiques)
+  // --- NOUVEAU MOTEUR DE STATISTIQUES AVANCEES ---
   const statsCalculations = useMemo(() => {
-    let totalNights = 0;
-    let totalGross = 0;
-    let totalNet = 0;
-    let nbRes = filteredData.length;
+    const year = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
+    const prevYear = year - 1;
 
-    const monthCounts = Array(12).fill(0);
-    const monthRevenues = Array(12).fill(0);
+    let currentYearNights = 0, prevYearNights = 0;
+    let currentYearGross = 0, prevYearGross = 0;
+    let currentYearNet = 0, prevYearNet = 0;
+    let currentYearExp = 0, prevYearExp = 0;
+    let upcomingGross = 0;
 
-    filteredData.forEach(t => {
-      if (t.startDate && t.endDate) {
-        const s = new Date(t.startDate);
-        const e = new Date(t.endDate);
-        const nights = Math.max(1, Math.round((e - s) / (1000 * 60 * 60 * 24)));
-        totalNights += nights;
-      }
-      
-      const gross = parseFloat(t.grossAmount) || 0;
-      const net = parseFloat(t.netAmount) || 0;
-      totalGross += gross;
-      totalNet += net;
+    const currentMonthGross = Array(12).fill(0);
+    const prevMonthGross = Array(12).fill(0);
+    
+    baseTenants.forEach(t => {
+       if (!t.startDate) return;
+       const resYear = parseInt(t.startDate.split('-')[0], 10);
+       const resMonth = parseInt(t.startDate.split('-')[1], 10) - 1;
 
-      if (t.startDate) {
-          const m = parseInt(t.startDate.split('-')[1], 10) - 1;
-          if (m >= 0 && m <= 11) {
-              monthCounts[m] += 1;
-              monthRevenues[m] += net;
-          }
-      }
+       const nights = t.endDate ? Math.max(1, Math.round((new Date(t.endDate) - new Date(t.startDate)) / 86400000)) : 1;
+       const gross = parseFloat(t.grossAmount) || 0;
+       const net = parseFloat(t.netAmount) || 0;
+       const exp = (t.resExpenses || []).reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+
+       let isFullyPaid = false;
+       if (t.platform === 'En direct') {
+          isFullyPaid = !!t.soldeDate;
+       } else {
+          isFullyPaid = !!t.paymentDate;
+       }
+       if (!isFullyPaid) upcomingGross += gross;
+
+       if (resYear === year) {
+           currentYearNights += nights;
+           currentYearGross += gross;
+           currentYearNet += net;
+           currentYearExp += exp;
+           if (resMonth >= 0 && resMonth <= 11) currentMonthGross[resMonth] += gross;
+       } else if (resYear === prevYear) {
+           prevYearNights += nights;
+           prevYearGross += gross;
+           prevYearNet += net;
+           prevYearExp += exp;
+           if (resMonth >= 0 && resMonth <= 11) prevMonthGross[resMonth] += gross;
+       }
     });
 
-    const avgStay = nbRes > 0 ? (totalNights / nbRes).toFixed(1) : 0;
-    const avgGrossPerRes = nbRes > 0 ? (totalGross / nbRes).toFixed(2) : 0;
-    const avgNetPerNight = totalNights > 0 ? (totalNet / totalNights).toFixed(2) : 0;
+    const currentBase = baseTenants.filter(t => t.startDate && t.startDate.startsWith(year.toString()));
+    const avgStay = currentBase.length > 0 ? (currentYearNights / currentBase.length).toFixed(1) : 0;
+    const avgGrossPerRes = currentBase.length > 0 ? (currentYearGross / currentBase.length).toFixed(2) : 0;
+    const revPerNight = currentYearNights > 0 ? (currentYearGross / currentYearNights).toFixed(2) : 0;
+    
+    const calcGrowth = (curr, prev) => prev > 0 ? Math.round(((curr - prev) / prev) * 100) : (curr > 0 ? 100 : 0);
+    const grossGrowth = calcGrowth(currentYearGross, prevYearGross);
 
-    return { totalNights, nbRes, avgStay, avgGrossPerRes, avgNetPerNight, monthCounts, monthRevenues };
-  }, [filteredData]);
+    return { 
+        year, prevYear,
+        currentYearNights, currentYearGross, currentYearNet, currentYearExp, upcomingGross,
+        prevYearNights, prevYearGross, prevYearNet, prevYearExp,
+        avgStay, avgGrossPerRes, revPerNight, grossGrowth,
+        currentMonthGross, prevMonthGross
+    };
+  }, [baseTenants, filterYear]);
 
   const getTenantProfitForFilters = (t) => {
     let profit = 0;
@@ -1031,36 +1056,76 @@ const App = () => {
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                  <div className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-40">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Nuitées Louées</p>
-                    <p className="text-4xl font-black text-indigo-600">{statsCalculations.totalNights}</p>
+                  <div className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-40 relative overflow-hidden group hover:scale-105 transition-transform">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 z-10">CA Généré Brut ({statsCalculations.year})</p>
+                    <p className="text-3xl font-black text-indigo-600 z-10">{Math.round(statsCalculations.currentYearGross).toLocaleString('fr-FR')}€</p>
+                    <div className={`mt-2 flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded-full z-10 ${statsCalculations.grossGrowth >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                        {statsCalculations.grossGrowth >= 0 ? <TrendingUp size={12}/> : <TrendingDown size={12}/>} {statsCalculations.grossGrowth}% vs {statsCalculations.prevYear}
+                    </div>
                   </div>
-                  <div className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-40">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Durée Moyenne</p>
-                    <p className="text-4xl font-black text-blue-600">{statsCalculations.avgStay} <span className="text-lg">j</span></p>
+                  
+                  <div className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-40 relative group hover:scale-105 transition-transform">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">CA à venir (Impayés)</p>
+                    <p className="text-3xl font-black text-blue-600">{Math.round(statsCalculations.upcomingGross).toLocaleString('fr-FR')}€</p>
+                    <p className="text-[9px] text-slate-400 mt-2">Paiements en attente</p>
                   </div>
-                  <div className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-40">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Panier Moyen</p>
-                    <p className="text-4xl font-black text-emerald-600">{statsCalculations.avgGrossPerRes}€</p>
+                  
+                  <div className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-40 group hover:scale-105 transition-transform">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Coût des Prestations</p>
+                    <p className="text-3xl font-black text-rose-500">-{Math.round(statsCalculations.currentYearExp).toLocaleString('fr-FR')}€</p>
+                    <p className="text-[9px] text-slate-400 mt-2">Dépenses générées en {statsCalculations.year}</p>
                   </div>
-                  <div className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-40">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Revenu Net / Nuit</p>
-                    <p className="text-4xl font-black text-rose-500">{statsCalculations.avgNetPerNight}€</p>
+                  
+                  <div className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-40 group hover:scale-105 transition-transform">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Revenu Brut / Nuit</p>
+                    <p className="text-3xl font-black text-emerald-600">{statsCalculations.revPerNight}€</p>
+                    <p className="text-[9px] text-slate-400 mt-2">Performance tarifaire</p>
+                  </div>
+
+                  <div className="bg-slate-50 p-6 rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-32">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Nuitées Louées</p>
+                    <p className="text-2xl font-black text-slate-700">{statsCalculations.currentYearNights}</p>
+                  </div>
+                  <div className="bg-slate-50 p-6 rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-32">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Durée Moyenne</p>
+                    <p className="text-2xl font-black text-slate-700">{statsCalculations.avgStay} <span className="text-sm">j</span></p>
+                  </div>
+                  <div className="bg-slate-50 p-6 rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-32">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Panier Moyen</p>
+                    <p className="text-2xl font-black text-slate-700">{statsCalculations.avgGrossPerRes}€</p>
+                  </div>
+                  <div className="bg-slate-50 p-6 rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-32">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Nb. Réservations</p>
+                    <p className="text-2xl font-black text-slate-700">{baseTenants.filter(t => t.startDate && t.startDate.startsWith(statsCalculations.year.toString())).length}</p>
                   </div>
                 </div>
 
                 <div className="bg-slate-900 p-10 rounded-[48px] shadow-2xl text-white">
-                   <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8 text-center md:text-left">Répartition Mensuelle des Revenus Nets</h3>
+                   <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center md:text-left">Saisonnalité : CA Brut Généré par mois de séjour</h3>
+                     <div className="flex gap-4">
+                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-slate-700"></div><span className="text-[9px] font-black uppercase text-slate-300">Année {statsCalculations.prevYear}</span></div>
+                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500"></div><span className="text-[9px] font-black uppercase text-white">Année {statsCalculations.year}</span></div>
+                     </div>
+                   </div>
+                   
                    <div className="flex items-end gap-2 h-56 mt-4">
                       {['Janv','Févr','Mars','Avril','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'].map((m, i) => {
-                         const maxRev = Math.max(...statsCalculations.monthRevenues, 100);
-                         const heightPct = (statsCalculations.monthRevenues[i] / maxRev) * 100;
+                         const maxRevStats = Math.max(...statsCalculations.currentMonthGross, ...statsCalculations.prevMonthGross, 100);
+                         const hCurr = Math.max((statsCalculations.currentMonthGross[i] / maxRevStats) * 100, 0);
+                         const hPrev = Math.max((statsCalculations.prevMonthGross[i] / maxRevStats) * 100, 0);
                          return (
                            <div key={i} className="flex-1 flex flex-col items-center gap-3 group">
-                              <div className="w-full max-w-[40px] relative bg-slate-800 rounded-t-xl overflow-hidden flex flex-col justify-end h-full">
-                                 <div className="w-full bg-blue-500 hover:bg-blue-400 transition-all duration-700 rounded-t-xl" style={{ height: `${heightPct}%` }}></div>
-                                 <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-white text-slate-900 text-[10px] font-black px-2 py-1 rounded-lg pointer-events-none whitespace-nowrap">
-                                   {Math.round(statsCalculations.monthRevenues[i]).toLocaleString('fr-FR')}€
+                              <div className="w-full flex items-end justify-center gap-1 h-full relative">
+                                 <div className="w-full max-w-[20px] bg-slate-700 hover:bg-slate-600 transition-all rounded-t-sm relative" style={{ height: `${hPrev}%` }}>
+                                     <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-white text-slate-900 text-[9px] font-black px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap z-10">
+                                       {Math.round(statsCalculations.prevMonthGross[i])}€
+                                     </div>
+                                 </div>
+                                 <div className="w-full max-w-[20px] bg-blue-500 hover:bg-blue-400 transition-all rounded-t-md shadow-lg shadow-blue-500/20 relative" style={{ height: `${hCurr}%` }}>
+                                     <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-blue-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap z-10">
+                                       {Math.round(statsCalculations.currentMonthGross[i])}€
+                                     </div>
                                  </div>
                               </div>
                               <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{m}</span>
