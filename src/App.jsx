@@ -425,7 +425,6 @@ const App = () => {
     }).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
   }, [filteredData, filterStatus]);
 
-  // AJOUT EXPLICITE DU BRUT URSSAF DANS FINANCIALS
   const financials = useMemo(() => {
     const paid = filteredData.filter(t => !!t.paymentDate);
     const upcoming = filteredData.filter(t => !t.paymentDate);
@@ -502,6 +501,9 @@ const App = () => {
     const lines = importText.split('\n').filter(l => l.trim() !== ''); 
     if (lines.length < 2) return;
 
+    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
+    const voyageurIdx = headers.findIndex(h => h.includes('voyageur') || h.includes('client') || h.includes('nom'));
+    
     const newList = [];
     
     lines.forEach((line, index) => {
@@ -537,8 +539,7 @@ const App = () => {
             const typeCol = parts[0]?.toLowerCase() || '';
             if (!typeCol.includes('rã©servation') && !typeCol.includes('réservation') && !typeCol.includes('reservation')) return;
 
-            // FORCER LE NUMERO DE REFERENCE COMME DEMANDE
-            guestName = `Réf: ${parts[2]?.trim()}`; 
+            guestName = voyageurIdx !== -1 && parts[voyageurIdx] ? parts[voyageurIdx].trim() : `Réf: ${parts[2]?.trim()}`; 
             
             startDate = parts[3]?.trim(); 
             endDate = parts[4]?.trim();   
@@ -657,9 +658,12 @@ const App = () => {
                         <h3 className="text-base font-black uppercase">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</h3>
                         <div className="flex gap-2 text-[10px] text-slate-400"><span>{t.platform}</span><span>{t.name}</span></div>
                       </div>
-                      <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase cursor-pointer hover:scale-105 transition-transform ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
-                        {t.paymentDate ? 'Payé' : 'Dû'}
-                      </span>
+                      <div className="flex flex-col items-end">
+                        <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                          {t.paymentDate ? 'Payé' : 'Dû'}
+                        </span>
+                        {t.paymentDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.paymentDate)}</span>}
+                      </div>
                     </div>
                     <div className="bg-slate-50 p-3 rounded-2xl flex justify-between font-black text-xs mb-3"><span>{formatDateFr(t.startDate)}</span><ArrowRight size={14} className="text-slate-300"/><span>{formatDateFr(t.endDate)}</span></div>
                     
@@ -668,7 +672,10 @@ const App = () => {
                         {(t.resExpenses || []).map((exp, idx) => (
                           <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-slate-50 p-2 rounded-xl cursor-pointer hover:bg-blue-50 transition-colors">
                             <span className="uppercase font-black text-slate-500">{exp.type} ({exp.person})</span>
-                            <span className={`font-black flex items-center gap-1 ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€ {exp.paymentDate ? <CheckCircle size={10}/> : <Clock size={10}/>}</span>
+                            <div className="text-right">
+                              <span className={`font-black flex items-center justify-end gap-1 ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€ {exp.paymentDate ? <CheckCircle size={10}/> : <Clock size={10}/>}</span>
+                              {exp.paymentDate && <div className="text-[8px] text-slate-400 mt-0.5">{formatDateFr(exp.paymentDate)}</div>}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -694,9 +701,12 @@ const App = () => {
                               {(t.resExpenses || []).map((exp, idx) => (
                                 <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-slate-50 p-1.5 rounded-lg border border-slate-100 cursor-pointer hover:border-blue-300 hover:shadow-sm transition-all">
                                   <span className="uppercase font-black text-slate-500 leading-none">{exp.type} ({exp.person})</span>
-                                  <div className="flex items-center gap-1.5">
-                                      <span className={`font-black ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€</span>
-                                      {exp.paymentDate ? <CheckCircle size={10} className="text-emerald-500" /> : <Clock size={10} className="text-orange-400" />}
+                                  <div className="text-right">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                        <span className={`font-black ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€</span>
+                                        {exp.paymentDate ? <CheckCircle size={10} className="text-emerald-500" /> : <Clock size={10} className="text-orange-400" />}
+                                    </div>
+                                    {exp.paymentDate && <div className="text-[8px] text-slate-400 mt-0.5 leading-none">{formatDateFr(exp.paymentDate)}</div>}
                                   </div>
                                 </div>
                               ))}
@@ -704,9 +714,12 @@ const App = () => {
                         </td>
                         <td className="p-6 text-right font-black">{(t.netAmount || 0).toFixed(2)}€</td>
                         <td className="p-6 text-center">
-                          <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-4 py-2 rounded-full text-[9px] uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
-                            {t.paymentDate ? 'Payé' : 'Attente'}
-                          </span>
+                          <div className="flex flex-col items-center">
+                            <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-4 py-2 rounded-full text-[9px] uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                              {t.paymentDate ? 'Payé' : 'Attente'}
+                            </span>
+                            {t.paymentDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.paymentDate)}</span>}
+                          </div>
                         </td>
                       </tr>
                     ))}
