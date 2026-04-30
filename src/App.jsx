@@ -8,7 +8,7 @@ import {
   ChevronLeft, ChevronRight, BarChart3, List, Wallet, Settings, Calculator,
   UserCheck, PlusCircle, TrendingUp, Info, Filter, Loader2,
   Building2, CalendarRange, MessageSquare, CreditCard, Activity, ArrowRight,
-  User, Sparkles, Key, UploadCloud, AlertTriangle, Check, TrendingDown
+  User, Sparkles, Key, UploadCloud, AlertTriangle, Check, TrendingDown, Search
 } from 'lucide-react';
 
 // --- CONFIGURATION FIREBASE ---
@@ -140,19 +140,23 @@ const ComparisonChart = ({ data, year1, year2 }) => {
            }
       }
     });
-    return res;
+    return res.map(val => isNaN(val) ? 0 : val); // Protection absolue contre les NaN
   };
 
   const d1 = getDataForYear(year1);
   const d2 = getDataForYear(year2);
-  const maxVal = Math.max(...d1, ...d2, 1000) * 1.15; 
+  const maxValRaw = Math.max(...d1, ...d2, 1000) * 1.15;
+  const maxVal = isNaN(maxValRaw) || maxValRaw === -Infinity ? 1000 : maxValRaw;
 
   const total1 = d1.reduce((acc, val) => acc + val, 0);
   const total2 = d2.reduce((acc, val) => acc + val, 0);
 
   const w = 900, h = 300, padX = 40, padY = 30;
   const getX = (i) => padX + (i * (w - 2 * padX) / 11);
-  const getY = (val) => h - padY - ((val / maxVal) * (h - 2 * padY));
+  const getY = (val) => {
+     if (isNaN(val) || !maxVal || maxVal === 0) return h - padY;
+     return h - padY - ((val / maxVal) * (h - 2 * padY));
+  };
 
   const buildPath = (dArr, start, end) => {
     if (start > end || start < 0) return '';
@@ -309,6 +313,7 @@ const App = () => {
   const [reviewList, setReviewList] = useState([]);
 
   const [quickPayConfig, setQuickPayConfig] = useState(null); 
+  const [statsDetailConfig, setStatsDetailConfig] = useState(null); // Modale liste stats
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
@@ -495,135 +500,6 @@ const App = () => {
      return true;
   };
 
-  const financials = useMemo(() => {
-    let netB = 0;
-    let grossUrssaf = 0;
-    let exp = 0;
-    let netUpcoming = 0;
-
-    baseTenants.forEach(t => {
-        if (t.platform === 'En direct') {
-            const a1 = parseFloat(t.acompte1Amount) || 0;
-            const a2 = parseFloat(t.acompte2Amount) || 0;
-            const s = parseFloat(t.soldeAmount) || 0;
-            
-            if (t.acompte1Date) { if (checkDateFilter(t.acompte1Date)) netB += a1; } else { if(checkDateFilter(t.startDate)) netUpcoming += a1; }
-            if (t.acompte2Date) { if (checkDateFilter(t.acompte2Date)) netB += a2; } else { if(checkDateFilter(t.startDate)) netUpcoming += a2; }
-            
-            if (t.soldeDate) {
-                if (checkDateFilter(t.soldeDate)) {
-                    netB += s;
-                    if (t.isUrssaf !== false) grossUrssaf += (t.grossAmount || 0);
-                }
-            } else {
-                if (checkDateFilter(t.startDate)) netUpcoming += s;
-            }
-        } else {
-            if (t.paymentDate) {
-                if (checkDateFilter(t.paymentDate)) {
-                    netB += (t.netAmount || 0);
-                    if (t.isUrssaf !== false) grossUrssaf += (t.grossAmount || 0);
-                }
-            } else {
-                if (checkDateFilter(t.startDate)) netUpcoming += (t.netAmount || 0);
-            }
-        }
-
-        (t.resExpenses || []).forEach(e => {
-            if (e.paymentDate) {
-                if (checkDateFilter(e.paymentDate)) {
-                    if (filterProv === 'all' || e.person === filterProv) {
-                       exp += (parseFloat(e.amount) || 0);
-                    }
-                }
-            }
-        });
-    });
-    
-    const taxes = grossUrssaf * 0.077;
-    return { netB, taxes, exp, profit: netB - exp - taxes, netUpcoming, grossUrssaf };
-  }, [baseTenants, filterYear, filterMonth, filterProv]);
-
-  const monthlyRecapData = useMemo(() => {
-    const stats = {};
-    
-    const initStats = (m) => {
-        if(!stats[m]) stats[m] = { totalBank: 0, urssafGross: 0, directNet: 0, charges: 0, taxes: 0, platforms: {} };
-    };
-
-    baseTenants.forEach(t => {
-      if (t.platform === 'En direct') {
-           const a1 = parseFloat(t.acompte1Amount) || 0;
-           const a2 = parseFloat(t.acompte2Amount) || 0;
-           const s = parseFloat(t.soldeAmount) || 0;
-
-           if (t.acompte1Date && checkDateFilter(t.acompte1Date)) {
-               const m = t.acompte1Date.substring(0,7);
-               initStats(m);
-               stats[m].totalBank += a1;
-               if (t.isUrssaf === false) stats[m].directNet += a1;
-           }
-           if (t.acompte2Date && checkDateFilter(t.acompte2Date)) {
-               const m = t.acompte2Date.substring(0,7);
-               initStats(m);
-               stats[m].totalBank += a2;
-               if (t.isUrssaf === false) stats[m].directNet += a2;
-           }
-           if (t.soldeDate && checkDateFilter(t.soldeDate)) {
-               const m = t.soldeDate.substring(0,7);
-               initStats(m);
-               stats[m].totalBank += s;
-               if (t.isUrssaf === false) stats[m].directNet += s;
-               
-               if (t.isUrssaf !== false) {
-                   stats[m].urssafGross += (t.grossAmount || 0);
-                   stats[m].taxes += (t.grossAmount || 0) * 0.077;
-                   stats[m].platforms[t.platform] = (stats[m].platforms[t.platform] || 0) + (t.grossAmount || 0);
-               }
-           }
-      } else {
-          if (t.paymentDate && checkDateFilter(t.paymentDate)) {
-              const m = t.paymentDate.substring(0, 7);
-              initStats(m);
-              stats[m].totalBank += (t.netAmount || 0);
-              if (t.isUrssaf !== false) { 
-                stats[m].urssafGross += (t.grossAmount || 0); 
-                stats[m].taxes += (t.grossAmount || 0) * 0.077; 
-                stats[m].platforms[t.platform] = (stats[m].platforms[t.platform] || 0) + (t.grossAmount || 0);
-              }
-              else {
-                stats[m].directNet += (t.netAmount || 0);
-              }
-          }
-      }
-      
-      (t.resExpenses || []).forEach(exp => {
-          if (exp.paymentDate && checkDateFilter(exp.paymentDate)) {
-             if (filterProv !== 'all' && exp.person !== filterProv) return; 
-             const m = exp.paymentDate.substring(0, 7);
-             initStats(m);
-             stats[m].charges += (parseFloat(exp.amount) || 0);
-          }
-      });
-    });
-    return Object.entries(stats).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [baseTenants, filterYear, filterMonth, filterProv]);
-
-  const detailedExpenses = useMemo(() => {
-    const list = [];
-    baseTenants.forEach(t => {
-      (t.resExpenses || []).forEach(exp => {
-        if (filterProv === 'all' || exp.person === filterProv) {
-          const refDate = exp.paymentDate || t.startDate;
-          if (checkDateFilter(refDate)) {
-            list.push({ id: `${t.id}-${exp.id}`, propertyName: properties.find(p => p.id === t.propertyId)?.name || '--', dateRes: t.startDate, person: exp.person, type: exp.type, amount: parseFloat(exp.amount) || 0, paymentDate: exp.paymentDate || '' });
-          }
-        }
-      });
-    });
-    return list.sort((a, b) => b.dateRes.localeCompare(a.dateRes));
-  }, [baseTenants, properties, filterProv, filterYear, filterMonth]);
-
   // --- NOUVEAU MOTEUR DE STATISTIQUES AVANCEES ---
   const statsCalculations = useMemo(() => {
     const year = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
@@ -688,6 +564,169 @@ const App = () => {
     };
   }, [baseTenants, filterYear]);
 
+  // LOGIQUE DU TIROIR DE LISTE STATS
+  const statsDetailList = useMemo(() => {
+    if (!statsDetailConfig) return [];
+    const { type, monthIndex } = statsDetailConfig;
+    const yearNum = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
+    
+    return baseTenants.filter(t => {
+        if (type === 'upcoming') {
+             let isFullyPaid = false;
+             if (t.platform === 'En direct') isFullyPaid = !!t.soldeDate;
+             else isFullyPaid = !!t.paymentDate;
+             return !isFullyPaid;
+        }
+        
+        const sDate = t.startDate || '';
+        const [y, m] = sDate.split('-');
+        
+        if (type === 'month_current') {
+             return parseInt(y) === yearNum && parseInt(m)-1 === monthIndex;
+        }
+        if (type === 'month_prev') {
+             return parseInt(y) === yearNum - 1 && parseInt(m)-1 === monthIndex;
+        }
+        if (type === 'year_current') {
+             return parseInt(y) === yearNum;
+        }
+        if (type === 'expenses') {
+             return parseInt(y) === yearNum && (t.resExpenses||[]).length > 0;
+        }
+        return false;
+    }).sort((a,b) => (a.startDate||"").localeCompare(b.startDate||""));
+  }, [statsDetailConfig, baseTenants, filterYear]);
+
+
+  const financials = useMemo(() => {
+    let netB = 0;
+    let grossUrssaf = 0;
+    let exp = 0;
+    let netUpcoming = 0;
+
+    baseTenants.forEach(t => {
+        if (t.platform === 'En direct') {
+            const a1 = parseFloat(t.acompte1Amount) || 0;
+            const a2 = parseFloat(t.acompte2Amount) || 0;
+            const s = parseFloat(t.soldeAmount) || 0;
+            
+            if (t.acompte1Date) { if (checkDateFilter(t.acompte1Date)) netB += a1; } else { if(checkDateFilter(t.startDate)) netUpcoming += a1; }
+            if (t.acompte2Date) { if (checkDateFilter(t.acompte2Date)) netB += a2; } else { if(checkDateFilter(t.startDate)) netUpcoming += a2; }
+            
+            if (t.soldeDate) {
+                if (checkDateFilter(t.soldeDate)) {
+                    netB += s;
+                    if (t.isUrssaf !== false) grossUrssaf += (parseFloat(t.grossAmount) || 0);
+                }
+            } else {
+                if (checkDateFilter(t.startDate)) netUpcoming += s;
+            }
+        } else {
+            if (t.paymentDate) {
+                if (checkDateFilter(t.paymentDate)) {
+                    netB += (parseFloat(t.netAmount) || 0);
+                    if (t.isUrssaf !== false) grossUrssaf += (parseFloat(t.grossAmount) || 0);
+                }
+            } else {
+                if (checkDateFilter(t.startDate)) netUpcoming += (parseFloat(t.netAmount) || 0);
+            }
+        }
+
+        (t.resExpenses || []).forEach(e => {
+            if (e.paymentDate) {
+                if (checkDateFilter(e.paymentDate)) {
+                    if (filterProv === 'all' || e.person === filterProv) {
+                       exp += (parseFloat(e.amount) || 0);
+                    }
+                }
+            }
+        });
+    });
+    
+    const taxes = grossUrssaf * 0.077;
+    return { netB, taxes, exp, profit: netB - exp - taxes, netUpcoming, grossUrssaf };
+  }, [baseTenants, filterYear, filterMonth, filterProv]);
+
+  const monthlyRecapData = useMemo(() => {
+    const stats = {};
+    
+    const initStats = (m) => {
+        if(!stats[m]) stats[m] = { totalBank: 0, urssafGross: 0, directNet: 0, charges: 0, taxes: 0, platforms: {} };
+    };
+
+    baseTenants.forEach(t => {
+      if (t.platform === 'En direct') {
+           const a1 = parseFloat(t.acompte1Amount) || 0;
+           const a2 = parseFloat(t.acompte2Amount) || 0;
+           const s = parseFloat(t.soldeAmount) || 0;
+
+           if (t.acompte1Date && checkDateFilter(t.acompte1Date)) {
+               const m = t.acompte1Date.substring(0,7);
+               initStats(m);
+               stats[m].totalBank += a1;
+               if (t.isUrssaf === false) stats[m].directNet += a1;
+           }
+           if (t.acompte2Date && checkDateFilter(t.acompte2Date)) {
+               const m = t.acompte2Date.substring(0,7);
+               initStats(m);
+               stats[m].totalBank += a2;
+               if (t.isUrssaf === false) stats[m].directNet += a2;
+           }
+           if (t.soldeDate && checkDateFilter(t.soldeDate)) {
+               const m = t.soldeDate.substring(0,7);
+               initStats(m);
+               stats[m].totalBank += s;
+               if (t.isUrssaf === false) stats[m].directNet += s;
+               
+               if (t.isUrssaf !== false) {
+                   stats[m].urssafGross += (parseFloat(t.grossAmount) || 0);
+                   stats[m].taxes += (parseFloat(t.grossAmount) || 0) * 0.077;
+                   stats[m].platforms[t.platform] = (stats[m].platforms[t.platform] || 0) + (parseFloat(t.grossAmount) || 0);
+               }
+           }
+      } else {
+          if (t.paymentDate && checkDateFilter(t.paymentDate)) {
+              const m = t.paymentDate.substring(0, 7);
+              initStats(m);
+              stats[m].totalBank += (parseFloat(t.netAmount) || 0);
+              if (t.isUrssaf !== false) { 
+                stats[m].urssafGross += (parseFloat(t.grossAmount) || 0); 
+                stats[m].taxes += (parseFloat(t.grossAmount) || 0) * 0.077; 
+                stats[m].platforms[t.platform] = (stats[m].platforms[t.platform] || 0) + (parseFloat(t.grossAmount) || 0);
+              }
+              else {
+                stats[m].directNet += (parseFloat(t.netAmount) || 0);
+              }
+          }
+      }
+      
+      (t.resExpenses || []).forEach(exp => {
+          if (exp.paymentDate && checkDateFilter(exp.paymentDate)) {
+             if (filterProv !== 'all' && exp.person !== filterProv) return; 
+             const m = exp.paymentDate.substring(0, 7);
+             initStats(m);
+             stats[m].charges += (parseFloat(exp.amount) || 0);
+          }
+      });
+    });
+    return Object.entries(stats).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [baseTenants, filterYear, filterMonth, filterProv]);
+
+  const detailedExpenses = useMemo(() => {
+    const list = [];
+    baseTenants.forEach(t => {
+      (t.resExpenses || []).forEach(exp => {
+        if (filterProv === 'all' || exp.person === filterProv) {
+          const refDate = exp.paymentDate || t.startDate;
+          if (checkDateFilter(refDate)) {
+            list.push({ id: `${t.id}-${exp.id}`, propertyName: properties.find(p => p.id === t.propertyId)?.name || '--', dateRes: t.startDate, person: exp.person, type: exp.type, amount: parseFloat(exp.amount) || 0, paymentDate: exp.paymentDate || '' });
+          }
+        }
+      });
+    });
+    return list.sort((a, b) => b.dateRes.localeCompare(a.dateRes));
+  }, [baseTenants, properties, filterProv, filterYear, filterMonth]);
+
   const getTenantProfitForFilters = (t) => {
     let profit = 0;
     if (t.platform === 'En direct') {
@@ -700,12 +739,12 @@ const App = () => {
         
         if (t.soldeDate && checkDateFilter(t.soldeDate)) {
             profit += s;
-            if (t.isUrssaf !== false) profit -= (t.grossAmount || 0) * 0.077;
+            if (t.isUrssaf !== false) profit -= (parseFloat(t.grossAmount) || 0) * 0.077;
         }
     } else {
         if (t.paymentDate && checkDateFilter(t.paymentDate)) {
-            profit += (t.netAmount || 0);
-            if (t.isUrssaf !== false) profit -= (t.grossAmount || 0) * 0.077;
+            profit += (parseFloat(t.netAmount) || 0);
+            if (t.isUrssaf !== false) profit -= (parseFloat(t.grossAmount) || 0) * 0.077;
         }
     }
 
@@ -765,7 +804,7 @@ const App = () => {
     const newList = [];
     
     lines.forEach((line, index) => {
-        if (index === 0) return; // Skip l'en-tête
+        if (index === 0) return; 
         const parts = parseCSVLine(line);
         if (parts.length < 5) return;
 
@@ -888,6 +927,7 @@ const App = () => {
 
       <main className="flex-1 p-4 md:p-12 overflow-y-auto h-screen custom-scrollbar relative">
         
+        {/* MODALE DE PAIEMENT RAPIDE */}
         {quickPayConfig && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
              <div className="bg-white p-8 rounded-[40px] shadow-2xl max-w-sm w-full border border-slate-100 flex flex-col gap-6 animate-in zoom-in-95">
@@ -903,6 +943,48 @@ const App = () => {
                 </div>
              </div>
           </div>
+        )}
+
+        {/* MODALE DES DETAILS DE STATISTIQUES (TIROIR CLIC) */}
+        {statsDetailConfig && (
+           <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-in fade-in">
+              <div className="bg-[#F8FAFC] rounded-[40px] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-slate-100 overflow-hidden relative">
+                 <div className="p-6 md:p-8 border-b flex justify-between items-center bg-white sticky top-0 z-10 shadow-sm">
+                    <div className="flex items-center gap-3 text-blue-600 font-black uppercase tracking-tighter text-xl">
+                        <Search size={24} /> {statsDetailConfig.title}
+                    </div>
+                    <button onClick={() => setStatsDetailConfig(null)} className="p-3 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900 transition-all"><X size={20}/></button>
+                 </div>
+                 <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-4">
+                    {statsDetailList.length === 0 ? (
+                       <div className="text-center text-slate-400 font-black uppercase text-xs py-10 opacity-60">Aucune réservation trouvée pour ce critère</div>
+                    ) : (
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {statsDetailList.map(t => (
+                              <div key={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="bg-white p-5 rounded-[24px] shadow-sm border border-slate-100 hover:border-blue-300 hover:shadow-lg cursor-pointer transition-all group hover:scale-[1.02]">
+                                  <div className="flex justify-between items-start mb-2">
+                                      <div>
+                                         <h4 className="font-black uppercase text-sm group-hover:text-blue-600 transition-colors">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</h4>
+                                         <p className="text-[10px] text-slate-400 font-bold mt-0.5">{t.platform} • {t.name}</p>
+                                      </div>
+                                      <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase inline-block ${getStatusProps(t).color}`}>
+                                          {getStatusProps(t).label}
+                                      </span>
+                                  </div>
+                                  <div className="bg-slate-50 p-2.5 rounded-xl flex justify-between font-black text-[10px] items-center mb-2 text-slate-500">
+                                      <span>{formatDateFr(t.startDate)}</span><ArrowRight size={12} className="text-slate-300"/><span>{formatDateFr(t.endDate)}</span>
+                                  </div>
+                                  <div className="flex justify-between items-end mt-4 border-t border-slate-50 pt-3">
+                                      <div className="text-[9px] text-slate-400 uppercase font-black tracking-widest">Net estimé</div>
+                                      <div className="font-black text-lg text-slate-800">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</div>
+                                  </div>
+                              </div>
+                          ))}
+                       </div>
+                    )}
+                 </div>
+              </div>
+           </div>
         )}
 
         <div className="max-w-7xl mx-auto pb-32">
@@ -943,7 +1025,7 @@ const App = () => {
                         ))}
                       </div>
                     )}
-                    <div className="text-right font-black text-lg">{(t.netAmount || 0).toFixed(2)}€</div>
+                    <div className="text-right font-black text-lg">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</div>
                   </div>
                 ))}
               </div>
@@ -975,7 +1057,7 @@ const App = () => {
                               ))}
                            </div>
                         </td>
-                        <td className="p-6 text-right font-black">{(t.netAmount || 0).toFixed(2)}€</td>
+                        <td className="p-6 text-right font-black">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</td>
                         <td className="p-6 text-center">
                           <div className="flex flex-col items-center">
                             <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-4 py-2 rounded-full text-[9px] uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>
@@ -1056,45 +1138,46 @@ const App = () => {
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                  <div className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-40 relative overflow-hidden group hover:scale-105 transition-transform">
+                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `CA Généré Brut (${statsCalculations.year})` })} className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-40 relative overflow-hidden group hover:scale-[1.03] transition-transform cursor-pointer hover:ring-2 ring-blue-500 ring-offset-4">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 z-10">CA Généré Brut ({statsCalculations.year})</p>
                     <p className="text-3xl font-black text-indigo-600 z-10">{Math.round(statsCalculations.currentYearGross).toLocaleString('fr-FR')}€</p>
                     <div className={`mt-2 flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded-full z-10 ${statsCalculations.grossGrowth >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
                         {statsCalculations.grossGrowth >= 0 ? <TrendingUp size={12}/> : <TrendingDown size={12}/>} {statsCalculations.grossGrowth}% vs {statsCalculations.prevYear}
                     </div>
+                    <div className="absolute inset-0 bg-blue-50/0 group-hover:bg-blue-50/50 transition-colors pointer-events-none"></div>
                   </div>
                   
-                  <div className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-40 relative group hover:scale-105 transition-transform">
+                  <div onClick={() => setStatsDetailConfig({ type: 'upcoming', title: `CA à venir (Impayés)` })} className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-40 relative group hover:scale-[1.03] transition-transform cursor-pointer hover:ring-2 ring-blue-500 ring-offset-4">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">CA à venir (Impayés)</p>
                     <p className="text-3xl font-black text-blue-600">{Math.round(statsCalculations.upcomingGross).toLocaleString('fr-FR')}€</p>
-                    <p className="text-[9px] text-slate-400 mt-2">Paiements en attente</p>
+                    <p className="text-[9px] text-blue-400 mt-2 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">👉 Clic pour voir</p>
                   </div>
                   
-                  <div className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-40 group hover:scale-105 transition-transform">
+                  <div onClick={() => setStatsDetailConfig({ type: 'expenses', title: `Réservations avec Prestations (${statsCalculations.year})` })} className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-40 group hover:scale-[1.03] transition-transform cursor-pointer hover:ring-2 ring-blue-500 ring-offset-4">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Coût des Prestations</p>
                     <p className="text-3xl font-black text-rose-500">-{Math.round(statsCalculations.currentYearExp).toLocaleString('fr-FR')}€</p>
-                    <p className="text-[9px] text-slate-400 mt-2">Dépenses générées en {statsCalculations.year}</p>
+                    <p className="text-[9px] text-blue-400 mt-2 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">👉 Clic pour voir</p>
                   </div>
                   
-                  <div className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-40 group hover:scale-105 transition-transform">
+                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-40 group hover:scale-[1.03] transition-transform cursor-pointer hover:ring-2 ring-blue-500 ring-offset-4">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Revenu Brut / Nuit</p>
                     <p className="text-3xl font-black text-emerald-600">{statsCalculations.revPerNight}€</p>
-                    <p className="text-[9px] text-slate-400 mt-2">Performance tarifaire</p>
+                    <p className="text-[9px] text-blue-400 mt-2 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">👉 Clic pour voir</p>
                   </div>
 
-                  <div className="bg-slate-50 p-6 rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-32">
+                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-slate-50 p-6 rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-32 hover:bg-slate-100 cursor-pointer transition-colors group">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Nuitées Louées</p>
                     <p className="text-2xl font-black text-slate-700">{statsCalculations.currentYearNights}</p>
                   </div>
-                  <div className="bg-slate-50 p-6 rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-32">
+                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-slate-50 p-6 rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-32 hover:bg-slate-100 cursor-pointer transition-colors group">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Durée Moyenne</p>
                     <p className="text-2xl font-black text-slate-700">{statsCalculations.avgStay} <span className="text-sm">j</span></p>
                   </div>
-                  <div className="bg-slate-50 p-6 rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-32">
+                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-slate-50 p-6 rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-32 hover:bg-slate-100 cursor-pointer transition-colors group">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Panier Moyen</p>
                     <p className="text-2xl font-black text-slate-700">{statsCalculations.avgGrossPerRes}€</p>
                   </div>
-                  <div className="bg-slate-50 p-6 rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-32">
+                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-slate-50 p-6 rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-32 hover:bg-slate-100 cursor-pointer transition-colors group">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Nb. Réservations</p>
                     <p className="text-2xl font-black text-slate-700">{baseTenants.filter(t => t.startDate && t.startDate.startsWith(statsCalculations.year.toString())).length}</p>
                   </div>
@@ -1112,17 +1195,17 @@ const App = () => {
                    <div className="flex items-end gap-2 h-56 mt-4">
                       {['Janv','Févr','Mars','Avril','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'].map((m, i) => {
                          const maxRevStats = Math.max(...statsCalculations.currentMonthGross, ...statsCalculations.prevMonthGross, 100);
-                         const hCurr = Math.max((statsCalculations.currentMonthGross[i] / maxRevStats) * 100, 0);
-                         const hPrev = Math.max((statsCalculations.prevMonthGross[i] / maxRevStats) * 100, 0);
+                         const hCurr = maxRevStats > 0 ? Math.max((statsCalculations.currentMonthGross[i] / maxRevStats) * 100, 0) : 0;
+                         const hPrev = maxRevStats > 0 ? Math.max((statsCalculations.prevMonthGross[i] / maxRevStats) * 100, 0) : 0;
                          return (
                            <div key={i} className="flex-1 flex flex-col items-center gap-3 group">
                               <div className="w-full flex items-end justify-center gap-1 h-full relative">
-                                 <div className="w-full max-w-[20px] bg-slate-700 hover:bg-slate-600 transition-all rounded-t-sm relative" style={{ height: `${hPrev}%` }}>
+                                 <div onClick={() => setStatsDetailConfig({ type: 'month_prev', monthIndex: i, title: `Réservations de ${m} ${statsCalculations.prevYear}` })} className="w-full max-w-[20px] bg-slate-700 hover:bg-slate-500 transition-all rounded-t-sm relative cursor-pointer" style={{ height: `${hPrev}%` }}>
                                      <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-white text-slate-900 text-[9px] font-black px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap z-10">
                                        {Math.round(statsCalculations.prevMonthGross[i])}€
                                      </div>
                                  </div>
-                                 <div className="w-full max-w-[20px] bg-blue-500 hover:bg-blue-400 transition-all rounded-t-md shadow-lg shadow-blue-500/20 relative" style={{ height: `${hCurr}%` }}>
+                                 <div onClick={() => setStatsDetailConfig({ type: 'month_current', monthIndex: i, title: `Réservations de ${m} ${statsCalculations.year}` })} className="w-full max-w-[20px] bg-blue-500 hover:bg-blue-400 transition-all rounded-t-md shadow-lg shadow-blue-500/20 relative cursor-pointer" style={{ height: `${hCurr}%` }}>
                                      <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-blue-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap z-10">
                                        {Math.round(statsCalculations.currentMonthGross[i])}€
                                      </div>
