@@ -8,7 +8,7 @@ import {
   ChevronLeft, ChevronRight, BarChart3, List, Wallet, Settings, Calculator,
   UserCheck, PlusCircle, TrendingUp, Info, Filter, Loader2,
   Building2, CalendarRange, MessageSquare, CreditCard, Activity, ArrowRight,
-  User, Sparkles, Key
+  User, Sparkles, Key, FileInput, UploadCloud
 } from 'lucide-react';
 
 // --- CONFIGURATION FIREBASE EXACTE ---
@@ -154,6 +154,8 @@ const App = () => {
   const [inputProv, setInputProv] = useState('');
   const [inputSvc, setInputSvc] = useState('');
   const [inputProp, setInputProp] = useState({ name: '', address: '' });
+  const [importText, setImportText] = useState('');
+  const [importStatus, setImportStatus] = useState('');
 
   // --- AUTHENTIFICATION ---
   useEffect(() => {
@@ -233,6 +235,71 @@ const App = () => {
       await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', id));
       setIsModalOpen(false);
     }
+  };
+
+  // --- LOGIQUE D'IMPORTATION CSV AIRBNB ---
+  const handleImport = async () => {
+    if (!importText.trim()) return;
+    const lines = importText.split('\n');
+    let successCount = 0;
+    
+    for (let line of lines) {
+        // Ignorer l'en-tête ou les lignes vides
+        if (line.toLowerCase().includes('date') || line.trim() === '') continue;
+
+        const parts = line.split(',');
+        if (parts.length < 10) continue;
+
+        // Parsing selon le format image: 
+        // 0: Date, 1: Type, 2: Code, 3: ResDate, 4: Start, 5: End, 6: Nights, 7: Guest, 8: Listing, ... 12: Amount, 13: Service Fee, 14: Cleaning Fee
+        const guestName = parts[7]?.trim();
+        const rawStart = parts[4]?.trim(); // Format MM/DD/YYYY
+        const rawEnd = parts[5]?.trim();
+        const listingName = parts[8]?.trim();
+        const grossStr = parts[15]?.trim() || parts[12]?.trim(); // Revenus Bruts
+        const serviceFeeStr = parts[13]?.trim();
+
+        // Conversion Date MM/DD/YYYY -> YYYY-MM-DD
+        const formatDate = (raw) => {
+            const [m, d, y] = raw.split('/');
+            if (!m || !d || !y) return '';
+            return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+        };
+
+        const startDate = formatDate(rawStart);
+        const endDate = formatDate(rawEnd);
+        const gross = parseFloat(grossStr) || 0;
+        const fees = parseFloat(serviceFeeStr) || 0;
+        const net = gross - fees;
+
+        // Trouver le logement correspondant
+        const matchedProp = properties.find(p => 
+            listingName.toLowerCase().includes(p.name.toLowerCase()) || 
+            p.name.toLowerCase().includes(listingName.toLowerCase())
+        );
+
+        if (matchedProp && startDate && endDate) {
+            const newRes = {
+                propertyId: matchedProp.id,
+                name: guestName,
+                startDate,
+                endDate,
+                platform: 'Airbnb',
+                grossAmount: gross,
+                platformFees: fees,
+                netAmount: net,
+                isUrssaf: true,
+                paymentDate: '', // On laisse vide pour validation manuelle
+                resExpenses: [],
+                comment: `Importé via CSV: ${parts[2]}`
+            };
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), newRes);
+            successCount++;
+        }
+    }
+    setImportStatus(`${successCount} réservations importées avec succès !`);
+    setImportText('');
+    setTimeout(() => setImportStatus(''), 5000);
   };
 
   // --- LOGIQUE DE FILTRAGE UNIFIÉE ---
@@ -363,17 +430,6 @@ const App = () => {
       <p className="text-blue-600 font-bold uppercase tracking-widest text-[10px]">Chargement CADEL MANAGER...</p>
     </div>
   );
-
-  const curChargesModale = formData.resExpenses.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
-  const isCplxForm = formData.platform === 'Booking' || formData.platform === 'Abritel';
-  let gModale = 0, nModale = 0;
-  if (isCplxForm) {
-    gModale = (parseFloat(formData.displayedAmount) || 0) - (parseFloat(formData.cityTax) || 0);
-    nModale = gModale - (parseFloat(formData.platformFees) || 0) - (parseFloat(formData.bankFees) || 0);
-  } else {
-    gModale = parseFloat(formData.grossAmount) || 0;
-    nModale = gModale - (parseFloat(formData.platformFees) || 0);
-  }
 
   // --- FILTRES RÉUTILISABLES ---
   const RenderFilters = () => (
@@ -793,6 +849,31 @@ const App = () => {
           {activeTab === 'settings' && (
             <div className="space-y-10 animate-in fade-in">
               <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">Paramètres</h2>
+              
+              {/* NOUVEAU BLOC : IMPORTATION AIRBNB */}
+              <div className="bg-white p-8 rounded-[40px] border-2 border-dashed border-slate-200 shadow-xl shadow-slate-100 flex flex-col items-center justify-center text-center group hover:border-blue-400 transition-all">
+                  <div className="bg-blue-50 p-4 rounded-3xl text-blue-600 mb-4 group-hover:scale-110 transition-transform"><UploadCloud size={40}/></div>
+                  <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Importation de données Airbnb</h3>
+                  <p className="text-xs text-slate-400 mt-2 max-w-md">Copiez les lignes de votre export CSV Airbnb et collez-les ici pour créer automatiquement vos réservations.</p>
+                  
+                  <textarea 
+                    value={importText}
+                    onChange={(e) => setImportText(e.target.value)}
+                    placeholder="Date,Type,Confirmation Code,Guest,Listing..."
+                    className="w-full mt-6 p-4 bg-slate-50 border border-slate-100 rounded-3xl min-h-[150px] font-mono text-[10px] outline-none focus:border-blue-300"
+                  />
+                  
+                  {importStatus && <p className="mt-4 text-xs font-black text-emerald-600 uppercase tracking-widest animate-pulse">{importStatus}</p>}
+
+                  <button 
+                    onClick={handleImport}
+                    disabled={!importText.trim()}
+                    className="mt-6 w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase text-[11px] tracking-[2px] shadow-xl hover:bg-blue-600 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    Lancer l'importation intelligente
+                  </button>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
                 {/* Plateformes */}
                 <div className="bg-white p-6 md:p-8 rounded-[32px] md:rounded-[40px] border border-slate-50 shadow-xl shadow-slate-200/40 flex flex-col h-full">
@@ -817,11 +898,11 @@ const App = () => {
                     {availableProviders.map(p => (
                       <div key={p} className="flex justify-between items-center text-[11px] font-black bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-slate-300 transition-all uppercase">
                         {p}
-                        <button onClick={() => { const n = availableProviders.filter(x => x !== p); setAvailablePlatforms(n); updateSettings({ providers: n }); }} className="text-slate-300 hover:text-rose-500"><X size={16} /></button>
+                        <button onClick={() => { const n = availableProviders.filter(x => x !== p); updateSettings({ providers: n }); }} className="text-slate-300 hover:text-rose-500"><X size={16} /></button>
                       </div>
                     ))}
                   </div>
-                  <form onSubmit={(e) => { e.preventDefault(); if (inputProv.trim()) { const n = [...availableProviders, inputProv.trim()]; setAvailableProviders(n); updateSettings({ providers: n }); setInputProv(''); } }} className="flex gap-2 bg-slate-100 p-2 rounded-[24px]">
+                  <form onSubmit={(e) => { e.preventDefault(); if (inputProv.trim()) { const n = [...availableProviders, inputProv.trim()]; updateSettings({ providers: n }); setInputProv(''); } }} className="flex gap-2 bg-slate-100 p-2 rounded-[24px]">
                     <input value={inputProv} onChange={e => setInputProv(e.target.value)} className="flex-1 bg-transparent px-4 py-2 font-bold text-xs outline-none w-0" placeholder="Prénom..." />
                     <button type="submit" className="bg-slate-900 text-white p-3 rounded-[18px] hover:scale-105 transition-all shrink-0"><Plus size={18} /></button>
                   </form>
@@ -833,11 +914,11 @@ const App = () => {
                     {availableServiceTypes.map(p => (
                       <div key={p} className="flex justify-between items-center text-[11px] font-black bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-slate-300 transition-all uppercase">
                         {p}
-                        <button onClick={() => { const n = availableServiceTypes.filter(x => x !== p); setAvailableServiceTypes(n); updateSettings({ services: n }); }} className="text-slate-300 hover:text-rose-500"><X size={16} /></button>
+                        <button onClick={() => { const n = availableServiceTypes.filter(x => x !== p); updateSettings({ services: n }); }} className="text-slate-300 hover:text-rose-500"><X size={16} /></button>
                       </div>
                     ))}
                   </div>
-                  <form onSubmit={(e) => { e.preventDefault(); if (inputSvc.trim()) { const n = [...availableServiceTypes, inputSvc.trim()]; setAvailableServiceTypes(n); updateSettings({ services: n }); setInputSvc(''); } }} className="flex gap-2 bg-slate-100 p-2 rounded-[24px]">
+                  <form onSubmit={(e) => { e.preventDefault(); if (inputSvc.trim()) { const n = [...availableServiceTypes, inputSvc.trim()]; updateSettings({ services: n }); setInputSvc(''); } }} className="flex gap-2 bg-slate-100 p-2 rounded-[24px]">
                     <input value={inputSvc} onChange={e => setInputSvc(e.target.value)} className="flex-1 bg-transparent px-4 py-2 font-bold text-xs outline-none w-0" placeholder="Service..." />
                     <button type="submit" className="bg-slate-900 text-white p-3 rounded-[18px] hover:scale-105 transition-all shrink-0"><Plus size={18} /></button>
                   </form>
@@ -880,12 +961,12 @@ const App = () => {
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
           <div className="bg-white rounded-[40px] md:rounded-[60px] shadow-2xl w-full max-w-3xl max-h-[95vh] flex flex-col scale-in-center overflow-hidden border border-slate-100">
-            <div className="p-6 md:p-10 border-b border-slate-50 flex justify-between items-center bg-white sticky top-0 z-10">
+            <div className="p-6 md:p-10 border-b border-slate-50 flex justify-between items-center bg-white sticky top-0 z-10 text-xs">
               <div className="flex items-center gap-4 text-blue-600">
                 <div className="bg-blue-50 p-2 md:p-3 rounded-2xl"><CalendarCheck size={24} /></div>
-                <div><h3 className="font-black text-xl md:text-2xl tracking-tight text-slate-900 leading-none">Réservation</h3></div>
+                <div><h3 className="font-black text-xl md:text-2xl tracking-tight text-slate-900">Réservation</h3><p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5 tracking-widest">Édition en temps réel</p></div>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="p-3 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900 transition-all"><X size={24} /></button>
+              <button onClick={() => setIsModalOpen(false)} className="p-3 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900 hover:rotate-90 transition-all duration-300"><X size={24} /></button>
             </div>
             <form onSubmit={saveRes} className="p-6 md:p-10 space-y-8 overflow-y-auto flex-1 custom-scrollbar text-xs">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
@@ -896,8 +977,8 @@ const App = () => {
                 <div className="space-y-1 md:col-span-2"><label className="text-[10px] font-black uppercase ml-3 text-slate-400">Notes</label><textarea placeholder="Notes particulières..." value={formData.comment} onChange={e => setFormData({ ...formData, comment: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-bold outline-none focus:border-blue-300 min-h-[80px] resize-none" /></div>
               </div>
 
-              <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-6 md:p-8 rounded-[40px] border border-blue-50 space-y-6">
-                <div className="flex justify-between items-center font-black text-[11px] uppercase text-blue-900 border-b border-blue-100 pb-2">
+              <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-6 md:p-8 rounded-[40px] border border-blue-50 space-y-6 shadow-inner">
+                <div className="flex justify-between items-center font-black text-[11px] uppercase tracking-widest text-blue-900 border-b border-blue-100 pb-2">
                   <div className="flex items-center gap-2"><Euro size={16}/> Finances</div>
                   <select value={formData.platform} onChange={e => setFormData({ ...formData, platform: e.target.value })} className="bg-white border border-blue-100 rounded-xl px-3 py-1.5 text-blue-600 shadow-sm outline-none">
                     {availablePlatforms.map(p => <option key={p} value={p}>{p}</option>)}
@@ -907,7 +988,7 @@ const App = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px]">
                     <div><label className="font-black uppercase text-slate-400 ml-1">Prix Client</label><input type="number" step="0.01" value={formData.displayedAmount} onChange={e => setFormData({ ...formData, displayedAmount: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl font-black" /></div>
                     <div><label className="font-black uppercase text-rose-400 ml-1">Taxe Séjour</label><input type="number" step="0.01" value={formData.cityTax} onChange={e => setFormData({ ...formData, cityTax: e.target.value })} className="w-full p-3 border border-rose-100 rounded-xl font-black text-rose-500 bg-rose-50/20" /></div>
-                    <div className="md:col-span-2 flex justify-between bg-slate-900 p-3 rounded-xl text-white font-black uppercase"><span>Brut URSSAF</span><span>{(parseFloat(formData.displayedAmount) - (parseFloat(formData.cityTax) || 0)).toFixed(2)}€</span></div>
+                    <div className="md:col-span-2 flex justify-between bg-slate-900 p-3 rounded-xl text-white font-black uppercase shadow-lg"><span>Brut URSSAF</span><span>{(parseFloat(formData.displayedAmount) - (parseFloat(formData.cityTax) || 0)).toFixed(2)}€</span></div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px]">
@@ -915,13 +996,13 @@ const App = () => {
                     <div><label className="font-black uppercase text-slate-400 ml-1">Comm. plateforme</label><input type="number" step="0.01" value={formData.platformFees} onChange={e => setFormData({ ...formData, platformFees: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl font-black" /></div>
                   </div>
                 )}
-                <div className="flex items-center gap-3 bg-white p-3 rounded-2xl shadow-sm"><input type="checkbox" className="w-4 h-4 accent-blue-600 rounded" checked={formData.isUrssaf} onChange={e => setFormData({ ...formData, isUrssaf: e.target.checked })} /><span className="text-[10px] font-black uppercase text-slate-600">Provisionner taxes AE (7.7%)</span></div>
+                <div className="flex items-center gap-3 bg-white p-3 rounded-2xl shadow-sm"><input type="checkbox" className="w-4 h-4 accent-blue-600 rounded" checked={formData.isUrssaf} onChange={e => setFormData({ ...formData, isUrssaf: e.target.checked })} /><span className="text-[10px] font-black uppercase text-slate-600 tracking-widest">Provisionner taxes AE (7.7%)</span></div>
               </div>
 
               <div className="space-y-6">
                 <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                   <span className="text-[11px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2"><UserCheck size={16}/> Prestations</span>
-                  <button type="button" onClick={() => setFormData({ ...formData, resExpenses: [...formData.resExpenses, { id: Date.now().toString(), person: availableProviders[0] || '', type: availableServiceTypes[0] || '', amount: 0, paymentDate: '' }] })} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-md hover:scale-105 transition-all">+ Ajouter</button>
+                  <button type="button" onClick={() => setFormData({ ...formData, resExpenses: [...formData.resExpenses, { id: Date.now().toString(), person: availableProviders[0] || '', type: availableServiceTypes[0] || '', amount: 0, paymentDate: '' }] })} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase shadow-md hover:scale-105 transition-all tracking-widest">+ Ajouter</button>
                 </div>
                 <div className="space-y-3">
                    {formData.resExpenses.map(exp => (
@@ -937,7 +1018,7 @@ const App = () => {
                           <input type="number" value={exp.amount} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, amount: e.target.value } : x) })} className="w-10 font-black text-right text-xs outline-none" />
                           <span className="text-slate-300 font-bold">€</span>
                         </div>
-                        <button type="button" onClick={() => setFormData({ ...formData, resExpenses: formData.resExpenses.filter(x => x.id !== exp.id) })} className="text-slate-300 hover:text-rose-500 shrink-0"><Trash2 size={18} /></button>
+                        <button type="button" onClick={() => setFormData({ ...formData, resExpenses: formData.resExpenses.filter(x => x.id !== exp.id) })} className="text-slate-300 hover:text-rose-500 shrink-0 transition-colors"><Trash2 size={18} /></button>
                       </div>
                       <div className="flex items-center gap-3 border-t border-slate-200/50 pt-2">
                          <span className="text-[9px] font-black uppercase text-slate-400 shrink-0">Réglé :</span>
@@ -953,10 +1034,18 @@ const App = () => {
                 <input type="date" value={formData.paymentDate} onChange={e => setFormData({ ...formData, paymentDate: e.target.value })} className="w-full md:w-auto p-3 border border-slate-200 rounded-[15px] font-black bg-white shadow-lg outline-none" />
               </div>
 
+              {editingResId && (
+                <div className="pt-4">
+                   <a href={getGoogleCalendarUrl(formData, properties.find(p => p.id === formData.propertyId))} target="_blank" rel="noreferrer" className="w-full bg-blue-50 text-blue-700 p-6 rounded-[32px] font-black text-[11px] uppercase tracking-[2px] flex items-center justify-center gap-3 hover:bg-blue-600 hover:text-white transition-all shadow-xl shadow-blue-100 border-2 border-white">
+                    <CalendarIcon size={22}/> Synchroniser avec Google Agenda
+                   </a>
+                </div>
+              )}
+
               <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-slate-100 gap-6">
                 <div className="text-center md:text-left">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 leading-none mb-2">Profit Net Estimé</p>
-                  <p className="text-2xl md:text-3xl font-black text-blue-600 tracking-tighter">
+                  <p className="text-2xl md:text-3xl font-black text-blue-600 tracking-tighter shadow-blue-50 drop-shadow-sm">
                     {(nModale - curChargesModale - (formData.isUrssaf ? ((formData.platform === 'Booking' || formData.platform === 'Abritel' ? (parseFloat(formData.displayedAmount) - (parseFloat(formData.cityTax) || 0)) : parseFloat(formData.grossAmount) || 0) * 0.077) : 0)).toFixed(2)}€
                   </p>
                 </div>
