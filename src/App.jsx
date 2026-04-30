@@ -320,7 +320,7 @@ const App = () => {
   const saveRes = async (e) => {
     e.preventDefault();
     if (!formData.propertyId) { alert("⚠️ Vous devez sélectionner un Logement."); return; }
-    if (!formData.name) { alert("⚠️ Vous devez indiquer le nom du Voyageur."); return; }
+    if (!formData.name) { alert("⚠️ Vous devez indiquer le nom du Voyageur ou sa Référence."); return; }
     if (!formData.startDate || !formData.endDate) { alert("⚠️ Les dates de séjour sont obligatoires."); return; }
 
     const isC = formData.platform === 'Booking' || formData.platform === 'Abritel';
@@ -425,13 +425,15 @@ const App = () => {
     }).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
   }, [filteredData, filterStatus]);
 
+  // AJOUT EXPLICITE DU BRUT URSSAF DANS FINANCIALS
   const financials = useMemo(() => {
     const paid = filteredData.filter(t => !!t.paymentDate);
     const upcoming = filteredData.filter(t => !t.paymentDate);
     const netB = paid.reduce((a, t) => a + (t.netAmount || 0), 0);
-    const taxes = paid.filter(t => t.isUrssaf).reduce((a, t) => a + (t.grossAmount || 0), 0) * 0.077;
+    const grossUrssaf = paid.filter(t => t.isUrssaf).reduce((a, t) => a + (t.grossAmount || 0), 0);
+    const taxes = grossUrssaf * 0.077;
     const exp = paid.reduce((a, t) => a + (t.resExpenses?.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0) || 0), 0);
-    return { netB, taxes, exp, profit: netB - exp - taxes, netUpcoming: upcoming.reduce((a, t) => a + (t.netAmount || 0), 0) };
+    return { netB, taxes, exp, profit: netB - exp - taxes, netUpcoming: upcoming.reduce((a, t) => a + (t.netAmount || 0), 0), grossUrssaf };
   }, [filteredData]);
 
   const monthlyRecapData = useMemo(() => {
@@ -500,9 +502,6 @@ const App = () => {
     const lines = importText.split('\n').filter(l => l.trim() !== ''); 
     if (lines.length < 2) return;
 
-    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
-    const voyageurIdx = headers.findIndex(h => h.includes('voyageur') || h.includes('client') || h.includes('nom'));
-    
     const newList = [];
     
     lines.forEach((line, index) => {
@@ -538,8 +537,8 @@ const App = () => {
             const typeCol = parts[0]?.toLowerCase() || '';
             if (!typeCol.includes('rã©servation') && !typeCol.includes('réservation') && !typeCol.includes('reservation')) return;
 
-            // Utilise l'index du voyageur s'il est trouvé dans l'en-tête, sinon utilise la référence
-            guestName = voyageurIdx !== -1 && parts[voyageurIdx] ? parts[voyageurIdx].trim() : `Réf: ${parts[2]?.trim()}`; 
+            // FORCER LE NUMERO DE REFERENCE COMME DEMANDE
+            guestName = `Réf: ${parts[2]?.trim()}`; 
             
             startDate = parts[3]?.trim(); 
             endDate = parts[4]?.trim();   
@@ -744,8 +743,29 @@ const App = () => {
 
               <ComparisonChart data={tenants} year1={compYear1} year2={compYear2} />
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div className="bg-white p-8 rounded-[40px] shadow-xl"><p className="text-[10px] font-black text-slate-400 uppercase">Net Encaissé ({filterYear})</p><p className="text-3xl font-black text-indigo-600">{financials.netB.toLocaleString('fr-FR')}€</p></div><div className="bg-slate-900 p-8 rounded-[40px] shadow-2xl text-white"><p className="text-[10px] font-black uppercase">Profit Réel ({filterYear})</p><p className="text-3xl font-black">{Math.round(financials.profit).toLocaleString('fr-FR')}€</p></div><div className="bg-white p-8 rounded-[40px] shadow-xl"><p className="text-[10px] font-black text-slate-400 uppercase">À venir ({filterYear})</p><p className="text-3xl font-black text-blue-500">{Math.round(financials.netUpcoming).toLocaleString('fr-FR')}€</p></div></div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-10"><DonutChart title="Net par Logement" data={(properties || []).map((p,idx)=>({label:p.name,value:(tenants || []).filter(t=>t.propertyId===p.id&&!!t.paymentDate).reduce((acc,t)=>acc+((t.netAmount||0)-(t.resExpenses?.reduce((s,e)=>s+(parseFloat(e.amount)||0),0)||0)-(t.isUrssaf?(t.grossAmount||0)*0.077:0)),0),color:CHART_COLORS[idx%CHART_COLORS.length]}))} /><DonutChart title="Net par Plateforme" data={(availablePlatforms || []).map((p,idx)=>({label:p,value:(tenants || []).filter(t=>t.platform===p&&!!t.paymentDate).reduce((acc,t)=>acc+((t.netAmount||0)-(t.isUrssaf?(t.grossAmount||0)*0.077:0)),0),color:CHART_COLORS[(idx+4)%CHART_COLORS.length]}))} /></div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Brut URSSAF ({filterYear})</p>
+                  <p className="text-2xl font-black text-slate-800">{financials.grossUrssaf.toLocaleString('fr-FR')}€</p>
+                </div>
+                <div className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Net Reçu Banque ({filterYear})</p>
+                  <p className="text-2xl font-black text-indigo-600">{financials.netB.toLocaleString('fr-FR')}€</p>
+                </div>
+                <div className="bg-slate-900 p-6 rounded-[32px] shadow-2xl text-white">
+                  <p className="text-[9px] font-black text-blue-300 uppercase tracking-widest">Profit Réel (Net Net) ({filterYear})</p>
+                  <p className="text-2xl font-black">{Math.round(financials.profit).toLocaleString('fr-FR')}€</p>
+                </div>
+                <div className="bg-blue-50 p-6 rounded-[32px] shadow-inner border border-blue-100">
+                  <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest">Net à venir (Attente) ({filterYear})</p>
+                  <p className="text-2xl font-black text-blue-600">{Math.round(financials.netUpcoming).toLocaleString('fr-FR')}€</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                 <DonutChart title="Net Reçu (Banque) par Logement" data={(properties || []).map((p,idx)=>({label:p.name,value:(tenants || []).filter(t=>t.propertyId===p.id&&!!t.paymentDate).reduce((acc,t)=>acc+((t.netAmount||0)-(t.resExpenses?.reduce((s,e)=>s+(parseFloat(e.amount)||0),0)||0)-(t.isUrssaf?(t.grossAmount||0)*0.077:0)),0),color:CHART_COLORS[idx%CHART_COLORS.length]}))} />
+                 <DonutChart title="Net Reçu (Banque) par Plateforme" data={(availablePlatforms || []).map((p,idx)=>({label:p,value:(tenants || []).filter(t=>t.platform===p&&!!t.paymentDate).reduce((acc,t)=>acc+((t.netAmount||0)-(t.isUrssaf?(t.grossAmount||0)*0.077:0)),0),color:CHART_COLORS[(idx+4)%CHART_COLORS.length]}))} />
+              </div>
             </div>
           )}
 
