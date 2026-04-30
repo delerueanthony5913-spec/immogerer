@@ -103,7 +103,7 @@ const ComparisonChart = ({ data, year1, year2 }) => {
       net = gross - fees;
     }
     const exp = (t.resExpenses || []).reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
-    const urssaf = t.isUrssaf ? gross * 0.077 : 0;
+    const urssaf = t.isUrssaf !== false ? gross * 0.077 : 0;
     return net - exp - urssaf;
   };
 
@@ -230,6 +230,23 @@ const App = () => {
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
   };
 
+  const getGoogleCalendarUrl = (res, prop) => {
+    if (!res.startDate || !res.endDate) return '#';
+    const text = encodeURIComponent(`Réservation : ${res.name} - ${prop?.name || ''}`);
+    const details = encodeURIComponent(`Client : ${res.name}\nLogement : ${prop?.name || ''}\nPlateforme : ${res.platform}\nNotes : ${res.comment || ''}`);
+    const dates = `${res.startDate.replace(/-/g, '')}/${res.endDate.replace(/-/g, '')}`;
+    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${details}`;
+  };
+
+  const getStatusProps = (t) => {
+    if (t.platform === 'En direct') {
+        if (t.soldeDate) return { label: 'Payé', color: 'bg-emerald-100 text-emerald-700' };
+        if (t.acompte1Date || t.acompte2Date) return { label: 'Incomplet', color: 'bg-blue-100 text-blue-700' };
+        return { label: 'Attente', color: 'bg-orange-100 text-orange-700' };
+    }
+    return t.paymentDate ? { label: 'Payé', color: 'bg-emerald-100 text-emerald-700' } : { label: 'Attente', color: 'bg-orange-100 text-orange-700' };
+  };
+
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('reservations');
@@ -255,7 +272,8 @@ const App = () => {
   const [formData, setFormData] = useState({ 
     propertyId: '', name: '', startDate: '', endDate: '', paymentDate: '', 
     platform: 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', 
-    bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: ''
+    bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '',
+    acompte1Amount: '', acompte1Date: '', acompte2Amount: '', acompte2Date: '', soldeAmount: '', soldeDate: ''
   });
 
   const [inputPlat, setInputPlat] = useState('');
@@ -291,7 +309,7 @@ const App = () => {
         const year = data.startDate ? parseInt(data.startDate.split('-')[0], 10) : 0;
         
         if (year >= 2022 && year <= 2025) {
-          if (!data.paymentDate) data.paymentDate = data.endDate || `${year}-12-31`;
+          if (!data.paymentDate && data.platform !== 'En direct') data.paymentDate = data.endDate || `${year}-12-31`;
           if (data.resExpenses) {
             data.resExpenses = data.resExpenses.map(exp => ({ ...exp, paymentDate: exp.paymentDate || data.endDate || `${year}-12-31` }));
           }
@@ -323,24 +341,35 @@ const App = () => {
     if (!formData.name) { alert("⚠️ Vous devez indiquer le nom du Voyageur ou sa Référence."); return; }
     if (!formData.startDate || !formData.endDate) { alert("⚠️ Les dates de séjour sont obligatoires."); return; }
 
+    const isDirect = formData.platform === 'En direct';
     const isC = formData.platform === 'Booking' || formData.platform === 'Abritel';
+    
     const disp = parseFloat(formData.displayedAmount) || 0;
     const city = parseFloat(formData.cityTax) || 0;
     const plat = parseFloat(formData.platformFees) || 0;
     const bank = parseFloat(formData.bankFees) || 0;
     const gross = parseFloat(formData.grossAmount) || 0;
 
-    const g = isC ? (disp - city) : gross;
-    const n = isC ? (g - plat - bank) : (g - plat);
+    const a1 = parseFloat(formData.acompte1Amount) || 0;
+    const a2 = parseFloat(formData.acompte2Amount) || 0;
+    const s = parseFloat(formData.soldeAmount) || 0;
+    const gDirect = a1 + a2 + s;
+
+    const g = isDirect ? gDirect : (isC ? (disp - city) : gross);
+    const n = isDirect ? gDirect : (isC ? (g - plat - bank) : (g - plat));
     
     const d = { 
       ...formData, 
+      isUrssaf: formData.isUrssaf !== false, 
       grossAmount: g, 
       netAmount: n, 
       platformFees: plat,
       bankFees: bank,
       cityTax: city,
       displayedAmount: disp,
+      acompte1Amount: a1,
+      acompte2Amount: a2,
+      soldeAmount: s,
       resExpenses: (formData.resExpenses || []).map(r => ({ ...r, amount: parseFloat(r.amount) || 0 })) 
     };
     
@@ -369,6 +398,13 @@ const App = () => {
     e.stopPropagation();
     e.preventDefault();
     if (!user || user.uid === 'local-test-user') return;
+
+    if (type === 'global' && tenant.platform === 'En direct') {
+        setEditingResId(tenant.id);
+        setFormData(tenant);
+        setIsModalOpen(true);
+        return;
+    }
 
     let isPaid = false;
     if (type === 'global') isPaid = !!tenant.paymentDate;
@@ -419,31 +455,103 @@ const App = () => {
 
   const reservationsList = useMemo(() => {
     return filteredData.filter(t => {
-      if (filterStatus === 'paid') return !!t.paymentDate;
-      if (filterStatus === 'pending') return !t.paymentDate;
+      if (filterStatus === 'paid') return (t.platform === 'En direct' ? !!t.soldeDate : !!t.paymentDate);
+      if (filterStatus === 'pending') return (t.platform === 'En direct' ? !t.soldeDate : !t.paymentDate);
       return true;
     }).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
   }, [filteredData, filterStatus]);
 
   const financials = useMemo(() => {
-    const paid = filteredData.filter(t => !!t.paymentDate);
-    const upcoming = filteredData.filter(t => !t.paymentDate);
-    const netB = paid.reduce((a, t) => a + (t.netAmount || 0), 0);
-    const grossUrssaf = paid.filter(t => t.isUrssaf).reduce((a, t) => a + (t.grossAmount || 0), 0);
+    let netB = 0;
+    let grossUrssaf = 0;
+    let exp = 0;
+    let netUpcoming = 0;
+
+    filteredData.forEach(t => {
+        if (t.platform === 'En direct') {
+            const a1 = parseFloat(t.acompte1Amount) || 0;
+            const a2 = parseFloat(t.acompte2Amount) || 0;
+            const s = parseFloat(t.soldeAmount) || 0;
+            
+            if (t.acompte1Date) netB += a1; else netUpcoming += a1;
+            if (t.acompte2Date) netB += a2; else netUpcoming += a2;
+            
+            if (t.soldeDate) {
+                netB += s;
+                if (t.isUrssaf !== false) grossUrssaf += (t.grossAmount || 0);
+                exp += (t.resExpenses?.reduce((acc, e) => acc + (parseFloat(e.amount) || 0), 0) || 0);
+            } else {
+                netUpcoming += s;
+            }
+        } else {
+            if (t.paymentDate) {
+                netB += (t.netAmount || 0);
+                if (t.isUrssaf !== false) grossUrssaf += (t.grossAmount || 0);
+                exp += (t.resExpenses?.reduce((acc, e) => acc + (parseFloat(e.amount) || 0), 0) || 0);
+            } else {
+                netUpcoming += (t.netAmount || 0);
+            }
+        }
+    });
+    
     const taxes = grossUrssaf * 0.077;
-    const exp = paid.reduce((a, t) => a + (t.resExpenses?.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0) || 0), 0);
-    return { netB, taxes, exp, profit: netB - exp - taxes, netUpcoming: upcoming.reduce((a, t) => a + (t.netAmount || 0), 0), grossUrssaf };
+    return { netB, taxes, exp, profit: netB - exp - taxes, netUpcoming, grossUrssaf };
   }, [filteredData]);
 
   const monthlyRecapData = useMemo(() => {
     const stats = {};
-    filteredData.filter(t => !!t.paymentDate).forEach(t => {
-      const m = t.paymentDate.substring(0, 7);
-      if(!stats[m]) stats[m] = { totalBank: 0, urssafGross: 0, directNet: 0, charges: 0, taxes: 0 };
-      stats[m].totalBank += (t.netAmount || 0);
-      if (t.isUrssaf) { stats[m].urssafGross += (t.grossAmount || 0); stats[m].taxes += (t.grossAmount || 0) * 0.077; }
-      else stats[m].directNet += (t.netAmount || 0);
-      stats[m].charges += (t.resExpenses?.reduce((acc, c) => acc + (parseFloat(c.amount) || 0), 0) || 0);
+    
+    const initStats = (m) => {
+        if(!stats[m]) stats[m] = { totalBank: 0, urssafGross: 0, directNet: 0, charges: 0, taxes: 0, platforms: {} };
+    };
+
+    filteredData.forEach(t => {
+      if (t.platform === 'En direct') {
+           const a1 = parseFloat(t.acompte1Amount) || 0;
+           const a2 = parseFloat(t.acompte2Amount) || 0;
+           const s = parseFloat(t.soldeAmount) || 0;
+
+           if (t.acompte1Date) {
+               const m = t.acompte1Date.substring(0,7);
+               initStats(m);
+               stats[m].totalBank += a1;
+               if (t.isUrssaf === false) stats[m].directNet += a1;
+           }
+           if (t.acompte2Date) {
+               const m = t.acompte2Date.substring(0,7);
+               initStats(m);
+               stats[m].totalBank += a2;
+               if (t.isUrssaf === false) stats[m].directNet += a2;
+           }
+           if (t.soldeDate) {
+               const m = t.soldeDate.substring(0,7);
+               initStats(m);
+               stats[m].totalBank += s;
+               if (t.isUrssaf === false) stats[m].directNet += s;
+               
+               if (t.isUrssaf !== false) {
+                   stats[m].urssafGross += (t.grossAmount || 0);
+                   stats[m].taxes += (t.grossAmount || 0) * 0.077;
+                   stats[m].platforms[t.platform] = (stats[m].platforms[t.platform] || 0) + (t.grossAmount || 0);
+               }
+               stats[m].charges += (t.resExpenses?.reduce((acc, c) => acc + (parseFloat(c.amount) || 0), 0) || 0);
+           }
+      } else {
+          if (t.paymentDate) {
+              const m = t.paymentDate.substring(0, 7);
+              initStats(m);
+              stats[m].totalBank += (t.netAmount || 0);
+              if (t.isUrssaf !== false) { 
+                stats[m].urssafGross += (t.grossAmount || 0); 
+                stats[m].taxes += (t.grossAmount || 0) * 0.077; 
+                stats[m].platforms[t.platform] = (stats[m].platforms[t.platform] || 0) + (t.grossAmount || 0);
+              }
+              else {
+                stats[m].directNet += (t.netAmount || 0);
+              }
+              stats[m].charges += (t.resExpenses?.reduce((acc, c) => acc + (parseFloat(c.amount) || 0), 0) || 0);
+          }
+      }
     });
     return Object.entries(stats).sort((a, b) => b[0].localeCompare(a[0]));
   }, [filteredData]);
@@ -459,6 +567,18 @@ const App = () => {
     });
     return list.sort((a, b) => b.dateRes.localeCompare(a.dateRes));
   }, [filteredData, properties, filterProv]);
+
+  const getTenantProfit = (t) => {
+    const received = t.platform === 'En direct' 
+        ? ((t.acompte1Date ? parseFloat(t.acompte1Amount)||0 : 0) + (t.acompte2Date ? parseFloat(t.acompte2Amount)||0 : 0) + (t.soldeDate ? parseFloat(t.soldeAmount)||0 : 0))
+        : (t.paymentDate ? t.netAmount || 0 : 0);
+    
+    const isFullyPaid = t.platform === 'En direct' ? !!t.soldeDate : !!t.paymentDate;
+    const charges = isFullyPaid ? (t.resExpenses||[]).reduce((s, e)=>s+(parseFloat(e.amount)||0), 0) : 0;
+    const taxes = (isFullyPaid && t.isUrssaf !== false) ? (parseFloat(t.grossAmount)||0) * 0.077 : 0;
+    
+    return received - charges - taxes;
+  }
 
   const handleMonthChange = (direction) => {
     let m = filterMonth === 'all' ? new Date().getMonth() : parseInt(filterMonth);
@@ -603,10 +723,14 @@ const App = () => {
   if (loading) return <div className="h-screen w-full flex items-center justify-center bg-slate-50 font-black uppercase text-xs"><Loader2 className="animate-spin text-blue-600 mr-2" /> CADEL MANAGER...</div>;
 
   const curChargesModale = (formData?.resExpenses || []).reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+  const isDirectFormModale = formData?.platform === 'En direct';
   const isCplxFormModale = formData?.platform === 'Booking' || formData?.platform === 'Abritel';
-  const nModale = isCplxFormModale 
-    ? (parseFloat(formData?.displayedAmount || 0) - parseFloat(formData?.cityTax || 0)) - (parseFloat(formData?.platformFees || 0) + parseFloat(formData?.bankFees || 0))
-    : (parseFloat(formData?.grossAmount || 0) - parseFloat(formData?.platformFees || 0));
+  
+  const nModale = isDirectFormModale 
+    ? ((parseFloat(formData?.acompte1Amount) || 0) + (parseFloat(formData?.acompte2Amount) || 0) + (parseFloat(formData?.soldeAmount) || 0))
+    : isCplxFormModale 
+      ? (parseFloat(formData?.displayedAmount || 0) - parseFloat(formData?.cityTax || 0)) - (parseFloat(formData?.platformFees || 0) + parseFloat(formData?.bankFees || 0))
+      : (parseFloat(formData?.grossAmount || 0) - parseFloat(formData?.platformFees || 0));
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col md:flex-row font-sans text-slate-900 overflow-hidden">
@@ -648,7 +772,7 @@ const App = () => {
 
           {activeTab === 'reservations' && (
             <div className="space-y-8 animate-in fade-in">
-              <div className="flex justify-between items-center"><h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2><button onClick={() => { setEditingResId(null); setFormData({ propertyId: properties[0]?.id || '', name: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '' }); setIsModalOpen(true); }} className="bg-blue-600 text-white px-8 py-4 rounded-[24px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button></div>
+              <div className="flex justify-between items-center"><h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2><button onClick={() => { setEditingResId(null); setFormData({ propertyId: properties[0]?.id || '', name: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '', acompte1Amount: '', acompte1Date: '', acompte2Amount: '', acompte2Date: '', soldeAmount: '', soldeDate: '' }); setIsModalOpen(true); }} className="bg-blue-600 text-white px-8 py-4 rounded-[24px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button></div>
               
               <div className="grid grid-cols-1 gap-4 md:hidden">
                 {(reservationsList || []).map(t => (
@@ -659,10 +783,11 @@ const App = () => {
                         <div className="flex gap-2 text-[10px] text-slate-400"><span>{t.platform}</span><span>{t.name}</span></div>
                       </div>
                       <div className="flex flex-col items-end">
-                        <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
-                          {t.paymentDate ? 'Payé' : 'Dû'}
+                        <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>
+                          {getStatusProps(t).label}
                         </span>
                         {t.paymentDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.paymentDate)}</span>}
+                        {t.platform === 'En direct' && t.soldeDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.soldeDate)}</span>}
                       </div>
                     </div>
                     <div className="bg-slate-50 p-3 rounded-2xl flex justify-between font-black text-xs mb-3"><span>{formatDateFr(t.startDate)}</span><ArrowRight size={14} className="text-slate-300"/><span>{formatDateFr(t.endDate)}</span></div>
@@ -715,10 +840,11 @@ const App = () => {
                         <td className="p-6 text-right font-black">{(t.netAmount || 0).toFixed(2)}€</td>
                         <td className="p-6 text-center">
                           <div className="flex flex-col items-center">
-                            <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-4 py-2 rounded-full text-[9px] uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
-                              {t.paymentDate ? 'Payé' : 'Attente'}
+                            <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-4 py-2 rounded-full text-[9px] uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>
+                              {getStatusProps(t).label}
                             </span>
-                            {t.paymentDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.paymentDate)}</span>}
+                            {t.platform !== 'En direct' && t.paymentDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.paymentDate)}</span>}
+                            {t.platform === 'En direct' && t.soldeDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.soldeDate)}</span>}
                           </div>
                         </td>
                       </tr>
@@ -776,8 +902,8 @@ const App = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                 <DonutChart title="Net Reçu (Banque) par Logement" data={(properties || []).map((p,idx)=>({label:p.name,value:(tenants || []).filter(t=>t.propertyId===p.id&&!!t.paymentDate).reduce((acc,t)=>acc+((t.netAmount||0)-(t.resExpenses?.reduce((s,e)=>s+(parseFloat(e.amount)||0),0)||0)-(t.isUrssaf?(t.grossAmount||0)*0.077:0)),0),color:CHART_COLORS[idx%CHART_COLORS.length]}))} />
-                 <DonutChart title="Net Reçu (Banque) par Plateforme" data={(availablePlatforms || []).map((p,idx)=>({label:p,value:(tenants || []).filter(t=>t.platform===p&&!!t.paymentDate).reduce((acc,t)=>acc+((t.netAmount||0)-(t.isUrssaf?(t.grossAmount||0)*0.077:0)),0),color:CHART_COLORS[(idx+4)%CHART_COLORS.length]}))} />
+                 <DonutChart title="Net Reçu (Banque) par Logement" data={(properties || []).map((p,idx)=>({label:p.name,value:(tenants || []).reduce((acc,t) => t.propertyId===p.id ? acc + getTenantProfit(t) : acc, 0),color:CHART_COLORS[idx%CHART_COLORS.length]}))} />
+                 <DonutChart title="Net Reçu (Banque) par Plateforme" data={(availablePlatforms || []).map((p,idx)=>({label:p,value:(tenants || []).reduce((acc,t) => t.platform===p ? acc + getTenantProfit(t) : acc, 0),color:CHART_COLORS[(idx+4)%CHART_COLORS.length]}))} />
               </div>
             </div>
           )}
@@ -801,22 +927,36 @@ const App = () => {
                     </thead>
                     <tbody className="divide-y font-bold">
                       {(monthlyRecapData || []).map(([m, d]) => (
-                        <tr key={m}>
-                          <td className="p-6 capitalize">{formatMonthYear(m)}</td>
-                          <td className="p-6 text-right text-slate-500">{d.urssafGross.toLocaleString('fr-FR')}€</td>
-                          <td className="p-6 text-right text-indigo-600 font-black">{d.totalBank.toLocaleString('fr-FR')}€</td>
-                          <td className="p-6 text-right text-slate-500">-{d.charges.toLocaleString('fr-FR')}€</td>
-                          <td className="p-6 text-right text-rose-500">-{d.taxes.toFixed(2)}€</td>
-                          <td className={`p-6 text-right font-black ${d.totalBank - d.taxes - d.charges >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{(d.totalBank - d.taxes - d.charges).toLocaleString('fr-FR')}€</td>
+                        <tr key={m} className="group hover:bg-slate-50/50 transition-colors">
+                          <td className="p-6 capitalize text-sm">{formatMonthYear(m)}</td>
+                          <td className="p-6 text-right text-slate-500">
+                             <div className="text-sm">{d.urssafGross.toLocaleString('fr-FR')}€</div>
+                             <div className="mt-1 flex flex-col items-end gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                               {(availablePlatforms || []).map(p => d.platforms[p] > 0 && <span key={p} className="text-[9px] text-slate-400 font-bold uppercase">{p}: {d.platforms[p].toLocaleString('fr-FR')}€</span>)}
+                             </div>
+                          </td>
+                          <td className="p-6 text-right text-indigo-600 font-black text-sm">{d.totalBank.toLocaleString('fr-FR')}€</td>
+                          <td className="p-6 text-right text-slate-500 text-sm">-{d.charges.toLocaleString('fr-FR')}€</td>
+                          <td className="p-6 text-right text-rose-500 text-sm">-{d.taxes.toFixed(2)}€</td>
+                          <td className={`p-6 text-right font-black text-sm ${d.totalBank - d.taxes - d.charges >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{(d.totalBank - d.taxes - d.charges).toLocaleString('fr-FR')}€</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot className="bg-indigo-600 text-white font-black text-lg">
                       <tr>
                         <td className="p-8 uppercase text-[10px]">TOTAL</td>
-                        <td className="p-8 text-right opacity-80">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.urssafGross, 0).toLocaleString('fr-FR')}€</td>
+                        <td className="p-8 text-right opacity-90">
+                           <div>{monthlyRecapData.reduce((acc, [m, d]) => acc + d.urssafGross, 0).toLocaleString('fr-FR')}€</div>
+                           <div className="mt-1 flex flex-col items-end gap-0.5">
+                               {(availablePlatforms || []).map(p => {
+                                 const platTotal = monthlyRecapData.reduce((acc, [m, d]) => acc + (d.platforms[p] || 0), 0);
+                                 if(platTotal > 0) return <span key={p} className="text-[9px] text-indigo-200 font-bold uppercase">{p}: {platTotal.toLocaleString('fr-FR')}€</span>;
+                                 return null;
+                               })}
+                           </div>
+                        </td>
                         <td className="p-8 text-right">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0).toLocaleString('fr-FR')}€</td>
-                        <td className="p-8 text-right text-slate-300">-{monthlyRecapData.reduce((acc, [m, d]) => acc + d.charges, 0).toLocaleString('fr-FR')}€</td>
+                        <td className="p-8 text-right text-indigo-200">-{monthlyRecapData.reduce((acc, [m, d]) => acc + d.charges, 0).toLocaleString('fr-FR')}€</td>
                         <td className="p-8 text-right text-rose-300">-{monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes, 0).toLocaleString('fr-FR')}€</td>
                         <td className="p-8 text-right bg-indigo-700/50">{(monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0) - monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes + d.charges, 0)).toLocaleString('fr-FR')}€</td>
                       </tr>
@@ -825,7 +965,12 @@ const App = () => {
                 </div>
               </div>
 
-              <div className="bg-white rounded-[40px] shadow-2xl overflow-hidden text-xs"><div className="p-8 bg-slate-900 text-white font-black uppercase flex justify-between">Suivi Prestataires</div><div className="overflow-x-auto"><table className="w-full text-left min-w-[700px]"><thead className="bg-slate-50 uppercase text-slate-400 border-b"><tr><th className="p-6">Date</th><th className="p-6">Logement</th><th className="p-6">Prestataire</th><th className="p-6 text-right">Montant</th><th className="p-6 text-center">Statut</th></tr></thead><tbody className="divide-y font-bold">{(detailedExpenses || []).map((exp) => (<tr key={exp.id}><td className="p-6">{formatDateFr(exp.dateRes)}</td><td className="p-6 uppercase">{exp.propertyName}</td><td className="p-6 text-blue-600 uppercase">{exp.person}</td><td className="p-6 text-right">{(exp.amount || 0).toLocaleString('fr-FR')}€</td><td className="p-6 text-center"><span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${exp.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>{exp.paymentDate ? 'Payé' : 'Attente'}</span></td></tr>))}</tbody></table></div></div>
+              <div className="bg-white rounded-[40px] shadow-2xl overflow-hidden text-xs"><div className="p-8 bg-slate-900 text-white font-black uppercase flex justify-between">Suivi Prestataires</div><div className="overflow-x-auto"><table className="w-full text-left min-w-[700px]"><thead className="bg-slate-50 uppercase text-slate-400 border-b"><tr><th className="p-6">Date</th><th className="p-6">Logement</th><th className="p-6">Prestataire</th><th className="p-6 text-right">Montant</th><th className="p-6 text-center">Statut</th></tr></thead><tbody className="divide-y font-bold">{(detailedExpenses || []).map((exp) => (<tr key={exp.id}><td className="p-6">{formatDateFr(exp.dateRes)}</td><td className="p-6 uppercase">{exp.propertyName}</td><td className="p-6 text-blue-600 uppercase">{exp.person}</td><td className="p-6 text-right">{(exp.amount || 0).toLocaleString('fr-FR')}€</td><td className="p-6 text-center">
+                 <div className="flex flex-col items-center">
+                    <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase inline-block ${exp.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>{exp.paymentDate ? 'Payé' : 'Attente'}</span>
+                    {exp.paymentDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(exp.paymentDate)}</span>}
+                 </div>
+              </td></tr>))}</tbody></table></div></div>
             </div>
           )}
 
@@ -895,61 +1040,122 @@ const App = () => {
       {isModalOpen && formData && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setIsModalOpen(false)}></div>
-          <div className="bg-white rounded-[40px] md:rounded-[60px] shadow-2xl w-full max-w-3xl max-h-[95vh] flex flex-col border border-slate-100 overflow-hidden relative z-10"><div className="p-6 md:p-10 border-b flex justify-between items-center bg-white sticky top-0 z-10"><div className="flex items-center gap-4 text-blue-600 font-black uppercase leading-none"><CalendarCheck size={28} /> Détails</div><button type="button" onClick={() => setIsModalOpen(false)} className="p-3 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900 transition-all duration-300"><X size={28} /></button></div><form onSubmit={saveRes} className="p-6 md:p-10 space-y-8 overflow-y-auto flex-1 custom-scrollbar text-xs"><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Logement<select value={formData.propertyId || ''} onChange={e => setFormData({ ...formData, propertyId: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900"><option value="">-- Choisir un logement --</option>{(properties || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Voyageur<input value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" placeholder="Nom du client" /></div><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Début<input type="date" value={formData.startDate || ''} onChange={e => setFormData({ ...formData, startDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Fin<input type="date" value={formData.endDate || ''} onChange={e => setFormData({ ...formData, endDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div></div><div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-8 rounded-[48px] border border-blue-50 space-y-6"><div className="flex justify-between font-black uppercase text-blue-900 border-b border-blue-100 pb-3 text-[11px] tracking-widest">Plateforme<select value={formData.platform || ''} onChange={e => setFormData({ ...formData, platform: e.target.value })} className="bg-white border rounded-xl px-4 py-1 text-blue-600">{(availablePlatforms || []).map(p => <option key={p} value={p}>{p}</option>)}</select></div>
-            
-            {/* CHAMPS DYNAMIQUES SELON LA PLATEFORME */}
-            {isCplxFormModale ? (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div><label className="text-[10px] font-black uppercase text-slate-400">Total affiché appli</label><input type="number" step="0.01" value={formData.displayedAmount || ''} onChange={e => setFormData({ ...formData, displayedAmount: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black" /></div>
-                <div><label className="text-[10px] font-black uppercase text-rose-400">Taxe Séjour</label><input type="number" step="0.01" value={formData.cityTax || ''} onChange={e => setFormData({ ...formData, cityTax: e.target.value })} className="w-full p-4 border border-rose-100 rounded-2xl font-black bg-rose-50/30 text-rose-500" /></div>
-                <div><label className="text-[10px] font-black uppercase text-slate-400">Commission Plat.</label><input type="number" step="0.01" value={formData.platformFees || ''} onChange={e => setFormData({ ...formData, platformFees: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black" /></div>
-                <div><label className="text-[10px] font-black uppercase text-slate-400">Frais Bancaires</label><input type="number" step="0.01" value={formData.bankFees || ''} onChange={e => setFormData({ ...formData, bankFees: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black" /></div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div><label className="text-[10px] font-black uppercase text-slate-400">Brut URSSAF</label><input type="number" step="0.01" value={formData.grossAmount || ''} onChange={e => setFormData({ ...formData, grossAmount: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black" /></div>
-                <div><label className="text-[10px] font-black uppercase text-slate-400">Commission Plateforme</label><input type="number" step="0.01" value={formData.platformFees || ''} onChange={e => setFormData({ ...formData, platformFees: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black" /></div>
-              </div>
-            )}
-            
-            {/* ENCART BRUT URSSAF BOOKING */}
-            {isCplxFormModale && (
-              <div className="flex justify-between items-center bg-slate-900 text-white p-4 rounded-2xl mt-4 shadow-inner">
-                <span className="font-black uppercase text-[10px] tracking-widest text-slate-300">Brut URSSAF (Total - Taxe Séjour) :</span>
-                <span className="font-black text-lg text-emerald-400">{((parseFloat(formData.displayedAmount) || 0) - (parseFloat(formData.cityTax) || 0)).toFixed(2)}€</span>
-              </div>
-            )}
-
-            </div><div className="space-y-4">
-                <div className="flex justify-between font-black uppercase tracking-widest text-slate-400 text-[10px]">Prestations<button type="button" onClick={() => setFormData({ ...formData, resExpenses: [...(formData.resExpenses || []), { id: Date.now().toString(), person: availableProviders[0] || '', type: availableServiceTypes[0] || '', amount: 0, paymentDate: '' }] })} className="bg-slate-900 text-white px-4 py-2 rounded-xl">+ Ajouter</button></div>
-                {(formData.resExpenses || []).map(exp => (
-                  <div key={exp.id} className="flex gap-2 bg-slate-50 p-4 rounded-[28px] border border-slate-100 items-center">
-                    <select value={exp.person || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, person: e.target.value } : x) })} className="flex-1 p-3 border rounded-xl font-black uppercase text-[10px]">{(availableProviders || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
-                    <select value={exp.type || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, type: e.target.value } : x) })} className="flex-1 p-3 border rounded-xl font-black uppercase text-[10px]">{(availableServiceTypes || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
-                    <input type="number" value={exp.amount || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, amount: e.target.value } : x) })} className="w-20 p-3 border rounded-xl font-black text-right" />
-                    <button type="button" onClick={() => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).filter(x => x.id !== exp.id) })} className="text-rose-500 font-black px-2"><Trash2 size={18}/></button>
-                  </div>
-                ))}
+          <div className="bg-white rounded-[40px] md:rounded-[60px] shadow-2xl w-full max-w-3xl max-h-[95vh] flex flex-col border border-slate-100 overflow-hidden relative z-10">
+            <div className="p-6 md:p-10 border-b flex justify-between items-center bg-white sticky top-0 z-10">
+               <div className="flex items-center gap-4 text-blue-600 font-black uppercase leading-none"><CalendarCheck size={28} /> Détails</div>
+               <div className="flex items-center gap-2">
+                 <a href={getGoogleCalendarUrl(formData, (properties || []).find(p => p.id === formData.propertyId))} target="_blank" rel="noopener noreferrer" title="Ajouter à Google Agenda" className="p-3 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-600 hover:text-white transition-all shadow-sm">
+                    <CalendarIcon size={20} />
+                 </a>
+                 <button type="button" onClick={() => setIsModalOpen(false)} className="p-3 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900 transition-all duration-300"><X size={20} /></button>
+               </div>
             </div>
-            
-            <div className={`p-6 md:p-8 rounded-[32px] md:rounded-[40px] border-2 flex flex-col md:flex-row items-center justify-between transition-all shadow-xl gap-4 ${formData.paymentDate ? 'bg-emerald-50/50 border-emerald-100' : 'bg-orange-50 border-orange-100'}`}>
-                <div className="text-center md:text-left">
-                    <h4 className="text-[10px] md:text-xs font-black uppercase tracking-widest text-slate-900 leading-none">Paiement Global Reçu</h4>
-                    <p className="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase mt-1.5">Définit le mois URSSAF</p>
+            <form onSubmit={saveRes} className="p-6 md:p-10 space-y-8 overflow-y-auto flex-1 custom-scrollbar text-xs">
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Logement<select value={formData.propertyId || ''} onChange={e => setFormData({ ...formData, propertyId: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900"><option value="">-- Choisir un logement --</option>{(properties || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+                 <div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Voyageur<input value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" placeholder="Nom du client" /></div>
+                 <div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Début<input type="date" value={formData.startDate || ''} onChange={e => setFormData({ ...formData, startDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div>
+                 <div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Fin<input type="date" value={formData.endDate || ''} onChange={e => setFormData({ ...formData, endDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div>
+              </div>
+
+              <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-8 rounded-[48px] border border-blue-50 space-y-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between font-black uppercase text-blue-900 border-b border-blue-100 pb-4 gap-4 text-[11px] tracking-widest">
+                   <div className="flex items-center gap-3">
+                       Plateforme
+                       <select value={formData.platform || ''} onChange={e => setFormData({ ...formData, platform: e.target.value })} className="bg-white border rounded-xl px-4 py-2 shadow-sm text-blue-600 outline-none">
+                           {(availablePlatforms || []).map(p => <option key={p} value={p}>{p}</option>)}
+                       </select>
+                   </div>
+                   <label className="flex items-center justify-center gap-2 cursor-pointer bg-white px-4 py-2 rounded-xl border shadow-sm hover:bg-slate-50 transition-colors">
+                       <input type="checkbox" checked={formData.isUrssaf !== false} onChange={e => setFormData({ ...formData, isUrssaf: e.target.checked })} className="w-4 h-4 accent-blue-600" />
+                       <span className={`${formData.isUrssaf !== false ? 'text-blue-600' : 'text-slate-400'}`}>Déclarer URSSAF</span>
+                   </label>
                 </div>
-                <input type="date" value={formData.paymentDate || ''} onChange={e => setFormData({ ...formData, paymentDate: e.target.value })} className="w-full md:w-auto p-3 border border-slate-200 rounded-[15px] font-black bg-white shadow-lg outline-none cursor-pointer" />
-            </div>
+            
+                {/* CHAMPS DYNAMIQUES SELON LA PLATEFORME */}
+                {formData.platform === 'En direct' ? (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                     <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
+                         <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">Acompte 1</label>
+                         <input type="number" step="0.01" value={formData.acompte1Amount || ''} onChange={e => setFormData({ ...formData, acompte1Amount: e.target.value })} placeholder="Montant €" className="w-full p-3 border border-slate-100 rounded-xl font-black mb-2 text-slate-700 outline-none" />
+                         <input type="date" value={formData.acompte1Date || ''} onChange={e => setFormData({ ...formData, acompte1Date: e.target.value })} className="w-full p-3 border border-slate-100 rounded-xl font-black text-slate-500 outline-none cursor-pointer" />
+                     </div>
+                     <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
+                         <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">Acompte 2</label>
+                         <input type="number" step="0.01" value={formData.acompte2Amount || ''} onChange={e => setFormData({ ...formData, acompte2Amount: e.target.value })} placeholder="Montant €" className="w-full p-3 border border-slate-100 rounded-xl font-black mb-2 text-slate-700 outline-none" />
+                         <input type="date" value={formData.acompte2Date || ''} onChange={e => setFormData({ ...formData, acompte2Date: e.target.value })} className="w-full p-3 border border-slate-100 rounded-xl font-black text-slate-500 outline-none cursor-pointer" />
+                     </div>
+                     <div className="bg-emerald-50/50 p-4 rounded-3xl border border-emerald-100 shadow-sm">
+                         <label className="text-[10px] font-black uppercase text-emerald-600 mb-2 block">Solde (Validation)</label>
+                         <input type="number" step="0.01" value={formData.soldeAmount || ''} onChange={e => setFormData({ ...formData, soldeAmount: e.target.value })} placeholder="Montant €" className="w-full p-3 border border-emerald-200 rounded-xl font-black mb-2 text-emerald-700 outline-none bg-white" />
+                         <input type="date" value={formData.soldeDate || ''} onChange={e => setFormData({ ...formData, soldeDate: e.target.value })} className="w-full p-3 border border-emerald-200 rounded-xl font-black text-emerald-700 outline-none cursor-pointer bg-white" />
+                     </div>
+                  </div>
+                ) : isCplxFormModale ? (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div><label className="text-[10px] font-black uppercase text-slate-400">Total affiché appli</label><input type="number" step="0.01" value={formData.displayedAmount || ''} onChange={e => setFormData({ ...formData, displayedAmount: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black outline-none" /></div>
+                    <div><label className="text-[10px] font-black uppercase text-rose-400">Taxe Séjour</label><input type="number" step="0.01" value={formData.cityTax || ''} onChange={e => setFormData({ ...formData, cityTax: e.target.value })} className="w-full p-4 border border-rose-100 rounded-2xl font-black bg-rose-50/30 text-rose-500 outline-none" /></div>
+                    <div><label className="text-[10px] font-black uppercase text-slate-400">Commission Plat.</label><input type="number" step="0.01" value={formData.platformFees || ''} onChange={e => setFormData({ ...formData, platformFees: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black outline-none" /></div>
+                    <div><label className="text-[10px] font-black uppercase text-slate-400">Frais Bancaires</label><input type="number" step="0.01" value={formData.bankFees || ''} onChange={e => setFormData({ ...formData, bankFees: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black outline-none" /></div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div><label className="text-[10px] font-black uppercase text-slate-400">Brut URSSAF</label><input type="number" step="0.01" value={formData.grossAmount || ''} onChange={e => setFormData({ ...formData, grossAmount: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black outline-none" /></div>
+                    <div><label className="text-[10px] font-black uppercase text-slate-400">Commission Plateforme</label><input type="number" step="0.01" value={formData.platformFees || ''} onChange={e => setFormData({ ...formData, platformFees: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black outline-none" /></div>
+                  </div>
+                )}
+                
+                {/* ENCART BRUT URSSAF BOOKING */}
+                {isCplxFormModale && (
+                  <div className="flex justify-between items-center bg-slate-900 text-white p-4 rounded-2xl mt-4 shadow-inner">
+                    <span className="font-black uppercase text-[10px] tracking-widest text-slate-300">Brut URSSAF (Total - Taxe Séjour) :</span>
+                    <span className="font-black text-lg text-emerald-400">{((parseFloat(formData.displayedAmount) || 0) - (parseFloat(formData.cityTax) || 0)).toFixed(2)}€</span>
+                  </div>
+                )}
 
-            <div className="bg-slate-900 p-8 rounded-[48px] text-white flex flex-col md:flex-row justify-between items-center gap-6">
-               <div className="text-center md:text-left leading-none">
-                  <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Net Estimé</p>
-                  <p className="text-4xl font-black text-blue-400 tracking-tighter">{(nModale - curChargesModale).toFixed(2)}€</p>
-               </div>
-               <div className="flex items-center gap-4 w-full md:w-auto">
-                 {editingResId && <button type="button" onClick={() => deleteRes(editingResId)} className="p-4 text-rose-500 bg-rose-50 rounded-[24px] hover:bg-rose-500 hover:text-white transition-colors"><Trash2 size={24}/></button>}
-                 <button type="submit" className="w-full md:w-auto bg-blue-600 px-12 py-5 rounded-[24px] font-black uppercase tracking-[2px] shadow-xl hover:-translate-y-1 transition-all">Enregistrer</button>
-               </div>
-            </div></form></div></div>
+              </div>
+              
+              <div className="space-y-4">
+                  <div className="flex justify-between font-black uppercase tracking-widest text-slate-400 text-[10px]">Prestations<button type="button" onClick={() => setFormData({ ...formData, resExpenses: [...(formData.resExpenses || []), { id: Date.now().toString(), person: availableProviders[0] || '', type: availableServiceTypes[0] || '', amount: 0, paymentDate: '' }] })} className="bg-slate-900 text-white px-4 py-2 rounded-xl">+ Ajouter</button></div>
+                  {(formData.resExpenses || []).map(exp => (
+                    <div key={exp.id} className="flex gap-2 bg-slate-50 p-4 rounded-[28px] border border-slate-100 items-center">
+                      <select value={exp.person || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, person: e.target.value } : x) })} className="flex-1 p-3 border rounded-xl font-black uppercase text-[10px] outline-none">{(availableProviders || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
+                      <select value={exp.type || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, type: e.target.value } : x) })} className="flex-1 p-3 border rounded-xl font-black uppercase text-[10px] outline-none">{(availableServiceTypes || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
+                      <input type="number" value={exp.amount || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, amount: e.target.value } : x) })} className="w-20 p-3 border rounded-xl font-black text-right outline-none" />
+                      <button type="button" onClick={() => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).filter(x => x.id !== exp.id) })} className="text-rose-500 font-black px-2"><Trash2 size={18}/></button>
+                    </div>
+                  ))}
+              </div>
+              
+              {/* Le bloc de paiement global disparaît pour le "En direct" car géré par les acomptes */}
+              {formData.platform !== 'En direct' && (
+                <div className={`p-6 md:p-8 rounded-[32px] md:rounded-[40px] border-2 flex flex-col md:flex-row items-center justify-between transition-all shadow-xl gap-4 ${formData.paymentDate ? 'bg-emerald-50/50 border-emerald-100' : 'bg-orange-50 border-orange-100'}`}>
+                    <div className="text-center md:text-left">
+                        <h4 className="text-[10px] md:text-xs font-black uppercase tracking-widest text-slate-900 leading-none">Paiement Global Reçu</h4>
+                        <p className="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase mt-1.5">Définit le mois URSSAF</p>
+                    </div>
+                    <input type="date" value={formData.paymentDate || ''} onChange={e => setFormData({ ...formData, paymentDate: e.target.value })} className="w-full md:w-auto p-3 border border-slate-200 rounded-[15px] font-black bg-white shadow-lg outline-none cursor-pointer" />
+                </div>
+              )}
+
+              <div className="bg-slate-900 p-8 rounded-[48px] text-white flex flex-col md:flex-row justify-between items-center gap-6">
+                 <div className="text-center md:text-left leading-none">
+                    <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Net Estimé</p>
+                    <p className="text-4xl font-black text-blue-400 tracking-tighter">
+                      {formData.platform === 'En direct' 
+                        ? ((parseFloat(formData?.acompte1Amount) || 0) + (parseFloat(formData?.acompte2Amount) || 0) + (parseFloat(formData?.soldeAmount) || 0)).toFixed(2)
+                        : (nModale - curChargesModale).toFixed(2)}€
+                    </p>
+                 </div>
+                 <div className="flex items-center gap-4 w-full md:w-auto">
+                   {editingResId && <button type="button" onClick={() => deleteRes(editingResId)} className="p-4 text-rose-500 bg-rose-50 rounded-[24px] hover:bg-rose-500 hover:text-white transition-colors"><Trash2 size={24}/></button>}
+                   <button type="submit" className="w-full md:w-auto bg-blue-600 px-12 py-5 rounded-[24px] font-black uppercase tracking-[2px] shadow-xl hover:-translate-y-1 transition-all">Enregistrer</button>
+                 </div>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
