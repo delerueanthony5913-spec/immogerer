@@ -307,24 +307,46 @@ const App = () => {
     setIsModalOpen(false);
   };
 
-  // --- TOGGLE STATUT PAIEMENT AVEC CONFIRMATION ---
+  const deleteRes = async (id) => {
+    if(window.confirm("Supprimer cette réservation ?")) {
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', id));
+      setIsModalOpen(false);
+    }
+  };
+
+  // --- TOGGLE STATUT PAIEMENT AVEC PROMPT DE DATE ---
   const toggleStatus = async (e, tenant, type, expId = null) => {
     e.stopPropagation();
     e.preventDefault();
     if (!user || user.uid === 'local-test-user') return;
-    
-    if (!window.confirm("Confirmez-vous le changement de statut de paiement ?")) return;
 
     const today = new Date().toISOString().split('T')[0];
     try {
       if (type === 'global') {
-        const newStatus = tenant.paymentDate ? '' : today;
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', tenant.id), { paymentDate: newStatus }, { merge: true });
+        if (tenant.paymentDate) {
+          if (window.confirm("Annuler le paiement et repasser en 'Attente' ?")) {
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', tenant.id), { paymentDate: '' }, { merge: true });
+          }
+        } else {
+          const dateInput = window.prompt("Date du règlement (AAAA-MM-JJ) :", today);
+          if (dateInput !== null) {
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', tenant.id), { paymentDate: dateInput || today }, { merge: true });
+          }
+        }
       } else if (type === 'expense') {
-        const newExpenses = (tenant.resExpenses || []).map(exp => 
-          exp.id === expId ? { ...exp, paymentDate: exp.paymentDate ? '' : today } : exp
-        );
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', tenant.id), { resExpenses: newExpenses }, { merge: true });
+        const targetExp = (tenant.resExpenses || []).find(x => x.id === expId);
+        if (targetExp && targetExp.paymentDate) {
+          if (window.confirm("Annuler le paiement de cette prestation ?")) {
+            const newExpenses = tenant.resExpenses.map(exp => exp.id === expId ? { ...exp, paymentDate: '' } : exp);
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', tenant.id), { resExpenses: newExpenses }, { merge: true });
+          }
+        } else {
+          const dateInput = window.prompt("Date de règlement de la prestation (AAAA-MM-JJ) :", today);
+          if (dateInput !== null) {
+            const newExpenses = tenant.resExpenses.map(exp => exp.id === expId ? { ...exp, paymentDate: dateInput || today } : exp);
+            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', tenant.id), { resExpenses: newExpenses }, { merge: true });
+          }
+        }
       }
     } catch (error) {
       console.error("Erreur mise à jour statut", error);
@@ -689,7 +711,18 @@ const App = () => {
                     <button type="button" onClick={() => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).filter(x => x.id !== exp.id) })} className="text-rose-500 font-black px-2"><Trash2 size={18}/></button>
                   </div>
                 ))}
-            </div><div className="bg-slate-900 p-8 rounded-[48px] text-white flex flex-col md:flex-row justify-between items-center gap-6"><div className="text-center md:text-left leading-none"><p className="text-[10px] font-black uppercase text-slate-400 mb-2">Net Estimé</p><p className="text-4xl font-black text-blue-400 tracking-tighter">{(nModale - curChargesModale).toFixed(2)}€</p></div><button type="submit" className="w-full md:w-auto bg-blue-600 px-12 py-5 rounded-[24px] font-black uppercase tracking-[2px] shadow-xl hover:-translate-y-1 transition-all">Enregistrer</button></div></form></div></div>
+            </div>
+            
+            {/* BLOC DE PAIEMENT GLOBAL RESTAURÉ */}
+            <div className={`p-6 md:p-8 rounded-[32px] md:rounded-[40px] border-2 flex flex-col md:flex-row items-center justify-between transition-all shadow-xl gap-4 ${formData.paymentDate ? 'bg-emerald-50/50 border-emerald-100' : 'bg-orange-50 border-orange-100'}`}>
+                <div className="text-center md:text-left">
+                    <h4 className="text-[10px] md:text-xs font-black uppercase tracking-widest text-slate-900 leading-none">Paiement Global Reçu</h4>
+                    <p className="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase mt-1.5">Définit le mois URSSAF</p>
+                </div>
+                <input type="date" value={formData.paymentDate || ''} onChange={e => setFormData({ ...formData, paymentDate: e.target.value })} className="w-full md:w-auto p-3 border border-slate-200 rounded-[15px] font-black bg-white shadow-lg outline-none" />
+            </div>
+
+            <div className="bg-slate-900 p-8 rounded-[48px] text-white flex flex-col md:flex-row justify-between items-center gap-6"><div className="text-center md:text-left leading-none"><p className="text-[10px] font-black uppercase text-slate-400 mb-2">Net Estimé</p><p className="text-4xl font-black text-blue-400 tracking-tighter">{(nModale - curChargesModale).toFixed(2)}€</p></div><button type="submit" className="w-full md:w-auto bg-blue-600 px-12 py-5 rounded-[24px] font-black uppercase tracking-[2px] shadow-xl hover:-translate-y-1 transition-all">Enregistrer</button></div></form></div></div>
       )}
     </div>
   );
