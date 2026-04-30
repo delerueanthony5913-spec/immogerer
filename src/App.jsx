@@ -81,7 +81,6 @@ const DonutChart = ({ data, title }) => {
   );
 };
 
-// NOUVEAU GRAPHIQUE DE COMPARAISON AVANCÉ
 const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
   const currentYear = new Date().getFullYear().toString();
   const currentMonth = new Date().getMonth();
@@ -579,55 +578,6 @@ const App = () => {
      return true;
   };
 
-  const financials = useMemo(() => {
-    let netB = 0;
-    let grossUrssaf = 0;
-    let exp = 0;
-    let netUpcoming = 0;
-
-    baseTenants.forEach(t => {
-        if (t.platform === 'En direct') {
-            const a1 = parseFloat(t.acompte1Amount) || 0;
-            const a2 = parseFloat(t.acompte2Amount) || 0;
-            const s = parseFloat(t.soldeAmount) || 0;
-            
-            if (t.acompte1Date) { if (checkDateFilter(t.acompte1Date)) netB += a1; } else { if(checkDateFilter(t.startDate)) netUpcoming += a1; }
-            if (t.acompte2Date) { if (checkDateFilter(t.acompte2Date)) netB += a2; } else { if(checkDateFilter(t.startDate)) netUpcoming += a2; }
-            
-            if (t.soldeDate) {
-                if (checkDateFilter(t.soldeDate)) {
-                    netB += s;
-                    if (t.isUrssaf !== false) grossUrssaf += (parseFloat(t.grossAmount) || 0);
-                }
-            } else {
-                if (checkDateFilter(t.startDate)) netUpcoming += s;
-            }
-        } else {
-            if (t.paymentDate) {
-                if (checkDateFilter(t.paymentDate)) {
-                    netB += (parseFloat(t.netAmount) || 0);
-                    if (t.isUrssaf !== false) grossUrssaf += (parseFloat(t.grossAmount) || 0);
-                }
-            } else {
-                if (checkDateFilter(t.startDate)) netUpcoming += (parseFloat(t.netAmount) || 0);
-            }
-        }
-
-        (t.resExpenses || []).forEach(e => {
-            if (e.paymentDate) {
-                if (checkDateFilter(e.paymentDate)) {
-                    if (filterProv === 'all' || e.person === filterProv) {
-                       exp += (parseFloat(e.amount) || 0);
-                    }
-                }
-            }
-        });
-    });
-    
-    const taxes = grossUrssaf * 0.077;
-    return { netB, taxes, exp, profit: netB - exp - taxes, netUpcoming, grossUrssaf };
-  }, [baseTenants, filterYear, filterMonth, filterProv]);
-
   const monthlyRecapData = useMemo(() => {
     const stats = {};
     
@@ -816,12 +766,12 @@ const App = () => {
         
         if (t.soldeDate && checkDateFilter(t.soldeDate)) {
             profit += s;
-            if (t.isUrssaf !== false) profit -= (t.grossAmount || 0) * 0.077;
+            if (t.isUrssaf !== false) profit -= (parseFloat(t.grossAmount) || 0) * 0.077;
         }
     } else {
         if (t.paymentDate && checkDateFilter(t.paymentDate)) {
-            profit += (t.netAmount || 0);
-            if (t.isUrssaf !== false) profit -= (t.grossAmount || 0) * 0.077;
+            profit += (parseFloat(t.netAmount) || 0);
+            if (t.isUrssaf !== false) profit -= (parseFloat(t.grossAmount) || 0) * 0.077;
         }
     }
 
@@ -881,7 +831,7 @@ const App = () => {
     const newList = [];
     
     lines.forEach((line, index) => {
-        if (index === 0) return; 
+        if (index === 0) return; // Skip l'en-tête
         const parts = parseCSVLine(line);
         if (parts.length < 5) return;
 
@@ -994,7 +944,7 @@ const App = () => {
           <h1 className="font-black uppercase tracking-tighter text-2xl">CADEL</h1><h2 className="font-black uppercase tracking-[0.3em] text-[10px] text-blue-600">MANAGER</h2>
         </div>
         <nav className="flex-1 p-6 space-y-2 overflow-y-auto">
-          {[{ id: 'reservations', label: 'Réservations', icon: <List size={18}/> }, { id: 'agenda', label: 'Agenda', icon: <CalendarRange size={18}/> }, { id: 'dashboard', label: 'Tableau de bord', icon: <LayoutDashboard size={18}/> }, { id: 'statistiques', label: 'Statistiques', icon: <Activity size={18}/> }, { id: 'finances', label: 'Finances', icon: <Calculator size={18}/> }, { id: 'settings', label: 'Paramètres', icon: <Settings size={18}/> }].map(item => (
+          {[{ id: 'reservations', label: 'Réservations', icon: <List size={18}/> }, { id: 'agenda', label: 'Agenda', icon: <CalendarRange size={18}/> }, { id: 'statistiques', label: 'Statistiques', icon: <Activity size={18}/> }, { id: 'finances', label: 'Finances', icon: <Calculator size={18}/> }, { id: 'settings', label: 'Paramètres', icon: <Settings size={18}/> }].map(item => (
             <button key={item.id} onClick={() => { setActiveTab(item.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-5 py-4 rounded-[20px] font-black text-[11px] uppercase tracking-widest transition-all flex items-center gap-4 ${activeTab === item.id ? 'bg-slate-900 text-white shadow-2xl' : 'text-slate-400 hover:bg-slate-50'}`}>{item.icon} {item.label}</button>
           ))}
         </nav>
@@ -1158,43 +1108,6 @@ const App = () => {
               <div className="bg-white p-6 rounded-[40px] shadow-2xl overflow-x-auto"><div className="min-w-[700px]"><div className="grid grid-cols-7 text-center font-black text-slate-300 text-[10px] uppercase mb-4">{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d=><div key={d}>{d}</div>)}</div><div className="grid grid-cols-7 gap-2">{(agendaDays || []).map((item,idx)=>{ if(item.empty) return <div key={idx} className="h-24 bg-slate-50/30 rounded-2xl"></div>; const dayRes = (reservationsList || []).filter(r=>item.dateStr>=r.startDate && item.dateStr<=r.endDate); return (<div key={item.dateStr} className={`h-24 md:h-32 border rounded-2xl p-2 relative flex flex-col ${item.dateStr===todayStr?'border-blue-500 bg-blue-50/10':'border-slate-100'}`}><span className="text-[10px] font-black text-slate-300">{item.day}</span><div className="flex-1 space-y-1 overflow-y-auto no-scrollbar">{dayRes.map(r=>(<div key={r.id} onClick={(e)=>{e.stopPropagation();setEditingResId(r.id);setFormData(r);setIsModalOpen(true)}} className="text-[8px] font-black text-white p-1 rounded truncate cursor-pointer" style={{backgroundColor: CHART_COLORS[(properties || []).findIndex(p=>p.id===r.propertyId)%CHART_COLORS.length]}}>{r.name?.split(' ')[0]}</div>))}</div></div>);})}</div></div></div>
             </div>
           )}
-
-          {activeTab === 'dashboard' && (
-            <div className="space-y-10 animate-in fade-in">
-              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                 <div>
-                    <h2 className="text-3xl md:text-4xl font-black uppercase text-slate-900 tracking-tighter leading-none mb-2">Tableau de bord</h2>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Performances & Comparaisons</p>
-                 </div>
-              </div>
-
-              <ComparisonChart data={tenants} properties={properties} platforms={availablePlatforms} yearsAvailable={yearsAvailable} />
-
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                <div className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Brut URSSAF ({filterYear})</p>
-                  <p className="text-2xl font-black text-slate-800">{financials.grossUrssaf.toLocaleString('fr-FR')}€</p>
-                </div>
-                <div className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Net Reçu Banque ({filterYear})</p>
-                  <p className="text-2xl font-black text-indigo-600">{financials.netB.toLocaleString('fr-FR')}€</p>
-                </div>
-                <div className="bg-slate-900 p-6 rounded-[32px] shadow-2xl text-white">
-                  <p className="text-[9px] font-black text-blue-300 uppercase tracking-widest">Profit Réel (Net Net) ({filterYear})</p>
-                  <p className="text-2xl font-black">{Math.round(financials.profit).toLocaleString('fr-FR')}€</p>
-                </div>
-                <div className="bg-blue-50 p-6 rounded-[32px] shadow-inner border border-blue-100">
-                  <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest">Net à venir (Attente) ({filterYear})</p>
-                  <p className="text-2xl font-black text-blue-600">{Math.round(financials.netUpcoming).toLocaleString('fr-FR')}€</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                 <DonutChart title="Net Reçu (Banque) par Logement" data={(properties || []).map((p,idx)=>({label:p.name,value:(baseTenants || []).reduce((acc,t) => t.propertyId===p.id ? acc + getTenantProfitForFilters(t) : acc, 0),color:CHART_COLORS[idx%CHART_COLORS.length]}))} />
-                 <DonutChart title="Net Reçu (Banque) par Plateforme" data={(availablePlatforms || []).map((p,idx)=>({label:p,value:(baseTenants || []).reduce((acc,t) => t.platform===p ? acc + getTenantProfitForFilters(t) : acc, 0),color:CHART_COLORS[(idx+4)%CHART_COLORS.length]}))} />
-              </div>
-            </div>
-          )}
           
           {activeTab === 'statistiques' && (
              <div className="space-y-10 animate-in fade-in">
@@ -1249,6 +1162,13 @@ const App = () => {
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Nb. Réservations</p>
                     <p className="text-2xl font-black text-slate-700">{baseTenants.filter(t => t.startDate && t.startDate.startsWith(statsCalculations.year.toString())).length}</p>
                   </div>
+                </div>
+
+                <ComparisonChart data={baseTenants} properties={properties} platforms={availablePlatforms} yearsAvailable={yearsAvailable} />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                   <DonutChart title="Net Reçu (Banque) par Logement" data={(properties || []).map((p,idx)=>({label:p.name,value:(baseTenants || []).reduce((acc,t) => t.propertyId===p.id ? acc + getTenantProfitForFilters(t) : acc, 0),color:CHART_COLORS[idx%CHART_COLORS.length]}))} />
+                   <DonutChart title="Net Reçu (Banque) par Plateforme" data={(availablePlatforms || []).map((p,idx)=>({label:p,value:(baseTenants || []).reduce((acc,t) => t.platform===p ? acc + getTenantProfitForFilters(t) : acc, 0),color:CHART_COLORS[(idx+4)%CHART_COLORS.length]}))} />
                 </div>
 
                 <div className="bg-slate-900 p-10 rounded-[48px] shadow-2xl text-white">
