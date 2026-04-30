@@ -141,7 +141,24 @@ const App = () => {
       else signInAnonymously(auth);
     });
     const unsubProps = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'properties'), (snap) => setProperties(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-    const unsubTenants = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), (snap) => setTenants(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    
+    // Modification pour FORCER le paiement des années 2022 à 2025
+    const unsubTenants = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), (snap) => {
+      setTenants(snap.docs.map(d => {
+        const data = d.data();
+        const year = data.startDate ? parseInt(data.startDate.split('-')[0], 10) : 0;
+        
+        if (year >= 2022 && year <= 2025) {
+          if (!data.paymentDate) data.paymentDate = data.endDate || `${year}-12-31`;
+          if (data.resExpenses) {
+            data.resExpenses = data.resExpenses.map(exp => ({ ...exp, paymentDate: exp.paymentDate || data.endDate || `${year}-12-31` }));
+          }
+        }
+        
+        return { id: d.id, ...data };
+      }));
+    });
+
     const unsubSettings = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), (snap) => {
       if (snap.exists()) {
         const d = snap.data();
@@ -255,7 +272,7 @@ const App = () => {
     return [...new Set([...years, new Date().getFullYear()])].sort((a,b) => b-a);
   }, [tenants]);
 
-  // IMPORT LOGIQUE (DYNAMIQUE POUR LES DEUX FORMATS AIRBNB)
+  // IMPORT LOGIQUE
   const parseCSVLine = (text) => {
     const result = []; let current = '', inQuotes = false;
     for (let i = 0; i < text.length; i++) {
@@ -277,13 +294,11 @@ const App = () => {
         const parts = parseCSVLine(line);
         if (parts.length < 10) return;
 
-        // Détection intelligente de la colonne "Type"
         const typeIndex = parts.findIndex(p => p.toLowerCase().includes('réservation') || p.toLowerCase().includes('reservation'));
-        if (typeIndex === -1) return; // Ignore les Payouts et Transferts
+        if (typeIndex === -1) return;
 
         let guestName, rawStart, rawEnd, listingName, grossStr, serviceFeeStr;
 
-        // Si "Réservation" est à la case 2, c'est le NOUVEAU format (avec la colonne "Arrivée au plus tard")
         if (typeIndex === 2) {
             rawStart = parts[5]?.trim();
             rawEnd = parts[6]?.trim();
@@ -292,7 +307,6 @@ const App = () => {
             grossStr = parts[18]?.trim() || parts[13]?.trim(); 
             serviceFeeStr = parts[15]?.trim();
         } 
-        // Si "Réservation" est à la case 1, c'est l'ANCIEN format
         else if (typeIndex === 1) {
             rawStart = parts[4]?.trim();
             rawEnd = parts[5]?.trim();
@@ -300,9 +314,7 @@ const App = () => {
             listingName = parts[8]?.trim();
             grossStr = parts[15]?.trim() || parts[12]?.trim();
             serviceFeeStr = parts[13]?.trim();
-        } else {
-            return; // Format inconnu, on ignore
-        }
+        } else return;
 
         const formatDate = (raw) => { 
             if(!raw) return ''; 
@@ -312,7 +324,7 @@ const App = () => {
 
         const startDate = formatDate(rawStart);
         const endDate = formatDate(rawEnd);
-        if (!startDate || !endDate) return; // Date invalide
+        if (!startDate || !endDate) return;
 
         const gross = parseFloat(grossStr?.replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
         const fees = parseFloat(serviceFeeStr?.replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
@@ -322,18 +334,9 @@ const App = () => {
         const hasProperty = !!matchedProp;
 
         newList.push({ 
-            id: index, 
-            propertyId: matchedProp?.id || '', 
-            propertyName: matchedProp?.name || listingName || 'Inconnu', 
-            name: guestName || 'Client Inconnu', 
-            startDate, 
-            endDate, 
-            grossAmount: gross, 
-            platformFees: fees, 
-            netAmount: gross - fees, 
-            isDuplicate, 
-            hasProperty,
-            selected: !isDuplicate && hasProperty 
+            id: index, propertyId: matchedProp?.id || '', propertyName: matchedProp?.name || listingName || 'Inconnu', 
+            name: guestName || 'Client Inconnu', startDate, endDate, grossAmount: gross, platformFees: fees, 
+            netAmount: gross - fees, isDuplicate, hasProperty, selected: !isDuplicate && hasProperty 
         });
     });
     setReviewList(newList);
@@ -342,7 +345,7 @@ const App = () => {
   const confirmImport = async () => {
       const toImport = reviewList.filter(i => i.selected && i.hasProperty);
       for (let item of toImport) {
-          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), { ...item, platform: 'Airbnb', isUrssaf: true, comment: 'Importé', resExpenses: [] });
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), { ...item, platform: 'Airbnb', isUrssaf: true, comment: 'Importé via CSV', resExpenses: [] });
       }
       setReviewList([]); setImportText(''); setImportStatus(`${toImport.length} réservation(s) importée(s) !`);
       setTimeout(() => setImportStatus(''), 5000);
@@ -488,9 +491,8 @@ const App = () => {
                 {(formData.resExpenses || []).map(exp => (
                   <div key={exp.id} className="flex gap-2 bg-slate-50 p-4 rounded-[28px] border border-slate-100 items-center">
                     <select value={exp.person} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, person: e.target.value } : x) })} className="flex-1 p-3 border rounded-xl font-black uppercase text-[10px]">{availableProviders.map(p => <option key={p} value={p}>{p}</option>)}</select>
-                    <select value={exp.type} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, type: e.target.value } : x) })} className="flex-1 p-3 border rounded-xl font-black uppercase text-[10px]">{availableServiceTypes.map(p => <option key={p} value={p}>{p}</option>)}</select>
                     <input type="number" value={exp.amount || ''} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, amount: e.target.value } : x) })} className="w-20 p-3 border rounded-xl font-black text-right" />
-                    <button type="button" onClick={() => setFormData({ ...formData, resExpenses: formData.resExpenses.filter(x => x.id !== exp.id) })} className="text-rose-500 font-black px-2"><Trash2 size={18}/></button>
+                    <button type="button" onClick={() => setFormData({ ...formData, resExpenses: formData.resExpenses.filter(x => x.id !== exp.id) })} className="text-rose-500 font-black px-2">X</button>
                   </div>
                 ))}
             </div><div className="bg-slate-900 p-8 rounded-[48px] text-white flex flex-col md:flex-row justify-between items-center gap-6"><div className="text-center md:text-left leading-none"><p className="text-[10px] font-black uppercase text-slate-400 mb-2">Net Estimé</p><p className="text-4xl font-black text-blue-400 tracking-tighter">{(nModale - curChargesModale).toFixed(2)}€</p></div><button type="submit" className="w-full md:w-auto bg-blue-600 px-12 py-5 rounded-[24px] font-black uppercase tracking-[2px] shadow-xl hover:-translate-y-1 transition-all">Enregistrer</button></div></form></div></div>
