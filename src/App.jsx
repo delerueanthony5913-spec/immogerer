@@ -216,7 +216,6 @@ const ComparisonChart = ({ data, year1, year2 }) => {
 
 // --- COMPOSANT PRINCIPAL ---
 const App = () => {
-  // HELPERS (Dates)
   const formatMonthYear = (m) => {
     if (!m) return "";
     const [year, month] = m.split('-');
@@ -224,20 +223,11 @@ const App = () => {
     return date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase());
   };
 
-  // Convertit "AAAA-MM-JJ" en "JJ/MM/AAAA" pour l'affichage visuel
   const formatDateFr = (dateString) => {
     if (!dateString) return '';
     const parts = dateString.split('-');
     if (parts.length !== 3) return dateString;
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
-  };
-
-  const getGoogleCalendarUrl = (res, prop) => {
-    if (!res.startDate || !res.endDate) return '#';
-    const text = encodeURIComponent(`Reservation: ${res.name} - ${prop?.name || ''}`);
-    const details = encodeURIComponent(`Client: ${res.name}\nLogement: ${prop?.name || ''}\nPlateforme: ${res.platform}\nNotes: ${res.comment || ''}`);
-    const dates = `${res.startDate.replace(/-/g, '')}/${res.endDate.replace(/-/g, '')}`;
-    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${details}`;
   };
 
   const [user, setUser] = useState(null);
@@ -272,11 +262,13 @@ const App = () => {
   const [inputProv, setInputProv] = useState('');
   const [inputSvc, setInputSvc] = useState('');
   const [inputProp, setInputProp] = useState({ name: '', address: '' });
+  
+  // --- NOUVEAUX ETATS POUR L'IMPORTATION MULTI-PLATEFORMES ---
+  const [importSource, setImportSource] = useState('Airbnb');
   const [importText, setImportText] = useState('');
   const [importStatus, setImportStatus] = useState('');
   const [reviewList, setReviewList] = useState([]);
 
-  // ETAT POUR LE MINI CALENDRIER DE PAIEMENT RAPIDE
   const [quickPayConfig, setQuickPayConfig] = useState(null); 
 
   useEffect(() => {
@@ -506,6 +498,13 @@ const App = () => {
 
   const startReview = () => {
     if (!importText.trim()) return;
+
+    if (importSource === 'Booking') {
+       alert("Pour configurer l'importation Booking, j'ai besoin de voir à quoi ressemble votre fichier CSV !\n\nPouvez-vous coller quelques lignes (avec l'en-tête) dans la discussion avec l'assistant ?");
+       return;
+    }
+
+    // --- LOGIQUE AIRBNB ---
     const lines = importText.split('\n'); const newList = [];
     lines.forEach((line, index) => {
         if (line.toLowerCase().includes('date') || line.trim() === '') return;
@@ -538,7 +537,7 @@ const App = () => {
       const toImport = reviewList.filter(i => i.selected && i.hasProperty);
       for (let item of toImport) {
           const { id, selected, isDuplicate, hasProperty, propertyName, ...cleanItem } = item;
-          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), { ...cleanItem, platform: 'Airbnb', isUrssaf: true, comment: 'Importé via CSV', resExpenses: [], paymentDate: '' });
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), { ...cleanItem, platform: importSource, isUrssaf: true, comment: `Importé via CSV ${importSource}`, resExpenses: [], paymentDate: '' });
       }
       setReviewList([]); setImportText(''); setImportStatus(`${toImport.length} réservation(s) importée(s) !`);
       setTimeout(() => setImportStatus(''), 5000);
@@ -766,9 +765,19 @@ const App = () => {
               
               <div className="bg-white p-8 rounded-[40px] border-2 border-dashed shadow-xl flex flex-col items-center justify-center text-center">
                 <UploadCloud size={40} className="text-blue-600 mb-4"/>
-                <h3 className="text-xl font-black uppercase">Importation Airbnb</h3>
-                <p className="text-xs text-slate-400 mt-2">Copiez vos lignes CSV ici (Gère les deux formats Airbnb).</p>
-                <textarea value={importText} onChange={(e)=>setImportText(e.target.value)} placeholder="Collez votre CSV Airbnb ici..." className="w-full mt-6 p-4 bg-slate-50 border rounded-3xl min-h-[150px] font-mono text-[10px] outline-none" />
+                <h3 className="text-xl font-black uppercase">Importation de Réservations</h3>
+                <p className="text-xs text-slate-400 mt-2 mb-6">Sélectionnez la plateforme source et collez votre export CSV (gère les colonnes automatiquement).</p>
+                
+                <div className="flex items-center gap-4 bg-slate-50 p-2 rounded-2xl shadow-inner border border-slate-100">
+                  <label className={`flex-1 py-3 px-6 rounded-xl font-black uppercase text-[10px] cursor-pointer transition-all ${importSource === 'Airbnb' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-200'}`}>
+                    <input type="radio" value="Airbnb" checked={importSource === 'Airbnb'} onChange={e => setImportSource(e.target.value)} className="hidden" /> Airbnb
+                  </label>
+                  <label className={`flex-1 py-3 px-6 rounded-xl font-black uppercase text-[10px] cursor-pointer transition-all ${importSource === 'Booking' ? 'bg-blue-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-200'}`}>
+                    <input type="radio" value="Booking" checked={importSource === 'Booking'} onChange={e => setImportSource(e.target.value)} className="hidden" /> Booking
+                  </label>
+                </div>
+
+                <textarea value={importText} onChange={(e)=>setImportText(e.target.value)} placeholder={`Collez les lignes de votre export ${importSource} ici...`} className="w-full mt-6 p-4 bg-slate-50 border rounded-3xl min-h-[150px] font-mono text-[10px] outline-none" />
                 
                 {importStatus && <p className="mt-4 font-black text-emerald-600 uppercase">{importStatus}</p>}
                 
@@ -843,7 +852,16 @@ const App = () => {
                 <input type="date" value={formData.paymentDate || ''} onChange={e => setFormData({ ...formData, paymentDate: e.target.value })} className="w-full md:w-auto p-3 border border-slate-200 rounded-[15px] font-black bg-white shadow-lg outline-none cursor-pointer" />
             </div>
 
-            <div className="bg-slate-900 p-8 rounded-[48px] text-white flex flex-col md:flex-row justify-between items-center gap-6"><div className="text-center md:text-left leading-none"><p className="text-[10px] font-black uppercase text-slate-400 mb-2">Net Estimé</p><p className="text-4xl font-black text-blue-400 tracking-tighter">{(nModale - curChargesModale).toFixed(2)}€</p></div><button type="submit" className="w-full md:w-auto bg-blue-600 px-12 py-5 rounded-[24px] font-black uppercase tracking-[2px] shadow-xl hover:-translate-y-1 transition-all">Enregistrer</button></div></form></div></div>
+            <div className="bg-slate-900 p-8 rounded-[48px] text-white flex flex-col md:flex-row justify-between items-center gap-6">
+               <div className="text-center md:text-left leading-none">
+                  <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Net Estimé</p>
+                  <p className="text-4xl font-black text-blue-400 tracking-tighter">{(nModale - curChargesModale).toFixed(2)}€</p>
+               </div>
+               <div className="flex items-center gap-4 w-full md:w-auto">
+                 {editingResId && <button type="button" onClick={() => deleteRes(editingResId)} className="p-4 text-rose-500 bg-rose-50 rounded-[24px] hover:bg-rose-500 hover:text-white transition-colors"><Trash2 size={24}/></button>}
+                 <button type="submit" className="w-full md:w-auto bg-blue-600 px-12 py-5 rounded-[24px] font-black uppercase tracking-[2px] shadow-xl hover:-translate-y-1 transition-all">Enregistrer</button>
+               </div>
+            </div></form></div></div>
       )}
     </div>
   );
