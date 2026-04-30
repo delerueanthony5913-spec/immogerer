@@ -219,7 +219,7 @@ const App = () => {
     const isC = formData.platform === 'Booking' || formData.platform === 'Abritel';
     const g = isC ? (parseFloat(formData.displayedAmount) || 0) - (parseFloat(formData.cityTax) || 0) : parseFloat(formData.grossAmount) || 0;
     const n = isC ? g - (parseFloat(formData.platformFees) || 0) - (parseFloat(formData.bankFees) || 0) : g - (parseFloat(formData.platformFees) || 0);
-    const d = { ...formData, grossAmount: g, netAmount: n, resExpenses: formData.resExpenses.map(r => ({ ...r, amount: parseFloat(r.amount) || 0 })) };
+    const d = { ...formData, grossAmount: g, netAmount: n, resExpenses: (formData.resExpenses || []).map(r => ({ ...r, amount: parseFloat(r.amount) || 0 })) };
     
     if (editingResId) {
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', editingResId), d);
@@ -244,22 +244,17 @@ const App = () => {
     let successCount = 0;
     
     for (let line of lines) {
-        // Ignorer l'en-tête ou les lignes vides
         if (line.toLowerCase().includes('date') || line.trim() === '') continue;
-
         const parts = line.split(',');
         if (parts.length < 10) continue;
 
-        // Parsing selon le format image: 
-        // 0: Date, 1: Type, 2: Code, 3: ResDate, 4: Start, 5: End, 6: Nights, 7: Guest, 8: Listing, ... 12: Amount, 13: Service Fee, 14: Cleaning Fee
         const guestName = parts[7]?.trim();
-        const rawStart = parts[4]?.trim(); // Format MM/DD/YYYY
+        const rawStart = parts[4]?.trim(); 
         const rawEnd = parts[5]?.trim();
         const listingName = parts[8]?.trim();
-        const grossStr = parts[15]?.trim() || parts[12]?.trim(); // Revenus Bruts
+        const grossStr = parts[15]?.trim() || parts[12]?.trim();
         const serviceFeeStr = parts[13]?.trim();
 
-        // Conversion Date MM/DD/YYYY -> YYYY-MM-DD
         const formatDate = (raw) => {
             const [m, d, y] = raw.split('/');
             if (!m || !d || !y) return '';
@@ -272,7 +267,6 @@ const App = () => {
         const fees = parseFloat(serviceFeeStr) || 0;
         const net = gross - fees;
 
-        // Trouver le logement correspondant
         const matchedProp = properties.find(p => 
             listingName.toLowerCase().includes(p.name.toLowerCase()) || 
             p.name.toLowerCase().includes(listingName.toLowerCase())
@@ -289,7 +283,7 @@ const App = () => {
                 platformFees: fees,
                 netAmount: net,
                 isUrssaf: true,
-                paymentDate: '', // On laisse vide pour validation manuelle
+                paymentDate: '', 
                 resExpenses: [],
                 comment: `Importé via CSV: ${parts[2]}`
             };
@@ -335,12 +329,12 @@ const App = () => {
     filteredData.filter(t => !!t.paymentDate).forEach(t => {
       const m = t.paymentDate.substring(0, 7);
       initMonth(m);
-      stats[m].totalBank += t.netAmount;
+      stats[m].totalBank += (t.netAmount || 0);
       if (t.isUrssaf) {
-        stats[m].urssafGross += t.grossAmount;
-        stats[m].taxes += t.grossAmount * 0.077;
+        stats[m].urssafGross += (t.grossAmount || 0);
+        stats[m].taxes += (t.grossAmount || 0) * 0.077;
       } else {
-        stats[m].directNet += t.netAmount;
+        stats[m].directNet += (t.netAmount || 0);
       }
       stats[m].charges += (t.resExpenses?.reduce((acc, c) => acc + (parseFloat(c.amount) || 0), 0) || 0);
     });
@@ -424,12 +418,18 @@ const App = () => {
 
   const todayStr = new Date().toISOString().split('T')[0];
 
-  if (loading) return (
-    <div className="h-screen w-full flex items-center justify-center bg-slate-50 flex-col gap-4">
-      <Loader2 className="animate-spin text-blue-600" size={48} />
-      <p className="text-blue-600 font-bold uppercase tracking-widest text-[10px]">Chargement CADEL MANAGER...</p>
-    </div>
-  );
+  // --- SECURITE CALCULS MODALE ---
+  // On utilise des valeurs par défaut pour éviter le plantage lors de l'ouverture d'une réservation incomplète
+  const curChargesModale = (formData.resExpenses || []).reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+  const isCplxForm = formData.platform === 'Booking' || formData.platform === 'Abritel';
+  let gModale = 0, nModale = 0;
+  if (isCplxForm) {
+    gModale = (parseFloat(formData.displayedAmount) || 0) - (parseFloat(formData.cityTax) || 0);
+    nModale = gModale - (parseFloat(formData.platformFees) || 0) - (parseFloat(formData.bankFees) || 0);
+  } else {
+    gModale = parseFloat(formData.grossAmount) || 0;
+    nModale = gModale - (parseFloat(formData.platformFees) || 0);
+  }
 
   // --- FILTRES RÉUTILISABLES ---
   const RenderFilters = () => (
@@ -582,7 +582,7 @@ const App = () => {
                                <div className="mb-4 space-y-2 border-t border-slate-50 pt-4">
                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1"><Sparkles size={10}/> Services associés</p>
                                    <div className="grid grid-cols-1 gap-2">
-                                       {t.resExpenses.map((exp, idx) => (
+                                       {(t.resExpenses || []).map((exp, idx) => (
                                            <div key={idx} className="flex items-center justify-between bg-slate-50/50 p-2 rounded-xl border border-slate-100">
                                                <div className="flex items-center gap-2">
                                                    <div className="w-1 h-1 rounded-full bg-indigo-400"></div>
@@ -601,7 +601,7 @@ const App = () => {
                            <div className="flex justify-between items-center border-t border-slate-50 pt-4">
                                <div className="flex flex-col">
                                   <span className="text-[9px] font-black text-slate-400 uppercase leading-none">Net Reçu (Banque)</span>
-                                  <span className="text-lg font-black text-slate-900 tabular-nums">{t.netAmount.toFixed(2)}€</span>
+                                  <span className="text-lg font-black text-slate-900 tabular-nums">{(t.netAmount || 0).toFixed(2)}€</span>
                                </div>
                                {t.paymentDate && <span className="text-[9px] font-bold text-slate-400 italic">Réglé le {t.paymentDate}</span>}
                            </div>
@@ -645,7 +645,7 @@ const App = () => {
                                 <td className="p-6 text-center text-slate-500 font-medium whitespace-nowrap bg-slate-50/30 group-hover:bg-blue-50/20 transition-colors">{t.startDate} <span className="mx-2 text-slate-300">➔</span> {t.endDate}</td>
                                 <td className="p-6">
                                     <div className="space-y-1.5">
-                                        {t.resExpenses?.map((exp, idx) => (
+                                        {(t.resExpenses || []).map((exp, idx) => (
                                             <div key={idx} className="flex items-center justify-between text-[10px] bg-slate-50 p-1.5 rounded-lg border border-slate-100">
                                                 <span className="uppercase font-black text-slate-500 leading-none">{exp.type} ({exp.person})</span>
                                                 <div className="flex items-center gap-1.5">
@@ -657,7 +657,7 @@ const App = () => {
                                         {(!t.resExpenses || t.resExpenses.length === 0) && <span className="text-slate-300 italic">Aucun</span>}
                                     </div>
                                 </td>
-                                <td className="p-6 text-right font-black text-slate-900 text-base tabular-nums">{t.netAmount.toFixed(2)}€</td>
+                                <td className="p-6 text-right font-black text-slate-900 text-base tabular-nums">{(t.netAmount || 0).toFixed(2)}€</td>
                                 <td className="p-6 text-center">
                                     <div className="flex flex-col items-center gap-1">
                                         <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
@@ -724,7 +724,7 @@ const App = () => {
                                                 return (
                                                     <div key={res.id} onClick={(e) => { e.stopPropagation(); setEditingResId(res.id); setFormData(res); setIsModalOpen(true); }} className="h-3.5 md:h-5 rounded-md text-[7px] md:text-[9px] font-black text-white px-1 flex items-center truncate cursor-pointer" style={{ backgroundColor: color }}>
                                                         {isStart && <span className="mr-0.5 opacity-60">●</span>}
-                                                        {res.name.split(' ')[0]}
+                                                        {res.name?.split(' ')[0] || 'Client'}
                                                     </div>
                                                 );
                                             })}
@@ -762,8 +762,8 @@ const App = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10">
-                <DonutChart title="Net par Logement" data={properties.map((p, idx) => ({ label: p.name, value: tenants.filter(t => t.propertyId === p.id && !!t.paymentDate).reduce((acc, t) => acc + (t.netAmount - (t.resExpenses?.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0) || 0) - (t.isUrssaf ? t.grossAmount * 0.077 : 0)), 0), color: CHART_COLORS[idx % CHART_COLORS.length] }))} />
-                <DonutChart title="Net par Plateforme" data={availablePlatforms.map((p, idx) => ({ label: p, value: tenants.filter(t => t.platform === p && !!t.paymentDate).reduce((acc, t) => acc + (t.netAmount - (t.isUrssaf ? t.grossAmount * 0.077 : 0)), 0), color: CHART_COLORS[(idx + 4) % CHART_COLORS.length] }))} />
+                <DonutChart title="Net par Logement" data={properties.map((p, idx) => ({ label: p.name, value: tenants.filter(t => t.propertyId === p.id && !!t.paymentDate).reduce((acc, t) => acc + ((t.netAmount || 0) - (t.resExpenses?.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0) || 0) - (t.isUrssaf ? (t.grossAmount || 0) * 0.077 : 0)), 0), color: CHART_COLORS[idx % CHART_COLORS.length] }))} />
+                <DonutChart title="Net par Plateforme" data={availablePlatforms.map((p, idx) => ({ label: p, value: tenants.filter(t => t.platform === p && !!t.paymentDate).reduce((acc, t) => acc + ((t.netAmount || 0) - (t.isUrssaf ? (t.grossAmount || 0) * 0.077 : 0)), 0), color: CHART_COLORS[(idx + 4) % CHART_COLORS.length] }))} />
               </div>
             </div>
           )}
@@ -850,7 +850,6 @@ const App = () => {
             <div className="space-y-10 animate-in fade-in">
               <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">Paramètres</h2>
               
-              {/* NOUVEAU BLOC : IMPORTATION AIRBNB */}
               <div className="bg-white p-8 rounded-[40px] border-2 border-dashed border-slate-200 shadow-xl shadow-slate-100 flex flex-col items-center justify-center text-center group hover:border-blue-400 transition-all">
                   <div className="bg-blue-50 p-4 rounded-3xl text-blue-600 mb-4 group-hover:scale-110 transition-transform"><UploadCloud size={40}/></div>
                   <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Importation de données Airbnb</h3>
@@ -957,28 +956,28 @@ const App = () => {
         </div>
       </main>
 
-      {/* MODALE RÉSERVATION */}
+      {/* MODALE RÉSERVATION - SÉCURISÉE */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
           <div className="bg-white rounded-[40px] md:rounded-[60px] shadow-2xl w-full max-w-3xl max-h-[95vh] flex flex-col scale-in-center overflow-hidden border border-slate-100">
-            <div className="p-6 md:p-10 border-b border-slate-50 flex justify-between items-center bg-white sticky top-0 z-10 text-xs">
+            <div className="p-6 md:p-10 border-b border-slate-50 flex justify-between items-center bg-white sticky top-0 z-10">
               <div className="flex items-center gap-4 text-blue-600">
                 <div className="bg-blue-50 p-2 md:p-3 rounded-2xl"><CalendarCheck size={24} /></div>
-                <div><h3 className="font-black text-xl md:text-2xl tracking-tight text-slate-900">Réservation</h3><p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5 tracking-widest">Édition en temps réel</p></div>
+                <div><h3 className="font-black text-xl md:text-2xl tracking-tight text-slate-900 leading-none">Réservation</h3></div>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="p-3 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900 hover:rotate-90 transition-all duration-300"><X size={24} /></button>
+              <button onClick={() => setIsModalOpen(false)} className="p-3 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900 transition-all"><X size={24} /></button>
             </div>
             <form onSubmit={saveRes} className="p-6 md:p-10 space-y-8 overflow-y-auto flex-1 custom-scrollbar text-xs">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
                 <div className="space-y-1"><label className="text-[10px] font-black uppercase ml-3 text-slate-400">Bien</label><select required value={formData.propertyId} onChange={e => setFormData({ ...formData, propertyId: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-black outline-none focus:border-blue-300">{properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
-                <div className="space-y-1"><label className="text-[10px] font-black uppercase ml-3 text-slate-400">Voyageur</label><input required placeholder="Nom complet" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-black outline-none" /></div>
-                <div className="space-y-1"><label className="text-[10px] font-black uppercase ml-3 text-slate-400">Arrivée</label><input type="date" required value={formData.startDate} onChange={e => setFormData({ ...formData, startDate: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-black outline-none" /></div>
-                <div className="space-y-1"><label className="text-[10px] font-black uppercase ml-3 text-slate-400">Départ</label><input type="date" required value={formData.endDate} onChange={e => setFormData({ ...formData, endDate: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-black outline-none" /></div>
-                <div className="space-y-1 md:col-span-2"><label className="text-[10px] font-black uppercase ml-3 text-slate-400">Notes</label><textarea placeholder="Notes particulières..." value={formData.comment} onChange={e => setFormData({ ...formData, comment: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-bold outline-none focus:border-blue-300 min-h-[80px] resize-none" /></div>
+                <div className="space-y-1"><label className="text-[10px] font-black uppercase ml-3 text-slate-400">Voyageur</label><input required placeholder="Nom complet" value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-black outline-none" /></div>
+                <div className="space-y-1"><label className="text-[10px] font-black uppercase ml-3 text-slate-400">Arrivée</label><input type="date" required value={formData.startDate || ''} onChange={e => setFormData({ ...formData, startDate: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-black outline-none" /></div>
+                <div className="space-y-1"><label className="text-[10px] font-black uppercase ml-3 text-slate-400">Départ</label><input type="date" required value={formData.endDate || ''} onChange={e => setFormData({ ...formData, endDate: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-black outline-none" /></div>
+                <div className="space-y-1 md:col-span-2"><label className="text-[10px] font-black uppercase ml-3 text-slate-400">Notes</label><textarea placeholder="Notes particulières..." value={formData.comment || ''} onChange={e => setFormData({ ...formData, comment: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-bold outline-none focus:border-blue-300 min-h-[80px] resize-none" /></div>
               </div>
 
-              <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-6 md:p-8 rounded-[40px] border border-blue-50 space-y-6 shadow-inner">
-                <div className="flex justify-between items-center font-black text-[11px] uppercase tracking-widest text-blue-900 border-b border-blue-100 pb-2">
+              <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-6 md:p-8 rounded-[40px] border border-blue-50 space-y-6">
+                <div className="flex justify-between items-center font-black text-[11px] uppercase text-blue-900 border-b border-blue-100 pb-2">
                   <div className="flex items-center gap-2"><Euro size={16}/> Finances</div>
                   <select value={formData.platform} onChange={e => setFormData({ ...formData, platform: e.target.value })} className="bg-white border border-blue-100 rounded-xl px-3 py-1.5 text-blue-600 shadow-sm outline-none">
                     {availablePlatforms.map(p => <option key={p} value={p}>{p}</option>)}
@@ -986,26 +985,26 @@ const App = () => {
                 </div>
                 {formData.platform === 'Booking' || formData.platform === 'Abritel' ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px]">
-                    <div><label className="font-black uppercase text-slate-400 ml-1">Prix Client</label><input type="number" step="0.01" value={formData.displayedAmount} onChange={e => setFormData({ ...formData, displayedAmount: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl font-black" /></div>
-                    <div><label className="font-black uppercase text-rose-400 ml-1">Taxe Séjour</label><input type="number" step="0.01" value={formData.cityTax} onChange={e => setFormData({ ...formData, cityTax: e.target.value })} className="w-full p-3 border border-rose-100 rounded-xl font-black text-rose-500 bg-rose-50/20" /></div>
-                    <div className="md:col-span-2 flex justify-between bg-slate-900 p-3 rounded-xl text-white font-black uppercase shadow-lg"><span>Brut URSSAF</span><span>{(parseFloat(formData.displayedAmount) - (parseFloat(formData.cityTax) || 0)).toFixed(2)}€</span></div>
+                    <div><label className="font-black uppercase text-slate-400 ml-1">Prix Client</label><input type="number" step="0.01" value={formData.displayedAmount || ''} onChange={e => setFormData({ ...formData, displayedAmount: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl font-black" /></div>
+                    <div><label className="font-black uppercase text-rose-400 ml-1">Taxe Séjour</label><input type="number" step="0.01" value={formData.cityTax || ''} onChange={e => setFormData({ ...formData, cityTax: e.target.value })} className="w-full p-3 border border-rose-100 rounded-xl font-black text-rose-500 bg-rose-50/20" /></div>
+                    <div className="md:col-span-2 flex justify-between bg-slate-900 p-3 rounded-xl text-white font-black uppercase"><span>Brut URSSAF</span><span>{(parseFloat(formData.displayedAmount || 0) - (parseFloat(formData.cityTax || 0))).toFixed(2)}€</span></div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px]">
-                    <div><label className="font-black uppercase text-slate-400 ml-1">Brut URSSAF</label><input type="number" step="0.01" value={formData.grossAmount} onChange={e => setFormData({ ...formData, grossAmount: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl font-black" /></div>
-                    <div><label className="font-black uppercase text-slate-400 ml-1">Comm. plateforme</label><input type="number" step="0.01" value={formData.platformFees} onChange={e => setFormData({ ...formData, platformFees: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl font-black" /></div>
+                    <div><label className="font-black uppercase text-slate-400 ml-1">Brut URSSAF</label><input type="number" step="0.01" value={formData.grossAmount || ''} onChange={e => setFormData({ ...formData, grossAmount: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl font-black" /></div>
+                    <div><label className="font-black uppercase text-slate-400 ml-1">Comm. plateforme</label><input type="number" step="0.01" value={formData.platformFees || ''} onChange={e => setFormData({ ...formData, platformFees: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl font-black" /></div>
                   </div>
                 )}
-                <div className="flex items-center gap-3 bg-white p-3 rounded-2xl shadow-sm"><input type="checkbox" className="w-4 h-4 accent-blue-600 rounded" checked={formData.isUrssaf} onChange={e => setFormData({ ...formData, isUrssaf: e.target.checked })} /><span className="text-[10px] font-black uppercase text-slate-600 tracking-widest">Provisionner taxes AE (7.7%)</span></div>
+                <div className="flex items-center gap-3 bg-white p-3 rounded-2xl shadow-sm"><input type="checkbox" className="w-4 h-4 accent-blue-600 rounded" checked={!!formData.isUrssaf} onChange={e => setFormData({ ...formData, isUrssaf: e.target.checked })} /><span className="text-[10px] font-black uppercase text-slate-600">Provisionner taxes AE (7.7%)</span></div>
               </div>
 
               <div className="space-y-6">
                 <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                   <span className="text-[11px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2"><UserCheck size={16}/> Prestations</span>
-                  <button type="button" onClick={() => setFormData({ ...formData, resExpenses: [...formData.resExpenses, { id: Date.now().toString(), person: availableProviders[0] || '', type: availableServiceTypes[0] || '', amount: 0, paymentDate: '' }] })} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase shadow-md hover:scale-105 transition-all tracking-widest">+ Ajouter</button>
+                  <button type="button" onClick={() => setFormData({ ...formData, resExpenses: [...(formData.resExpenses || []), { id: Date.now().toString(), person: availableProviders[0] || '', type: availableServiceTypes[0] || '', amount: 0, paymentDate: '' }] })} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase shadow-md hover:scale-105 transition-all tracking-widest">+ Ajouter</button>
                 </div>
                 <div className="space-y-3">
-                   {formData.resExpenses.map(exp => (
+                   {(formData.resExpenses || []).map(exp => (
                     <div key={exp.id} className="flex flex-col bg-slate-50 p-4 rounded-3xl border border-slate-100 space-y-3">
                       <div className="flex gap-3 items-center">
                         <select value={exp.person} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, person: e.target.value } : x) })} className="flex-1 p-2 border border-slate-200 rounded-xl text-[10px] font-black uppercase bg-white w-0 shrink">
@@ -1015,7 +1014,7 @@ const App = () => {
                           {availableServiceTypes.map(p => <option key={p} value={p}>{p}</option>)}
                         </select>
                         <div className="flex items-center gap-1 bg-white px-2 py-1.5 rounded-xl border border-slate-200 shrink-0">
-                          <input type="number" value={exp.amount} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, amount: e.target.value } : x) })} className="w-10 font-black text-right text-xs outline-none" />
+                          <input type="number" value={exp.amount || ''} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, amount: e.target.value } : x) })} className="w-10 font-black text-right text-xs outline-none" />
                           <span className="text-slate-300 font-bold">€</span>
                         </div>
                         <button type="button" onClick={() => setFormData({ ...formData, resExpenses: formData.resExpenses.filter(x => x.id !== exp.id) })} className="text-slate-300 hover:text-rose-500 shrink-0 transition-colors"><Trash2 size={18} /></button>
@@ -1031,22 +1030,14 @@ const App = () => {
 
               <div className={`p-6 md:p-8 rounded-[32px] md:rounded-[40px] border-2 flex flex-col md:flex-row items-center justify-between transition-all shadow-xl gap-4 ${formData.paymentDate ? 'bg-emerald-50/50 border-emerald-100' : 'bg-orange-50 border-orange-100'}`}>
                 <div className="text-center md:text-left"><h4 className="text-[10px] md:text-xs font-black uppercase tracking-widest text-slate-900 leading-none">Paiement Global Reçu</h4><p className="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase mt-1.5">Date en banque</p></div>
-                <input type="date" value={formData.paymentDate} onChange={e => setFormData({ ...formData, paymentDate: e.target.value })} className="w-full md:w-auto p-3 border border-slate-200 rounded-[15px] font-black bg-white shadow-lg outline-none" />
+                <input type="date" value={formData.paymentDate || ''} onChange={e => setFormData({ ...formData, paymentDate: e.target.value })} className="w-full md:w-auto p-3 border border-slate-200 rounded-[15px] font-black bg-white shadow-lg outline-none" />
               </div>
-
-              {editingResId && (
-                <div className="pt-4">
-                   <a href={getGoogleCalendarUrl(formData, properties.find(p => p.id === formData.propertyId))} target="_blank" rel="noreferrer" className="w-full bg-blue-50 text-blue-700 p-6 rounded-[32px] font-black text-[11px] uppercase tracking-[2px] flex items-center justify-center gap-3 hover:bg-blue-600 hover:text-white transition-all shadow-xl shadow-blue-100 border-2 border-white">
-                    <CalendarIcon size={22}/> Synchroniser avec Google Agenda
-                   </a>
-                </div>
-              )}
 
               <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-slate-100 gap-6">
                 <div className="text-center md:text-left">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 leading-none mb-2">Profit Net Estimé</p>
                   <p className="text-2xl md:text-3xl font-black text-blue-600 tracking-tighter shadow-blue-50 drop-shadow-sm">
-                    {(nModale - curChargesModale - (formData.isUrssaf ? ((formData.platform === 'Booking' || formData.platform === 'Abritel' ? (parseFloat(formData.displayedAmount) - (parseFloat(formData.cityTax) || 0)) : parseFloat(formData.grossAmount) || 0) * 0.077) : 0)).toFixed(2)}€
+                    {(nModale - curChargesModale - (formData.isUrssaf ? ((formData.platform === 'Booking' || formData.platform === 'Abritel' ? (parseFloat(formData.displayedAmount || 0) - (parseFloat(formData.cityTax || 0))) : parseFloat(formData.grossAmount || 0)) * 0.077) : 0)).toFixed(2)}€
                   </p>
                 </div>
                 <div className="flex gap-3 w-full md:w-auto">
