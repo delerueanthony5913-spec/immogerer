@@ -260,6 +260,9 @@ const App = () => {
   const [importStatus, setImportStatus] = useState('');
   const [reviewList, setReviewList] = useState([]);
 
+  // ETAT POUR LE MINI CALENDRIER DE PAIEMENT RAPIDE
+  const [quickPayConfig, setQuickPayConfig] = useState(null); 
+
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
       if (u) { setUser(u); setLoading(false); }
@@ -297,11 +300,16 @@ const App = () => {
 
   const saveRes = async (e) => {
     e.preventDefault();
-    if (!formData.propertyId) return;
+    // ALERTES CLAIRES EN CAS D'OUBLI
+    if (!formData.propertyId) { alert("⚠️ Vous devez sélectionner un Logement pour enregistrer."); return; }
+    if (!formData.name) { alert("⚠️ Vous devez indiquer le nom du Voyageur."); return; }
+    if (!formData.startDate || !formData.endDate) { alert("⚠️ Les dates de début et de fin sont obligatoires."); return; }
+
     const isC = formData.platform === 'Booking' || formData.platform === 'Abritel';
     const g = isC ? (parseFloat(formData.displayedAmount || 0) - (parseFloat(formData.cityTax || 0))) : parseFloat(formData.grossAmount || 0);
     const n = isC ? g - (parseFloat(formData.platformFees || 0) + (parseFloat(formData.bankFees || 0))) : g - parseFloat(formData.platformFees || 0);
     const d = { ...formData, grossAmount: g, netAmount: n, resExpenses: (formData.resExpenses || []).map(r => ({ ...r, amount: parseFloat(r.amount) || 0 })) };
+    
     if (editingResId) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', editingResId), d);
     else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), d);
     setIsModalOpen(false);
@@ -314,43 +322,47 @@ const App = () => {
     }
   };
 
-  // --- TOGGLE STATUT PAIEMENT AVEC PROMPT DE DATE ---
-  const toggleStatus = async (e, tenant, type, expId = null) => {
+  // --- LOGIQUE MINI CALENDRIER DE PAIEMENT RAPIDE ---
+  const handleQuickPayToggle = async (e, tenant, type, expId = null) => {
     e.stopPropagation();
     e.preventDefault();
     if (!user || user.uid === 'local-test-user') return;
 
-    const today = new Date().toISOString().split('T')[0];
-    try {
-      if (type === 'global') {
-        if (tenant.paymentDate) {
-          if (window.confirm("Annuler le paiement et repasser en 'Attente' ?")) {
+    let isPaid = false;
+    if (type === 'global') isPaid = !!tenant.paymentDate;
+    if (type === 'expense') {
+      const exp = (tenant.resExpenses || []).find(x => x.id === expId);
+      isPaid = !!(exp && exp.paymentDate);
+    }
+
+    if (isPaid) {
+      if (window.confirm("Annuler ce paiement et le repasser en attente ?")) {
+        try {
+          if (type === 'global') {
             await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', tenant.id), { paymentDate: '' }, { merge: true });
-          }
-        } else {
-          const dateInput = window.prompt("Date du règlement (AAAA-MM-JJ) :", today);
-          if (dateInput !== null) {
-            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', tenant.id), { paymentDate: dateInput || today }, { merge: true });
-          }
-        }
-      } else if (type === 'expense') {
-        const targetExp = (tenant.resExpenses || []).find(x => x.id === expId);
-        if (targetExp && targetExp.paymentDate) {
-          if (window.confirm("Annuler le paiement de cette prestation ?")) {
+          } else {
             const newExpenses = tenant.resExpenses.map(exp => exp.id === expId ? { ...exp, paymentDate: '' } : exp);
             await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', tenant.id), { resExpenses: newExpenses }, { merge: true });
           }
-        } else {
-          const dateInput = window.prompt("Date de règlement de la prestation (AAAA-MM-JJ) :", today);
-          if (dateInput !== null) {
-            const newExpenses = tenant.resExpenses.map(exp => exp.id === expId ? { ...exp, paymentDate: dateInput || today } : exp);
-            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', tenant.id), { resExpenses: newExpenses }, { merge: true });
-          }
-        }
+        } catch (err) { console.error(err); }
       }
-    } catch (error) {
-      console.error("Erreur mise à jour statut", error);
+    } else {
+      // Ouvre le mini calendrier avec la date du jour par défaut
+      setQuickPayConfig({ tenant, type, expId, date: new Date().toISOString().split('T')[0] });
     }
+  };
+
+  const submitQuickPay = async () => {
+    if (!quickPayConfig || !quickPayConfig.date) return;
+    try {
+      if (quickPayConfig.type === 'global') {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', quickPayConfig.tenant.id), { paymentDate: quickPayConfig.date }, { merge: true });
+      } else {
+        const newExpenses = quickPayConfig.tenant.resExpenses.map(exp => exp.id === quickPayConfig.expId ? { ...exp, paymentDate: quickPayConfig.date } : exp);
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', quickPayConfig.tenant.id), { resExpenses: newExpenses }, { merge: true });
+      }
+      setQuickPayConfig(null);
+    } catch (err) { console.error(err); }
   };
 
   const filteredData = useMemo(() => {
@@ -425,7 +437,6 @@ const App = () => {
   }, [filterYear, filterMonth]);
 
   const todayStr = new Date().toISOString().split('T')[0];
-  
   const yearsAvailable = useMemo(() => {
     const years = tenants.map(t => t.startDate ? new Date(t.startDate).getFullYear() : null).filter(Boolean);
     return [...new Set([...years, new Date().getFullYear()])].sort((a,b) => b-a);
@@ -525,13 +536,32 @@ const App = () => {
 
       <div className="md:hidden flex justify-between p-5 bg-white border-b sticky top-0 z-40 shadow-sm"><div className="flex items-center gap-2"><div className="bg-blue-600 p-1.5 rounded-lg text-white"><Building2 size={16}/></div><h1 className="font-black text-sm uppercase">CADEL MANAGER</h1></div><button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2">{isMobileMenuOpen ? <X /> : <Menu />}</button></div>
 
-      <main className="flex-1 p-4 md:p-12 overflow-y-auto h-screen custom-scrollbar">
+      <main className="flex-1 p-4 md:p-12 overflow-y-auto h-screen custom-scrollbar relative">
+        
+        {/* MINI MODALE DE PAIEMENT RAPIDE (DESSUS LE RESTE) */}
+        {quickPayConfig && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+             <div className="bg-white p-8 rounded-[40px] shadow-2xl max-w-sm w-full border border-slate-100 flex flex-col gap-6 animate-in zoom-in-95">
+                <div className="text-center">
+                  <div className="bg-emerald-50 text-emerald-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><Euro size={32}/></div>
+                  <h3 className="font-black text-xl uppercase tracking-tighter">Valider le paiement</h3>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-2">Définit le mois URSSAF</p>
+                </div>
+                <input type="date" value={quickPayConfig.date} onChange={e => setQuickPayConfig({...quickPayConfig, date: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-black text-center text-lg outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-50" />
+                <div className="flex gap-3 mt-2">
+                  <button onClick={() => setQuickPayConfig(null)} className="flex-1 p-4 rounded-2xl font-black uppercase text-[10px] text-slate-400 bg-slate-50 hover:bg-slate-100 transition-colors">Annuler</button>
+                  <button onClick={submitQuickPay} className="flex-1 p-4 rounded-2xl font-black uppercase text-[10px] text-white bg-emerald-500 shadow-xl shadow-emerald-200 hover:bg-emerald-600 transition-all hover:-translate-y-0.5">Encaisser</button>
+                </div>
+             </div>
+          </div>
+        )}
+
         <div className="max-w-7xl mx-auto pb-32">
           <RenderFilters />
 
           {activeTab === 'reservations' && (
             <div className="space-y-8 animate-in fade-in">
-              <div className="flex justify-between items-center"><h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2><button onClick={() => { setEditingResId(null); setIsModalOpen(true); }} className="bg-blue-600 text-white px-8 py-4 rounded-[24px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button></div>
+              <div className="flex justify-between items-center"><h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2><button onClick={() => { setEditingResId(null); setFormData({ propertyId: properties[0]?.id || '', name: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '' }); setIsModalOpen(true); }} className="bg-blue-600 text-white px-8 py-4 rounded-[24px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button></div>
               
               {/* MOBILE RESERVATIONS */}
               <div className="grid grid-cols-1 gap-4 md:hidden">
@@ -542,7 +572,7 @@ const App = () => {
                         <h3 className="text-base font-black uppercase">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</h3>
                         <div className="flex gap-2 text-[10px] text-slate-400"><span>{t.platform}</span><span>{t.name}</span></div>
                       </div>
-                      <span onClick={(e) => toggleStatus(e, t, 'global')} className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase cursor-pointer hover:scale-105 transition-transform ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                      <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase cursor-pointer hover:scale-105 transition-transform ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
                         {t.paymentDate ? 'Payé' : 'Dû'}
                       </span>
                     </div>
@@ -552,7 +582,7 @@ const App = () => {
                     {t.resExpenses && t.resExpenses.length > 0 && (
                       <div className="space-y-1.5 border-t border-slate-50 pt-3 mb-3">
                         {(t.resExpenses || []).map((exp, idx) => (
-                          <div key={idx} onClick={(e) => toggleStatus(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-slate-50 p-2 rounded-xl cursor-pointer hover:bg-blue-50 transition-colors">
+                          <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-slate-50 p-2 rounded-xl cursor-pointer hover:bg-blue-50 transition-colors">
                             <span className="uppercase font-black text-slate-500">{exp.type} ({exp.person})</span>
                             <span className={`font-black flex items-center gap-1 ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€ {exp.paymentDate ? <CheckCircle size={10}/> : <Clock size={10}/>}</span>
                           </div>
@@ -579,7 +609,7 @@ const App = () => {
                         <td className="p-6">
                            <div className="space-y-1.5">
                               {(t.resExpenses || []).map((exp, idx) => (
-                                <div key={idx} onClick={(e) => toggleStatus(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-slate-50 p-1.5 rounded-lg border border-slate-100 cursor-pointer hover:border-blue-300 hover:shadow-sm transition-all">
+                                <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-slate-50 p-1.5 rounded-lg border border-slate-100 cursor-pointer hover:border-blue-300 hover:shadow-sm transition-all">
                                   <span className="uppercase font-black text-slate-500 leading-none">{exp.type} ({exp.person})</span>
                                   <div className="flex items-center gap-1.5">
                                       <span className={`font-black ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€</span>
@@ -591,7 +621,7 @@ const App = () => {
                         </td>
                         <td className="p-6 text-right font-black">{(t.netAmount || 0).toFixed(2)}€</td>
                         <td className="p-6 text-center">
-                          <span onClick={(e) => toggleStatus(e, t, 'global')} className={`px-4 py-2 rounded-full text-[9px] uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                          <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-4 py-2 rounded-full text-[9px] uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
                             {t.paymentDate ? 'Payé' : 'Attente'}
                           </span>
                         </td>
@@ -694,7 +724,7 @@ const App = () => {
       {/* MODALE DE RESERVATION SECURISEE */}
       {isModalOpen && formData && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
-          <div className="bg-white rounded-[40px] md:rounded-[60px] shadow-2xl w-full max-w-3xl max-h-[95vh] flex flex-col border border-slate-100 overflow-hidden"><div className="p-6 md:p-10 border-b flex justify-between items-center bg-white sticky top-0 z-10"><div className="flex items-center gap-4 text-blue-600 font-black uppercase leading-none"><CalendarCheck size={28} /> Détails</div><button onClick={() => setIsModalOpen(false)} className="p-3 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900 transition-all duration-300"><X size={28} /></button></div><form onSubmit={saveRes} className="p-6 md:p-10 space-y-8 overflow-y-auto flex-1 custom-scrollbar text-xs"><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Logement<select required value={formData.propertyId || ''} onChange={e => setFormData({ ...formData, propertyId: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900">{(properties || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Voyageur<input required value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Début<input type="date" required value={formData.startDate || ''} onChange={e => setFormData({ ...formData, startDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Fin<input type="date" required value={formData.endDate || ''} onChange={e => setFormData({ ...formData, endDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div></div><div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-8 rounded-[48px] border border-blue-50 space-y-6"><div className="flex justify-between font-black uppercase text-blue-900 border-b border-blue-100 pb-3 text-[11px] tracking-widest">Plateforme<select value={formData.platform || ''} onChange={e => setFormData({ ...formData, platform: e.target.value })} className="bg-white border rounded-xl px-4 py-1 text-blue-600">{(availablePlatforms || []).map(p => <option key={p} value={p}>{p}</option>)}</select></div>
+          <div className="bg-white rounded-[40px] md:rounded-[60px] shadow-2xl w-full max-w-3xl max-h-[95vh] flex flex-col border border-slate-100 overflow-hidden"><div className="p-6 md:p-10 border-b flex justify-between items-center bg-white sticky top-0 z-10"><div className="flex items-center gap-4 text-blue-600 font-black uppercase leading-none"><CalendarCheck size={28} /> Détails</div><button onClick={() => setIsModalOpen(false)} className="p-3 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900 transition-all duration-300"><X size={28} /></button></div><form onSubmit={saveRes} className="p-6 md:p-10 space-y-8 overflow-y-auto flex-1 custom-scrollbar text-xs"><div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Logement<select value={formData.propertyId || ''} onChange={e => setFormData({ ...formData, propertyId: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900"><option value="">-- Choisir un logement --</option>{(properties || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Voyageur<input value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" placeholder="Nom du client" /></div><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Début<input type="date" value={formData.startDate || ''} onChange={e => setFormData({ ...formData, startDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div><div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Fin<input type="date" value={formData.endDate || ''} onChange={e => setFormData({ ...formData, endDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div></div><div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-8 rounded-[48px] border border-blue-50 space-y-6"><div className="flex justify-between font-black uppercase text-blue-900 border-b border-blue-100 pb-3 text-[11px] tracking-widest">Plateforme<select value={formData.platform || ''} onChange={e => setFormData({ ...formData, platform: e.target.value })} className="bg-white border rounded-xl px-4 py-1 text-blue-600">{(availablePlatforms || []).map(p => <option key={p} value={p}>{p}</option>)}</select></div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {isCplxFormModale ? (
                 <><div><label className="text-[10px] font-black uppercase text-slate-400">Brut Client</label><input type="number" step="0.01" value={formData.displayedAmount || ''} onChange={e => setFormData({ ...formData, displayedAmount: e.target.value })} className="w-full p-4 border border-slate-200 rounded-2xl font-black" /></div><div><label className="text-[10px] font-black uppercase text-rose-400">Taxe Séjour</label><input type="number" step="0.01" value={formData.cityTax || ''} onChange={e => setFormData({ ...formData, cityTax: e.target.value })} className="w-full p-4 border border-rose-100 rounded-2xl font-black bg-rose-50/30 text-rose-500" /></div></>
@@ -719,7 +749,7 @@ const App = () => {
                     <h4 className="text-[10px] md:text-xs font-black uppercase tracking-widest text-slate-900 leading-none">Paiement Global Reçu</h4>
                     <p className="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase mt-1.5">Définit le mois URSSAF</p>
                 </div>
-                <input type="date" value={formData.paymentDate || ''} onChange={e => setFormData({ ...formData, paymentDate: e.target.value })} className="w-full md:w-auto p-3 border border-slate-200 rounded-[15px] font-black bg-white shadow-lg outline-none" />
+                <input type="date" value={formData.paymentDate || ''} onChange={e => setFormData({ ...formData, paymentDate: e.target.value })} className="w-full md:w-auto p-3 border border-slate-200 rounded-[15px] font-black bg-white shadow-lg outline-none cursor-pointer" />
             </div>
 
             <div className="bg-slate-900 p-8 rounded-[48px] text-white flex flex-col md:flex-row justify-between items-center gap-6"><div className="text-center md:text-left leading-none"><p className="text-[10px] font-black uppercase text-slate-400 mb-2">Net Estimé</p><p className="text-4xl font-black text-blue-400 tracking-tighter">{(nModale - curChargesModale).toFixed(2)}€</p></div><button type="submit" className="w-full md:w-auto bg-blue-600 px-12 py-5 rounded-[24px] font-black uppercase tracking-[2px] shadow-xl hover:-translate-y-1 transition-all">Enregistrer</button></div></form></div></div>
