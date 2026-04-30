@@ -81,6 +81,7 @@ const DonutChart = ({ data, title }) => {
   );
 };
 
+// GRAPHIQUE MULTI-COURBES DYNAMIQUE (Moteur "Classic" compatible)
 const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
   const currentYear = new Date().getFullYear().toString();
   const currentMonth = new Date().getMonth();
@@ -205,6 +206,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
   const [hoveredMonth, setHoveredMonth] = useState(null);
   const months = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
 
+  // Remplacement du .flat() pour la compatibilité
   const allDataValues = series.reduce((acc, currentSeries) => {
       return acc.concat(currentSeries.data);
   }, []);
@@ -451,18 +453,14 @@ const App = () => {
   useEffect(() => {
     if (!user || loading) return;
     
-    // Sécurité pour ne pas boucler indéfiniment. 
-    // S'il l'a déjà fait une fois dans la session, il s'arrête.
     const isAlreadyInjected = sessionStorage.getItem('cadel_injected_2025_auto');
     if (isAlreadyInjected === 'true') return;
 
-    // On attend que les données soient bien chargées
     if (properties.length === 0 && tenants.length === 0) return;
 
     const runInjection = async () => {
         sessionStorage.setItem('cadel_injected_2025_auto', 'true');
         
-        // 1. Assurer que la VILLA CADELIA existe (la créer sinon)
         let targetProp = properties.find(p => p.name.toUpperCase().includes('CADELIA'));
         if (!targetProp) {
             try {
@@ -471,7 +469,6 @@ const App = () => {
             } catch(e) { console.error(e); return; }
         }
 
-        // 2. Vérifier que la première réservation "LOLA DROIN" n'y est pas déjà
         const hasLola = tenants.some(t => t.name.toUpperCase().includes("LOLA DROIN"));
         if (!hasLola) {
             const dataToImport = [
@@ -487,7 +484,6 @@ const App = () => {
                 { name: "MACIE CLAUDE", startDate: "2025-12-30", endDate: "2026-01-02", amount: 2900 }
             ];
             
-            // 3. Injecter les 10 réservations
             dataToImport.forEach(item => {
                  addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), {
                       propertyId: targetProp.id,
@@ -507,7 +503,7 @@ const App = () => {
                       acompte2Amount: 0,
                       acompte2Date: '',
                       soldeAmount: item.amount,
-                      soldeDate: item.endDate, // SOLDE AU JOUR DU DEPART
+                      soldeDate: item.endDate, 
                       resExpenses: [],
                       comment: 'Import automatique VILLA CADELIA'
                  });
@@ -928,6 +924,134 @@ const App = () => {
     return [...new Set([...years, new Date().getFullYear()])].sort((a,b) => b-a);
   }, [tenants]);
 
+  const parseCSVLine = (text) => {
+    const result = []; let current = '', inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        if (char === '"') inQuotes = !inQuotes;
+        else if (char === ',' && !inQuotes) { result.push(current); current = ''; }
+        else current += char;
+    }
+    result.push(current); return result;
+  };
+
+  const startReview = () => {
+    if (!importText.trim()) return;
+    const lines = importText.split('\n').filter(l => l.trim() !== ''); 
+    if (lines.length < 2) return;
+
+    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
+    const voyageurIdx = headers.findIndex(h => h.includes('voyageur') || h.includes('client') || h.includes('nom'));
+    
+    const newList = [];
+    
+    lines.forEach((line, index) => {
+        if (index === 0) return; 
+        const parts = parseCSVLine(line);
+        if (parts.length < 5) return;
+
+        let guestName, startDate, endDate, listingName;
+        let gross = 0, fees = 0, cityTax = 0, bankFees = 0, dispAmount = 0, net = 0;
+
+        if (importSource === 'Airbnb') {
+            const typeIndex = parts.findIndex(p => p.toLowerCase().includes('réservation') || p.toLowerCase().includes('reservation'));
+            if (typeIndex === -1) return;
+            let rawStart, rawEnd, grossStr, serviceFeeStr;
+            if (typeIndex === 2) {
+                rawStart = parts[5]?.trim(); rawEnd = parts[6]?.trim(); guestName = parts[8]?.trim(); listingName = parts[9]?.trim();
+                grossStr = parts[18]?.trim() || parts[13]?.trim(); serviceFeeStr = parts[15]?.trim();
+            } else if (typeIndex === 1) {
+                rawStart = parts[4]?.trim(); rawEnd = parts[5]?.trim(); guestName = parts[7]?.trim(); listingName = parts[8]?.trim();
+                grossStr = parts[15]?.trim() || parts[12]?.trim(); serviceFeeStr = parts[13]?.trim();
+            } else return;
+
+            const formatDateStr = (raw) => { if(!raw) return ''; const [m, d, y] = raw.split('/'); return (m && d && y) ? `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}` : ''; };
+            startDate = formatDateStr(rawStart); endDate = formatDateStr(rawEnd);
+            if (!startDate || !endDate) return;
+
+            gross = parseFloat(grossStr?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
+            fees = Math.abs(parseFloat(serviceFeeStr?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
+            dispAmount = gross;
+            net = gross - fees;
+        } 
+        else if (importSource === 'Booking') {
+            const typeCol = parts[0]?.toLowerCase() || '';
+            if (!typeCol.includes('rã©servation') && !typeCol.includes('réservation') && !typeCol.includes('reservation')) return;
+
+            guestName = voyageurIdx !== -1 && parts[voyageurIdx] ? parts[voyageurIdx].trim() : `Réf: ${parts[2]?.trim()}`; 
+            
+            startDate = parts[3]?.trim(); 
+            endDate = parts[4]?.trim();   
+            listingName = parts[10]?.trim();
+
+            if (!startDate || !endDate) return;
+
+            dispAmount = parseFloat(parts[15]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
+            cityTax = Math.abs(parseFloat(parts[16]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
+            fees = Math.abs(parseFloat(parts[17]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
+            bankFees = Math.abs(parseFloat(parts[19]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
+
+            gross = dispAmount - cityTax;
+            net = gross - fees - bankFees;
+        }
+
+        const matchedProp = properties.find(p => listingName && p.name && (listingName.toLowerCase().includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(listingName.toLowerCase())));
+        const isDuplicate = tenants.some(t => t.startDate === startDate && t.propertyId === (matchedProp?.id || 'none'));
+        const hasProperty = !!matchedProp;
+
+        newList.push({ 
+            id: index, propertyId: matchedProp?.id || '', propertyName: matchedProp?.name || listingName || 'Inconnu', 
+            name: guestName || 'Client Inconnu', startDate, endDate, grossAmount: gross, platformFees: fees, 
+            displayedAmount: dispAmount, cityTax: cityTax, bankFees: bankFees,
+            netAmount: net, isDuplicate, hasProperty, selected: !isDuplicate && hasProperty 
+        });
+    });
+    setReviewList(newList);
+  };
+
+  const confirmImport = async () => {
+      const toImport = reviewList.filter(i => i.selected && i.hasProperty);
+      for (let item of toImport) {
+          const { id, selected, isDuplicate, hasProperty, propertyName, ...cleanItem } = item;
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), { ...cleanItem, platform: importSource, isUrssaf: true, comment: `Importé via CSV ${importSource}`, resExpenses: [], paymentDate: '' });
+      }
+      setReviewList([]); setImportText(''); setImportStatus(`${toImport.length} réservation(s) importée(s) !`);
+      setTimeout(() => setImportStatus(''), 5000);
+  };
+
+  // LE BLOC MANQUANT EST ICI : RenderFilters
+  const RenderFilters = () => (
+    <div className="flex flex-wrap items-center gap-2 bg-white/70 backdrop-blur-md p-3 rounded-[28px] border border-white shadow-xl mb-6 md:mb-8">
+      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+        <Filter size={12} className="text-slate-400" />
+        <select value={filterYear} onChange={e => setFilterYear(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer">
+          <option value="all">Années</option>{(yearsAvailable || []).map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
+      </div>
+      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+        <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Mois (Tous)</option>{['Janv','Févr','Mars','Avril','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'].map((m,i)=><option key={i} value={i}>{m}</option>)}</select>
+      </div>
+      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+        <select value={filterProp} onChange={e => setFilterProp(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none max-w-[100px] md:max-w-[130px] cursor-pointer"><option value="all">Logements</option>{(properties || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+      </div>
+      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+        <select value={filterPlat} onChange={e => setFilterPlat(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Plateformes</option>{(availablePlatforms || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
+      </div>
+    </div>
+  );
+
+  if (loading) return <div className="h-screen w-full flex items-center justify-center bg-slate-50 font-black uppercase text-xs"><Loader2 className="animate-spin text-blue-600 mr-2" /> CADEL MANAGER...</div>;
+
+  const curChargesModale = (formData?.resExpenses || []).reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+  const isDirectFormModale = formData?.platform === 'En direct';
+  const isCplxFormModale = formData?.platform === 'Booking' || formData?.platform === 'Abritel';
+  
+  const nModale = isDirectFormModale 
+    ? (parseFloat(formData?.grossAmount) || 0) 
+    : isCplxFormModale 
+      ? (parseFloat(formData?.displayedAmount || 0) - parseFloat(formData?.cityTax || 0)) - (parseFloat(formData?.platformFees || 0) + parseFloat(formData?.bankFees || 0))
+      : (parseFloat(formData?.grossAmount || 0) - parseFloat(formData?.platformFees || 0));
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col md:flex-row font-sans text-slate-900 overflow-hidden">
       <aside className={`fixed md:sticky top-0 left-0 z-50 w-72 h-full md:h-screen bg-white border-r transform md:translate-x-0 transition-transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
@@ -1007,6 +1131,7 @@ const App = () => {
         )}
 
         <div className="max-w-7xl mx-auto pb-32">
+          
           <RenderFilters />
 
           {activeTab === 'reservations' && (
