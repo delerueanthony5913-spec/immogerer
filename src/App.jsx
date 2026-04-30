@@ -8,7 +8,7 @@ import {
   ChevronLeft, ChevronRight, BarChart3, List, Wallet, Settings, Calculator,
   UserCheck, PlusCircle, TrendingUp, Info, Filter, Loader2,
   Building2, CalendarRange, MessageSquare, CreditCard, Activity, ArrowRight,
-  User, Sparkles, Key, UploadCloud, AlertTriangle, Check, TrendingDown, Search
+  User, Sparkles, Key, UploadCloud, AlertTriangle, Check, TrendingDown, Search, BarChart2
 } from 'lucide-react';
 
 // --- CONFIGURATION FIREBASE ---
@@ -81,14 +81,15 @@ const DonutChart = ({ data, title }) => {
   );
 };
 
+// NOUVEAU GRAPHIQUE MULTI-CRITÈRES AVANCÉ
 const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
   const currentYear = new Date().getFullYear().toString();
   const currentMonth = new Date().getMonth();
   
+  const [mode, setMode] = useState('years'); // 'years', 'properties', 'platforms'
   const [metric, setMetric] = useState('net'); // 'net', 'gross', 'expenses'
-  const [compareBy, setCompareBy] = useState('years'); // 'years', 'properties', 'platforms'
-  const [baseYear, setBaseYear] = useState(currentYear);
   
+  // Controls pour chaque mode
   const [val1Y, setVal1Y] = useState(currentYear);
   const [val2Y, setVal2Y] = useState((parseInt(currentYear) - 1).toString());
   const [val1P, setVal1P] = useState(properties[0]?.id || '');
@@ -96,72 +97,92 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
   const [val1Pl, setVal1Pl] = useState(platforms[0] || '');
   const [val2Pl, setVal2Pl] = useState(platforms[1] || platforms[0] || '');
 
-  const val1 = compareBy === 'years' ? val1Y : compareBy === 'properties' ? val1P : val1Pl;
-  const val2 = compareBy === 'years' ? val2Y : compareBy === 'properties' ? val2P : val2Pl;
+  // Contextes (Filtres globaux de la carte)
+  const [contextYear, setContextYear] = useState(currentYear);
+  const [contextProp, setContextProp] = useState('all');
+  const [contextPlat, setContextPlat] = useState('all');
+
+  const safeData = Array.isArray(data) ? data : [];
+
+  // Moteur de génération des courbes
+  const buildSeriesFor = (targetYear, targetProp, targetPlat) => {
+      const res = Array(12).fill(0);
+      safeData.forEach(t => {
+          if (targetProp !== 'all' && t.propertyId !== targetProp) return;
+          if (targetPlat !== 'all' && t.platform !== targetPlat) return;
+
+          let isUrssafTriggered = false;
+
+          const addIncome = (dateStr, amt, isUrssafCheck) => {
+              if (dateStr && dateStr.startsWith(targetYear)) {
+                  const m = parseInt(dateStr.split('-')[1], 10) - 1;
+                  if (m >= 0 && m <= 11) {
+                      if (metric === 'gross') res[m] += amt;
+                      if (metric === 'net') {
+                          res[m] += amt;
+                          if (isUrssafCheck) isUrssafTriggered = true;
+                      }
+                  }
+              }
+          };
+
+          if (t.platform === 'En direct') {
+              addIncome(t.acompte1Date, parseFloat(t.acompte1Amount)||0, false);
+              addIncome(t.acompte2Date, parseFloat(t.acompte2Amount)||0, false);
+              addIncome(t.soldeDate, parseFloat(t.soldeAmount)||0, true);
+          } else {
+              addIncome(t.paymentDate, parseFloat(t.netAmount)||0, true);
+              if (metric === 'gross') addIncome(t.paymentDate, parseFloat(t.platformFees)||0, false); // gross = net + fees
+          }
+
+          const addExpense = (dateStr, amount) => {
+              if (dateStr && dateStr.startsWith(targetYear)) {
+                  const m = parseInt(dateStr.split('-')[1], 10) - 1;
+                  if (m >= 0 && m <= 11) {
+                      if (metric === 'expenses') res[m] += amount;
+                      if (metric === 'net') res[m] -= amount;
+                  }
+              }
+          };
+
+          (t.resExpenses || []).forEach(e => addExpense(e.paymentDate, parseFloat(e.amount)||0));
+
+          if (isUrssafTriggered && t.isUrssaf !== false && metric === 'net') {
+               const taxDate = t.platform === 'En direct' ? t.soldeDate : t.paymentDate;
+               if (taxDate && taxDate.startsWith(targetYear)) {
+                   const m = parseInt(taxDate.split('-')[1], 10) - 1;
+                   if (m >= 0 && m <= 11) {
+                       res[m] -= (parseFloat(t.grossAmount)||0) * 0.077;
+                   }
+               }
+          }
+      });
+      return res.map(val => isNaN(val) ? 0 : val);
+  };
+
+  // Assignation des séries selon le mode actif
+  let d1 = [], d2 = [], label1 = '', label2 = '';
   
-  const label1 = compareBy === 'years' ? val1Y : compareBy === 'properties' ? (properties.find(p=>p.id===val1P)?.name || 'Inconnu') : val1Pl;
-  const label2 = compareBy === 'years' ? val2Y : compareBy === 'properties' ? (properties.find(p=>p.id===val2P)?.name || 'Inconnu') : val2Pl;
-  const contextLabel = compareBy === 'years' ? '' : ` (${baseYear})`;
+  if (mode === 'years') {
+      d1 = buildSeriesFor(val1Y, contextProp, contextPlat);
+      d2 = buildSeriesFor(val2Y, contextProp, contextPlat);
+      label1 = val1Y;
+      label2 = val2Y;
+  } else if (mode === 'properties') {
+      d1 = buildSeriesFor(contextYear, val1P, contextPlat);
+      d2 = buildSeriesFor(contextYear, val2P, contextPlat);
+      label1 = properties.find(p=>p.id===val1P)?.name || 'Inconnu';
+      label2 = properties.find(p=>p.id===val2P)?.name || 'Inconnu';
+  } else if (mode === 'platforms') {
+      d1 = buildSeriesFor(contextYear, contextProp, val1Pl);
+      d2 = buildSeriesFor(contextYear, contextProp, val2Pl);
+      label1 = val1Pl;
+      label2 = val2Pl;
+  }
 
   const [hoveredMonth, setHoveredMonth] = useState(null);
   const months = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
 
-  const safeData = Array.isArray(data) ? data : [];
-
-  const buildSeries = (filterVal) => {
-      const res = Array(12).fill(0);
-      const targetYear = compareBy === 'years' ? filterVal : baseYear;
-
-      safeData.forEach(t => {
-          if (compareBy === 'properties' && t.propertyId !== filterVal) return;
-          if (compareBy === 'platforms' && t.platform !== filterVal) return;
-
-          if (t.platform === 'En direct') {
-              const processIncome = (dateStr, amt, isSolde) => {
-                  if (dateStr && dateStr.startsWith(targetYear)) {
-                      const m = parseInt(dateStr.split('-')[1], 10) - 1;
-                      if (m >= 0 && m <= 11) {
-                          if (metric === 'gross') res[m] += amt;
-                          if (metric === 'net') {
-                             res[m] += amt;
-                             if (isSolde && t.isUrssaf !== false) res[m] -= (parseFloat(t.grossAmount) || 0) * 0.077;
-                          }
-                      }
-                  }
-              };
-              processIncome(t.acompte1Date, parseFloat(t.acompte1Amount) || 0, false);
-              processIncome(t.acompte2Date, parseFloat(t.acompte2Amount) || 0, false);
-              processIncome(t.soldeDate, parseFloat(t.soldeAmount) || 0, true);
-          } else {
-              if (t.paymentDate && t.paymentDate.startsWith(targetYear)) {
-                  const m = parseInt(t.paymentDate.split('-')[1], 10) - 1;
-                  if (m >= 0 && m <= 11) {
-                      if (metric === 'gross') res[m] += (parseFloat(t.grossAmount) || 0);
-                      if (metric === 'net') {
-                          res[m] += (parseFloat(t.netAmount) || 0);
-                          if (t.isUrssaf !== false) res[m] -= (parseFloat(t.grossAmount) || 0) * 0.077;
-                      }
-                  }
-              }
-          }
-
-          (t.resExpenses || []).forEach(e => {
-              if (e.paymentDate && e.paymentDate.startsWith(targetYear)) {
-                  const m = parseInt(e.paymentDate.split('-')[1], 10) - 1;
-                  if (m >= 0 && m <= 11) {
-                      if (metric === 'expenses') res[m] += (parseFloat(e.amount) || 0);
-                      if (metric === 'net') res[m] -= (parseFloat(e.amount) || 0);
-                  }
-              }
-          });
-      });
-
-      return res.map(val => isNaN(val) ? 0 : val);
-  };
-
-  const d1 = buildSeries(val1);
-  const d2 = buildSeries(val2);
-  
   const maxValRaw = Math.max(...d1, ...d2);
   const maxVal = (!isFinite(maxValRaw) || maxValRaw <= 0) ? 100 : maxValRaw * 1.15;
 
@@ -194,8 +215,14 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
     return currentMonth;
   };
 
-  const split1 = getSplit(compareBy === 'years' ? val1 : baseYear);
-  const split2 = getSplit(compareBy === 'years' ? val2 : baseYear);
+  let split1 = 11, split2 = 11;
+  if (mode === 'years') {
+      split1 = getSplit(val1Y);
+      split2 = getSplit(val2Y);
+  } else {
+      split1 = getSplit(contextYear);
+      split2 = getSplit(contextYear);
+  }
 
   const path1Solid = buildPath(d1, 0, Math.max(0, split1));
   const path1Dotted = buildPath(d1, Math.max(0, split1), 11);
@@ -205,61 +232,46 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
   const yTicks = [0, maxVal * 0.33, maxVal * 0.66, maxVal];
 
   return (
-    <div className="w-full bg-white p-6 md:p-8 rounded-[48px] shadow-xl shadow-slate-200/50 border border-slate-50 animate-in fade-in">
+    <div className="w-full bg-white p-6 md:p-8 rounded-[48px] shadow-2xl border border-slate-50 animate-in fade-in relative">
       
-      {/* PANNEAU DE CONTROLE DU GRAPHIQUE */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-8 bg-slate-50 p-4 md:p-6 rounded-3xl border border-slate-100">
-         <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[10px] font-black uppercase text-slate-400">Analyser :</span>
-            <select value={metric} onChange={e=>setMetric(e.target.value)} className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-[10px] font-black uppercase text-blue-600 outline-none shadow-sm cursor-pointer hover:border-blue-300 transition-colors">
-               <option value="net">Profit Net Réel</option>
-               <option value="gross">CA Brut</option>
-               <option value="expenses">Coût Prestations</option>
-            </select>
-            
-            <span className="text-[10px] font-black uppercase text-slate-400 ml-0 md:ml-4">Par :</span>
-            <select value={compareBy} onChange={e=>setCompareBy(e.target.value)} className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-[10px] font-black uppercase text-slate-700 outline-none shadow-sm cursor-pointer hover:border-slate-300 transition-colors">
-               <option value="years">Années</option>
-               <option value="properties">Logements</option>
-               <option value="platforms">Plateformes</option>
-            </select>
-         </div>
+      <div className="flex bg-slate-100 p-1.5 rounded-[20px] w-max mb-6">
+         <button onClick={()=>setMode('years')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'years' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>📅 Années</button>
+         <button onClick={()=>setMode('properties')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'properties' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>🏠 Logements</button>
+         <button onClick={()=>setMode('platforms')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'platforms' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>💻 Plateformes</button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-4 bg-slate-50/50 p-4 md:p-5 rounded-3xl border border-slate-100 mb-8">
+         <select value={metric} onChange={e=>setMetric(e.target.value)} className="bg-slate-900 text-white border-none rounded-xl px-4 py-2 text-[10px] font-black uppercase outline-none shadow-md cursor-pointer hover:bg-blue-600 transition-colors">
+            <option value="net">Profit Net Réel</option>
+            <option value="gross">CA Brut</option>
+            <option value="expenses">Coût Prestations</option>
+         </select>
          
-         <div className="flex flex-wrap items-center gap-2">
-            {compareBy !== 'years' && (
-               <>
-                 <span className="text-[10px] font-black uppercase text-slate-400 mr-1">Année Réf :</span>
-                 <select value={baseYear} onChange={e=>setBaseYear(e.target.value)} className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-[10px] font-black uppercase outline-none shadow-sm cursor-pointer mr-2 md:mr-4">
-                    {yearsAvailable.map(y => <option key={y} value={y}>{y}</option>)}
-                 </select>
-               </>
-            )}
-            
-            <select value={val1} 
-                    onChange={e=> {
-                        if (compareBy === 'years') setVal1Y(e.target.value);
-                        if (compareBy === 'properties') setVal1P(e.target.value);
-                        if (compareBy === 'platforms') setVal1Pl(e.target.value);
-                    }} 
-                    className="bg-rose-50 border border-rose-200 rounded-xl px-3 py-1.5 text-[10px] font-black uppercase text-rose-600 outline-none shadow-sm cursor-pointer hover:border-rose-400 transition-colors max-w-[120px] md:max-w-[150px] truncate">
-                {compareBy === 'years' && yearsAvailable.map(y => <option key={y} value={y}>{y}</option>)}
-                {compareBy === 'properties' && properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                {compareBy === 'platforms' && platforms.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-            
-            <span className="text-[10px] font-black uppercase text-slate-300 mx-1">VS</span>
-            
-            <select value={val2} 
-                    onChange={e=> {
-                        if (compareBy === 'years') setVal2Y(e.target.value);
-                        if (compareBy === 'properties') setVal2P(e.target.value);
-                        if (compareBy === 'platforms') setVal2Pl(e.target.value);
-                    }} 
-                    className="bg-purple-50 border border-purple-200 rounded-xl px-3 py-1.5 text-[10px] font-black uppercase text-purple-600 outline-none shadow-sm cursor-pointer hover:border-purple-400 transition-colors max-w-[120px] md:max-w-[150px] truncate">
-                {compareBy === 'years' && yearsAvailable.map(y => <option key={y} value={y}>{y}</option>)}
-                {compareBy === 'properties' && properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                {compareBy === 'platforms' && platforms.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
+         <div className="w-px h-6 bg-slate-200 hidden md:block"></div>
+         
+         <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+               <div className="w-3 h-3 bg-rose-500 rounded-full shadow-sm"></div>
+               {mode === 'years' && <select value={val1Y} onChange={e=>setVal1Y(e.target.value)} className="bg-transparent font-black text-rose-600 outline-none text-xs cursor-pointer">{yearsAvailable.map(y=><option key={y} value={y}>{y}</option>)}</select>}
+               {mode === 'properties' && <select value={val1P} onChange={e=>setVal1P(e.target.value)} className="bg-transparent font-black text-rose-600 outline-none text-xs max-w-[120px] truncate cursor-pointer">{properties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>}
+               {mode === 'platforms' && <select value={val1Pl} onChange={e=>setVal1Pl(e.target.value)} className="bg-transparent font-black text-rose-600 outline-none text-xs max-w-[120px] truncate cursor-pointer">{platforms.map(p=><option key={p} value={p}>{p}</option>)}</select>}
+            </div>
+            <span className="text-[9px] font-black uppercase text-slate-300">VS</span>
+            <div className="flex items-center gap-1.5">
+               <div className="w-3 h-3 bg-purple-600 rounded-full shadow-sm"></div>
+               {mode === 'years' && <select value={val2Y} onChange={e=>setVal2Y(e.target.value)} className="bg-transparent font-black text-purple-600 outline-none text-xs cursor-pointer">{yearsAvailable.map(y=><option key={y} value={y}>{y}</option>)}</select>}
+               {mode === 'properties' && <select value={val2P} onChange={e=>setVal2P(e.target.value)} className="bg-transparent font-black text-purple-600 outline-none text-xs max-w-[120px] truncate cursor-pointer">{properties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>}
+               {mode === 'platforms' && <select value={val2Pl} onChange={e=>setVal2Pl(e.target.value)} className="bg-transparent font-black text-purple-600 outline-none text-xs max-w-[120px] truncate cursor-pointer">{platforms.map(p=><option key={p} value={p}>{p}</option>)}</select>}
+            </div>
+         </div>
+
+         <div className="w-px h-6 bg-slate-200 hidden md:block"></div>
+
+         <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm">
+            <Filter size={12} className="text-slate-400" />
+            {mode !== 'years' && <select value={contextYear} onChange={e=>setContextYear(e.target.value)} className="bg-transparent text-[10px] font-black uppercase outline-none text-slate-500 cursor-pointer">{yearsAvailable.map(y=><option key={y} value={y}>{y}</option>)}</select>}
+            {mode !== 'properties' && <select value={contextProp} onChange={e=>setContextProp(e.target.value)} className="bg-transparent text-[10px] font-black uppercase outline-none text-slate-500 cursor-pointer max-w-[80px] truncate"><option value="all">Tous Logements</option>{properties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>}
+            {mode !== 'platforms' && <select value={contextPlat} onChange={e=>setContextPlat(e.target.value)} className="bg-transparent text-[10px] font-black uppercase outline-none text-slate-500 cursor-pointer max-w-[80px] truncate"><option value="all">Toutes Plateformes</option>{platforms.map(p=><option key={p} value={p}>{p}</option>)}</select>}
          </div>
       </div>
 
@@ -295,11 +307,11 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
           <>
             <div className="animate-in slide-in-from-left-4 fade-in">
                <div className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">{d1[hoveredMonth].toFixed(2)}€</div>
-               <div className="text-[10px] text-slate-500 font-black uppercase tracking-widest flex items-center gap-2 mt-1 truncate max-w-[120px] md:max-w-xs"><div className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-sm flex-shrink-0"></div> {months[hoveredMonth]} {label1}{contextLabel}</div>
+               <div className="text-[10px] text-slate-500 font-black uppercase tracking-widest flex items-center gap-2 mt-1 truncate max-w-[120px] md:max-w-xs"><div className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-sm flex-shrink-0"></div> {months[hoveredMonth]} {label1}</div>
             </div>
             <div className="text-right animate-in slide-in-from-right-4 fade-in">
                <div className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">{d2[hoveredMonth].toFixed(2)}€</div>
-               <div className="text-[10px] text-slate-500 font-black uppercase tracking-widest flex items-center justify-end gap-2 mt-1 truncate max-w-[120px] md:max-w-xs"><div className="w-2.5 h-2.5 rounded-full bg-purple-600 shadow-sm flex-shrink-0"></div> {months[hoveredMonth]} {label2}{contextLabel}</div>
+               <div className="text-[10px] text-slate-500 font-black uppercase tracking-widest flex items-center justify-end gap-2 mt-1 truncate max-w-[120px] md:max-w-xs"><div className="w-2.5 h-2.5 rounded-full bg-purple-600 shadow-sm flex-shrink-0"></div> {months[hoveredMonth]} {label2}</div>
             </div>
           </>
         ) : (
@@ -831,7 +843,7 @@ const App = () => {
     const newList = [];
     
     lines.forEach((line, index) => {
-        if (index === 0) return; // Skip l'en-tête
+        if (index === 0) return; 
         const parts = parseCSVLine(line);
         if (parts.length < 5) return;
 
@@ -1114,7 +1126,7 @@ const App = () => {
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                    <div>
                       <h2 className="text-3xl md:text-4xl font-black uppercase text-slate-900 tracking-tighter leading-none mb-2">Statistiques</h2>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Analyse détaillée de l'activité (basée sur les filtres)</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tableau de bord et croisements dynamiques</p>
                    </div>
                 </div>
 
@@ -1167,43 +1179,8 @@ const App = () => {
                 <ComparisonChart data={baseTenants} properties={properties} platforms={availablePlatforms} yearsAvailable={yearsAvailable} />
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                   <DonutChart title="Net Reçu (Banque) par Logement" data={(properties || []).map((p,idx)=>({label:p.name,value:(baseTenants || []).reduce((acc,t) => t.propertyId===p.id ? acc + getTenantProfitForFilters(t) : acc, 0),color:CHART_COLORS[idx%CHART_COLORS.length]}))} />
-                   <DonutChart title="Net Reçu (Banque) par Plateforme" data={(availablePlatforms || []).map((p,idx)=>({label:p,value:(baseTenants || []).reduce((acc,t) => t.platform===p ? acc + getTenantProfitForFilters(t) : acc, 0),color:CHART_COLORS[(idx+4)%CHART_COLORS.length]}))} />
-                </div>
-
-                <div className="bg-slate-900 p-10 rounded-[48px] shadow-2xl text-white">
-                   <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center md:text-left">Saisonnalité : CA Brut Généré par mois de séjour</h3>
-                     <div className="flex gap-4">
-                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-slate-700"></div><span className="text-[9px] font-black uppercase text-slate-300">Année {statsCalculations.prevYear}</span></div>
-                        <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-blue-500"></div><span className="text-[9px] font-black uppercase text-white">Année {statsCalculations.year}</span></div>
-                     </div>
-                   </div>
-                   
-                   <div className="flex items-end gap-2 h-56 mt-4">
-                      {['Janv','Févr','Mars','Avril','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'].map((m, i) => {
-                         const maxRevStats = Math.max(...statsCalculations.currentMonthGross, ...statsCalculations.prevMonthGross, 100);
-                         const hCurr = maxRevStats > 0 ? Math.max((statsCalculations.currentMonthGross[i] / maxRevStats) * 100, 0) : 0;
-                         const hPrev = maxRevStats > 0 ? Math.max((statsCalculations.prevMonthGross[i] / maxRevStats) * 100, 0) : 0;
-                         return (
-                           <div key={i} className="flex-1 flex flex-col items-center gap-3 group">
-                              <div className="w-full flex items-end justify-center gap-1 h-full relative">
-                                 <div onClick={() => setStatsDetailConfig({ type: 'month_prev', monthIndex: i, title: `Réservations de ${m} ${statsCalculations.prevYear}` })} className="w-full max-w-[20px] bg-slate-700 hover:bg-slate-500 transition-all rounded-t-sm relative cursor-pointer" style={{ height: `${hPrev}%` }}>
-                                     <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-white text-slate-900 text-[9px] font-black px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap z-10">
-                                       {Math.round(statsCalculations.prevMonthGross[i])}€
-                                     </div>
-                                 </div>
-                                 <div onClick={() => setStatsDetailConfig({ type: 'month_current', monthIndex: i, title: `Réservations de ${m} ${statsCalculations.year}` })} className="w-full max-w-[20px] bg-blue-500 hover:bg-blue-400 transition-all rounded-t-md shadow-lg shadow-blue-500/20 relative cursor-pointer" style={{ height: `${hCurr}%` }}>
-                                     <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-blue-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded pointer-events-none whitespace-nowrap z-10">
-                                       {Math.round(statsCalculations.currentMonthGross[i])}€
-                                     </div>
-                                 </div>
-                              </div>
-                              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{m}</span>
-                           </div>
-                         )
-                      })}
-                   </div>
+                   <DonutChart title={`Net Reçu (Banque) par Logement (${filterYear === 'all' ? 'Toutes années' : filterYear})`} data={(properties || []).map((p,idx)=>({label:p.name,value:(baseTenants || []).reduce((acc,t) => t.propertyId===p.id ? acc + getTenantProfitForFilters(t) : acc, 0),color:CHART_COLORS[idx%CHART_COLORS.length]}))} />
+                   <DonutChart title={`Net Reçu (Banque) par Plateforme (${filterYear === 'all' ? 'Toutes années' : filterYear})`} data={(availablePlatforms || []).map((p,idx)=>({label:p,value:(baseTenants || []).reduce((acc,t) => t.platform===p ? acc + getTenantProfitForFilters(t) : acc, 0),color:CHART_COLORS[(idx+4)%CHART_COLORS.length]}))} />
                 </div>
              </div>
           )}
