@@ -45,7 +45,7 @@ const DonutChart = ({ data, title }) => {
   }
 
   return (
-    <div className="bg-white p-10 rounded-[48px] border border-gray-50 flex flex-col md:flex-row items-center gap-10 animate-in fade-in shadow-xl">
+    <div className="bg-white p-10 rounded-[48px] border border-gray-50 flex flex-col md:flex-row items-center gap-10 animate-in fade-in shadow-xl shadow-slate-200/50">
       <div className="relative w-48 h-48 flex-shrink-0">
         <svg viewBox="0 0 32 32" className="w-full h-full transform -rotate-90">
           {visibleData.map((slice, i) => {
@@ -59,7 +59,7 @@ const DonutChart = ({ data, title }) => {
           })}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-          <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">Total Net</span>
+          <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest leading-none mb-1">Total Net</span>
           <span className="text-xl font-black text-slate-900">{Math.round(displayTotal).toLocaleString('fr-FR')}€</span>
         </div>
       </div>
@@ -82,6 +82,23 @@ const DonutChart = ({ data, title }) => {
 };
 
 const App = () => {
+  // HELPERS
+  const formatMonthYear = (m) => {
+    if (!m) return "";
+    const [year, month] = m.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1);
+    let result = date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+    return result.charAt(0).toUpperCase() + result.slice(1);
+  };
+
+  const getGoogleCalendarUrl = (res, prop) => {
+    if (!res.startDate || !res.endDate) return '#';
+    const text = encodeURIComponent(`Reservation: ${res.name} - ${prop?.name || ''}`);
+    const details = encodeURIComponent(`Client: ${res.name}\nLogement: ${prop?.name || ''}\nPlateforme: ${res.platform}\nNotes: ${res.comment || ''}`);
+    const dates = `${res.startDate.replace(/-/g, '')}/${res.endDate.replace(/-/g, '')}`;
+    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${details}`;
+  };
+
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('reservations');
@@ -93,7 +110,7 @@ const App = () => {
   const [availableProviders, setAvailableProviders] = useState(['Justine', 'Marc', 'Stéphanie']);
   const [availableServiceTypes, setAvailableServiceTypes] = useState(['Ménage', 'Entrée/Sortie', 'Piscine', 'Divers']);
 
-  // FILTRES
+  // FILTRES PAR DÉFAUT : Année en cours, Mois : Tous
   const [filterYear, setFilterYear] = useState(new Date().getFullYear().toString());
   const [filterMonth, setFilterMonth] = useState('all');
   const [filterProp, setFilterProp] = useState('all');
@@ -120,11 +137,14 @@ const App = () => {
 
   // AUTH & FIREBASE
   useEffect(() => {
-    onAuthStateChanged(auth, (u) => { if (u) { setUser(u); setLoading(false); } else { signInAnonymously(auth); } });
-    
-    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'properties'), (snap) => setProperties(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-    onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), (snap) => setTenants(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-    onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), (snap) => {
+    const unsubAuth = onAuthStateChanged(auth, (u) => {
+      if (u) { setUser(u); setLoading(false); }
+      else { signInAnonymously(auth); }
+    });
+
+    const unsubProps = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'properties'), (snap) => setProperties(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unsubTenants = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), (snap) => setTenants(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unsubSettings = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), (snap) => {
         if (snap.exists()) {
             const d = snap.data();
             if (d.platforms) setAvailablePlatforms(d.platforms);
@@ -132,24 +152,23 @@ const App = () => {
             if (d.services) setAvailableServiceTypes(d.services);
         }
     });
+
+    return () => { unsubAuth(); unsubProps(); unsubTenants(); unsubSettings(); };
   }, []);
 
   const saveRes = async (e) => {
     e.preventDefault();
-    const d = { ...formData, resExpenses: (formData.resExpenses || []).map(r => ({ ...r, amount: parseFloat(r.amount) || 0 })) };
+    const isC = formData.platform === 'Booking' || formData.platform === 'Abritel';
+    const g = isC ? (parseFloat(formData.displayedAmount || 0) - (parseFloat(formData.cityTax || 0))) : parseFloat(formData.grossAmount || 0);
+    const n = isC ? g - (parseFloat(formData.platformFees || 0) + (parseFloat(formData.bankFees || 0))) : g - parseFloat(formData.platformFees || 0);
+    const d = { ...formData, grossAmount: g, netAmount: n, resExpenses: (formData.resExpenses || []).map(r => ({ ...r, amount: parseFloat(r.amount) || 0 })) };
+    
     if (editingResId) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', editingResId), d);
     else await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), d);
     setIsModalOpen(false);
   };
 
-  const deleteRes = async (id) => {
-    if(window.confirm("Supprimer cette réservation ?")) {
-      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', id));
-      setIsModalOpen(false);
-    }
-  };
-
-  // LOGIQUE DE FILTRAGE UNIFIÉE
+  // LOGIQUE FILTRAGE
   const filteredData = useMemo(() => {
     return (tenants || []).filter(t => {
       const dateRef = t.startDate ? new Date(t.startDate) : new Date();
@@ -160,6 +179,41 @@ const App = () => {
              (filterProv === 'all' || (t.resExpenses && t.resExpenses.some(e => e.person === filterProv)));
     });
   }, [tenants, filterYear, filterMonth, filterProp, filterPlat, filterProv]);
+
+  // CALCULS FINANCIERS
+  const financials = useMemo(() => {
+    const paid = filteredData.filter(t => !!t.paymentDate);
+    const upcoming = filteredData.filter(t => !t.paymentDate);
+    const netB = paid.reduce((a, t) => a + (t.netAmount || 0), 0);
+    const taxes = paid.filter(t => t.isUrssaf).reduce((a, t) => a + (t.grossAmount || 0), 0) * 0.077;
+    const exp = paid.reduce((a, t) => a + (t.resExpenses?.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0) || 0), 0);
+    return { netB, taxes, exp, profit: netB - exp - taxes, netUpcoming: upcoming.reduce((a, t) => a + (t.netAmount || 0), 0) };
+  }, [filteredData]);
+
+  const monthlyRecapData = useMemo(() => {
+    const stats = {};
+    filteredData.filter(t => !!t.paymentDate).forEach(t => {
+      const m = t.paymentDate.substring(0, 7);
+      if(!stats[m]) stats[m] = { totalBank: 0, urssafGross: 0, directNet: 0, charges: 0, taxes: 0 };
+      stats[m].totalBank += (t.netAmount || 0);
+      if (t.isUrssaf) { stats[m].urssafGross += (t.grossAmount || 0); stats[m].taxes += (t.grossAmount || 0) * 0.077; }
+      else stats[m].directNet += (t.netAmount || 0);
+      stats[m].charges += (t.resExpenses?.reduce((acc, c) => acc + (parseFloat(c.amount) || 0), 0) || 0);
+    });
+    return Object.entries(stats).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [filteredData]);
+
+  const detailedExpenses = useMemo(() => {
+    const list = [];
+    filteredData.forEach(t => {
+      (t.resExpenses || []).forEach(exp => {
+        if (filterProv === 'all' || exp.person === filterProv) {
+          list.push({ id: `${t.id}-${exp.id}`, propertyName: properties.find(p => p.id === t.propertyId)?.name || '--', dateRes: t.startDate, person: exp.person, type: exp.type, amount: parseFloat(exp.amount) || 0, paymentDate: exp.paymentDate || '' });
+        }
+      });
+    });
+    return list.sort((a, b) => b.dateRes.localeCompare(a.dateRes));
+  }, [filteredData, properties, filterProv]);
 
   const reservationsList = useMemo(() => {
     return filteredData.filter(t => {
@@ -173,6 +227,79 @@ const App = () => {
     const years = (tenants || []).map(t => t.startDate ? new Date(t.startDate).getFullYear() : null).filter(Boolean);
     return [...new Set([...years, new Date().getFullYear()])].sort((a, b) => b - a);
   }, [tenants]);
+
+  // AGENDA VISUEL
+  const currentMonthName = useMemo(() => {
+    const m = filterMonth === 'all' ? new Date().getMonth() : parseInt(filterMonth);
+    return ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'][m];
+  }, [filterMonth]);
+
+  const handleMonthChange = (direction) => {
+    let m = filterMonth === 'all' ? new Date().getMonth() : parseInt(filterMonth);
+    let y = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
+    if (direction === 'next') { if (m === 11) { m = 0; y += 1; } else m += 1; }
+    else { if (m === 0) { m = 11; y -= 1; } else m -= 1; }
+    setFilterMonth(m.toString()); setFilterYear(y.toString());
+  };
+
+  const agendaDays = useMemo(() => {
+    const y = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
+    const m = filterMonth === 'all' ? new Date().getMonth() : parseInt(filterMonth);
+    const firstDay = new Date(y, m, 1), lastDay = new Date(y, m + 1, 0), days = [];
+    let offset = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
+    for (let i = 0; i < offset; i++) days.push({ empty: true });
+    for (let i = 1; i <= lastDay.getDate(); i++) days.push({ day: i, dateStr: `${y}-${(m+1).toString().padStart(2, '0')}-${i.toString().padStart(2, '0')}` });
+    return days;
+  }, [filterYear, filterMonth]);
+
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  // SÉCURITÉ CALCULS MODALE
+  const curChargesModale = (formData.resExpenses || []).reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+  const isCplxFormModale = formData.platform === 'Booking' || formData.platform === 'Abritel';
+  let nModale = 0;
+  if (isCplxFormModale) {
+    nModale = (parseFloat(formData.displayedAmount || 0) - (parseFloat(formData.cityTax || 0))) - (parseFloat(formData.platformFees || 0) + (parseFloat(formData.bankFees || 0)));
+  } else {
+    nModale = (parseFloat(formData.grossAmount || 0) - parseFloat(formData.platformFees || 0));
+  }
+
+  // IMPORT LOGIQUE
+  const parseCSVLine = (text) => {
+    const result = []; let current = '', inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        if (char === '"') inQuotes = !inQuotes;
+        else if (char === ',' && !inQuotes) { result.push(current); current = ''; }
+        else current += char;
+    }
+    result.push(current); return result;
+  };
+
+  const startReview = () => {
+    const lines = importText.split('\n'); const newList = [];
+    lines.forEach((line, index) => {
+        if (line.toLowerCase().includes('date') || line.trim() === '') return;
+        const parts = parseCSVLine(line);
+        if (parts.length < 10) return;
+        const guestName = parts[7]?.trim();
+        const formatDate = (raw) => { const [m, d, y] = raw.split('/'); return (m && d && y) ? `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}` : ''; };
+        const startDate = formatDate(parts[4]?.trim());
+        const gross = parseFloat((parts[15] || parts[12]).replace('€', '').replace(' ', '')) || 0;
+        const fees = parseFloat(parts[13].replace('€', '').replace(' ', '')) || 0;
+        const matchedProp = properties.find(p => (parts[8] || "").toLowerCase().includes(p.name.toLowerCase()));
+        const isDuplicate = tenants.some(t => t.name === guestName && t.startDate === startDate);
+        newList.push({ id: index, propertyId: matchedProp?.id || '', propertyName: matchedProp?.name || parts[8], name: guestName, startDate, endDate: formatDate(parts[5]?.trim()), grossAmount: gross, platformFees: fees, netAmount: gross - fees, isDuplicate, selected: !isDuplicate });
+    });
+    setReviewList(newList);
+  };
+
+  const confirmImport = async () => {
+      for (let item of reviewList.filter(i => i.selected && i.propertyId)) {
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), { ...item, platform: 'Airbnb', isUrssaf: true, comment: 'Importé', resExpenses: [] });
+      }
+      setReviewList([]); setImportText(''); setImportStatus('Importé !');
+  };
 
   if (loading) return <div className="h-screen w-full flex items-center justify-center bg-slate-50 font-black uppercase text-xs"><Loader2 className="animate-spin text-blue-600 mr-2" /> Chargement CADEL MANAGER...</div>;
 
@@ -192,95 +319,103 @@ const App = () => {
       </aside>
 
       {/* HEADER MOBILE */}
-      <div className="md:hidden flex items-center justify-between p-5 bg-white border-b sticky top-0 z-40 shadow-sm">
-        <div className="flex items-center gap-2"><div className="bg-blue-600 p-1.5 rounded-lg text-white"><Building2 size={16}/></div><h1 className="font-black uppercase text-sm">CADEL MANAGER</h1></div>
-        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2">{isMobileMenuOpen ? <X /> : <Menu />}</button>
-      </div>
+      <div className="md:hidden flex items-center justify-between p-5 bg-white border-b sticky top-0 z-40 shadow-sm"><div className="flex items-center gap-2"><div className="bg-blue-600 p-1.5 rounded-lg text-white"><Building2 size={16}/></div><h1 className="font-black uppercase text-sm">CADEL MANAGER</h1></div><button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2">{isMobileMenuOpen ? <X /> : <Menu />}</button></div>
 
       <main className="flex-1 p-4 md:p-12 overflow-y-auto h-screen custom-scrollbar">
         <div className="max-w-7xl mx-auto pb-32">
-          {/* BARRE DE FILTRES UNIFIÉE AVEC SÉCURITÉ */}
-          <div className="flex flex-wrap items-center gap-2 bg-white/70 backdrop-blur-md p-3 rounded-[28px] border border-white shadow-xl mb-6 animate-in slide-in-from-top-4">
+          {/* FILTRES UNIFIÉS */}
+          <div className="flex flex-wrap items-center gap-2 bg-white/70 backdrop-blur-md p-3 rounded-[28px] border border-white shadow-xl mb-6">
             <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
                 <Filter size={12} className="text-slate-400" />
                 <select value={filterYear} onChange={e => setFilterYear(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none">
-                    <option value="all">Années</option>
-                    {yearsAvailable?.map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
-            </div>
-            {/* Autres filtres avec sécurité map */}
-            <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-                <select value={filterProp} onChange={e => setFilterProp(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none max-w-[130px]">
-                    <option value="all">Logements</option>
-                    {properties?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    <option value="all">Années</option>{yearsAvailable?.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
             </div>
             <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-                <select value={filterPlat} onChange={e => setFilterPlat(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none">
-                    <option value="all">Plateformes</option>
-                    {availablePlatforms?.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
+                <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none"><option value="all">Mois (Tous)</option>{['Janv','Févr','Mars','Avril','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'].map((m,i)=><option key={i} value={i}>{m}</option>)}</select>
             </div>
             <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-                <select value={filterProv} onChange={e => setFilterProv(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none">
-                    <option value="all">Prestataires</option>
-                    {availableProviders?.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
+                <select value={filterProp} onChange={e => setFilterProp(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none max-w-[130px]"><option value="all">Logements</option>{properties?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+            </div>
+            <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+                <select value={filterPlat} onChange={e => setFilterPlat(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none"><option value="all">Plateformes</option>{availablePlatforms?.map(p => <option key={p} value={p}>{p}</option>)}</select>
             </div>
           </div>
 
-          {/* TAB RESERVATIONS */}
+          {/* TAB: RESERVATIONS */}
           {activeTab === 'reservations' && (
             <div className="space-y-6 md:space-y-8 animate-in fade-in">
-              <div className="flex justify-between items-center"><h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2><button onClick={() => { setEditingResId(null); setIsModalOpen(true); }} className="bg-blue-600 text-white px-6 md:px-8 py-3 rounded-[20px] font-black text-[10px] uppercase shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button></div>
-              <div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden text-xs"><table className="w-full text-left min-w-[900px]"><thead className="bg-slate-50 font-black uppercase border-b text-slate-400"><tr><th className="p-6">Bien</th><th className="p-6">Client</th><th className="p-6 text-center">Dates</th><th className="p-6">Services</th><th className="p-6 text-right">Net</th><th className="p-6 text-center">État</th></tr></thead><tbody className="divide-y divide-slate-50 font-bold">
+              <div className="flex justify-between items-center"><h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2><button onClick={() => { setEditingResId(null); setIsModalOpen(true); }} className="bg-blue-600 text-white px-6 md:px-8 py-3 rounded-[20px] font-black text-[10px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button></div>
+              <div className="grid grid-cols-1 gap-4 md:hidden">{reservationsList?.map(t => (
+                  <div key={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="bg-white p-6 rounded-[32px] shadow-lg border border-slate-50"><div className="flex justify-between items-start mb-3"><div><h3 className="text-base font-black uppercase tracking-tighter">{properties.find(p => p.id === t.propertyId)?.name || '--'}</h3><div className="flex gap-2 mt-1"><span className="text-[9px] font-black text-blue-600 uppercase">{t.platform}</span><span className="text-[9px] font-bold text-slate-400">{t.name}</span></div></div><span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>{t.paymentDate ? 'Payé' : 'Dû'}</span></div><div className="bg-slate-50 p-3 rounded-2xl flex justify-between text-xs font-black"><span>{t.startDate}</span><ArrowRight size={14} className="text-slate-300"/><span>{t.endDate}</span></div><div className="mt-3 text-right font-black text-lg">{(t.netAmount || 0).toFixed(2)}€</div></div>
+              ))}</div>
+              <div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden text-xs"><table className="w-full text-left min-w-[900px]"><thead className="bg-slate-50 font-black uppercase border-b text-slate-400"><tr><th className="p-6">Logement</th><th className="p-6">Client</th><th className="p-6 text-center">Dates</th><th className="p-6 text-right">Net</th><th className="p-6 text-center">État</th></tr></thead><tbody className="divide-y divide-slate-50 font-bold">
                 {reservationsList?.map(t => (
-                  <tr key={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="hover:bg-slate-50 cursor-pointer">
-                    <td className="p-6"><div><div className="font-black uppercase">{properties.find(p => p.id === t.propertyId)?.name || '--'}</div><div className="text-blue-600 text-[9px] uppercase tracking-widest">{t.platform}</div></div></td>
-                    <td className="p-6 text-sm">{t.name}</td>
-                    <td className="p-6 text-center text-slate-500">{t.startDate} ➔ {t.endDate}</td>
-                    <td className="p-6">{(t.resExpenses || []).map((e,i)=>(<div key={i} className="text-[9px] bg-slate-50 p-1 mb-1 rounded flex justify-between uppercase"><span>{e.type}</span><span className={e.paymentDate ? 'text-emerald-600' : 'text-orange-500'}>{e.amount}€</span></div>))}</td>
-                    <td className="p-6 text-right font-black text-base">{(t.netAmount || 0).toFixed(2)}€</td>
-                    <td className="p-6 text-center"><span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>{t.paymentDate ? 'Payé' : 'Dû'}</span></td>
-                  </tr>
+                  <tr key={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="hover:bg-slate-50 cursor-pointer"><td className="p-6"><div><div className="font-black uppercase">{properties.find(p => p.id === t.propertyId)?.name || '--'}</div><div className="text-blue-600 text-[9px] uppercase">{t.platform}</div></div></td><td className="p-6 text-sm">{t.name}</td><td className="p-6 text-center text-slate-500">{t.startDate} ➔ {t.endDate}</td><td className="p-6 text-right font-black text-base">{(t.netAmount || 0).toFixed(2)}€</td><td className="p-6 text-center"><span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>{t.paymentDate ? 'Payé' : 'Dû'}</span></td></tr>
                 ))}
               </tbody></table></div>
             </div>
           )}
+
+          {/* TAB: AGENDA */}
+          {activeTab === 'agenda' && (
+            <div className="space-y-6 md:space-y-8 animate-in fade-in">
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4"><div><h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Agenda Visuel</h2></div><div className="flex items-center gap-2 bg-white px-4 py-2 rounded-[20px] shadow-lg border w-full md:w-auto justify-between"><button onClick={() => handleMonthChange('prev')} className="p-2 text-blue-600"><ChevronLeft size={20}/></button><div className="text-center min-w-[120px]"><span className="block text-[8px] font-black text-slate-300 uppercase">{filterYear}</span><span className="text-lg font-black">{currentMonthName}</span></div><button onClick={() => handleMonthChange('next')} className="p-2 text-blue-600"><ChevronRight size={20}/></button></div></div>
+                <div className="bg-white p-4 md:p-10 rounded-[40px] shadow-2xl overflow-x-auto"><div className="min-w-[600px]"><div className="grid grid-cols-7 mb-4 border-b pb-4 text-center text-[11px] font-black uppercase text-slate-300">{['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map(d => <div key={d}>{d}</div>)}</div><div className="grid grid-cols-7 gap-1 md:gap-3">{agendaDays.map((item, idx) => { if (item.empty) return <div key={idx} className="h-20 bg-slate-50/20 rounded-2xl"></div>; const dayRes = reservationsList.filter(res => item.dateStr >= res.startDate && item.dateStr <= res.endDate); return (<div key={item.dateStr} className={`h-20 md:h-36 bg-white border ${item.dateStr === todayStr ? 'border-blue-400 ring-2' : 'border-slate-100'} rounded-xl p-2 relative flex flex-col group`}><span className="text-[11px] font-black text-slate-300">{item.day}</span><div className="flex-1 space-y-1 overflow-y-auto no-scrollbar">{dayRes.map((res) => { const propIdx = properties.findIndex(p => p.id === res.propertyId); return (<div key={res.id} onClick={(e) => { e.stopPropagation(); setEditingResId(res.id); setFormData(res); setIsModalOpen(true); }} className="h-4 md:h-5 rounded-md text-[8px] md:text-[9px] font-black text-white px-1 truncate cursor-pointer" style={{ backgroundColor: CHART_COLORS[propIdx % CHART_COLORS.length] }}>{res.name?.split(' ')[0]}</div>);})}</div></div>);})}</div></div></div>
+            </div>
+          )}
+
+          {/* TAB: DASHBOARD */}
+          {activeTab === 'dashboard' && (
+            <div className="space-y-8 animate-in fade-in">
+              <h2 className="text-3xl md:text-4xl font-black uppercase">Tableau de bord</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div className="bg-white p-8 rounded-[40px] shadow-xl"><p className="text-[9px] font-black text-slate-400 uppercase">Net Encaissé</p><p className="text-3xl font-black text-indigo-600">{financials.netB.toLocaleString('fr-FR')}€</p></div><div className="bg-slate-900 p-8 rounded-[40px] shadow-2xl text-white"><p className="text-[9px] font-black text-slate-400 uppercase">Profit Réel</p><p className="text-3xl font-black">{Math.round(financials.profit).toLocaleString('fr-FR')}€</p></div><div className="bg-white p-8 rounded-[40px] shadow-xl"><p className="text-[9px] font-black text-slate-400 uppercase">À venir</p><p className="text-3xl font-black text-blue-500">{Math.round(financials.netUpcoming).toLocaleString('fr-FR')}€</p></div></div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10"><DonutChart title="Net par Logement" data={properties.map((p, idx) => ({ label: p.name, value: tenants.filter(t => t.propertyId === p.id && !!t.paymentDate).reduce((acc, t) => acc + ((t.netAmount || 0) - (t.resExpenses?.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0) || 0) - (t.isUrssaf ? (t.grossAmount || 0) * 0.077 : 0)), 0), color: CHART_COLORS[idx % CHART_COLORS.length] }))} /><DonutChart title="Net par Plateforme" data={availablePlatforms.map((p, idx) => ({ label: p, value: tenants.filter(t => t.platform === p && !!t.paymentDate).reduce((acc, t) => acc + ((t.netAmount || 0) - (t.isUrssaf ? (t.grossAmount || 0) * 0.077 : 0)), 0), color: CHART_COLORS[(idx + 4) % CHART_COLORS.length] }))} /></div>
+            </div>
+          )}
+
+          {/* TAB: FINANCES */}
+          {activeTab === 'finances' && (
+            <div className="space-y-10 animate-in fade-in"><h2 className="text-3xl font-black uppercase">Comptabilité</h2><div className="bg-white rounded-[40px] shadow-2xl overflow-hidden text-xs"><div className="p-8 bg-slate-900 text-white font-black uppercase flex justify-between items-center"><div>Bilan Global</div><span className="opacity-40">Taxes 7.7%</span></div><div className="overflow-x-auto"><table className="w-full text-left min-w-[700px]"><thead className="bg-slate-50 uppercase text-slate-400 border-b"><tr><th className="p-6">Période</th><th className="p-6 text-right">Banque</th><th className="p-6 text-right text-rose-500">Taxes</th><th className="p-6 text-right">Services</th><th className="p-6 text-right font-black">Profit Réel</th></tr></thead><tbody className="divide-y font-bold">{monthlyRecapData.map(([m, d]) => (<tr key={m}><td className="p-6 capitalize">{formatMonthYear(m)}</td><td className="p-6 text-right text-indigo-600">{d.totalBank.toLocaleString('fr-FR')}€</td><td className="p-6 text-right text-rose-500">-{d.taxes.toFixed(2)}€</td><td className="p-6 text-right text-slate-500">-{d.charges.toLocaleString('fr-FR')}€</td><td className={`p-6 text-right font-black ${d.totalBank - d.taxes - d.charges >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{(d.totalBank - d.taxes - d.charges).toLocaleString('fr-FR')}€</td></tr>))}</tbody><tfoot className="bg-indigo-600 text-white font-black text-lg"><tr><td className="p-8 uppercase text-[10px]">TOTAL FILTRÉ</td><td className="p-8 text-right">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0).toLocaleString('fr-FR')}€</td><td colSpan="2"></td><td className="p-8 text-right bg-indigo-700/50">{(monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0) - monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes + d.charges, 0)).toLocaleString('fr-FR')}€</td></tr></tfoot></table></div></div><div className="bg-white rounded-[40px] shadow-2xl overflow-hidden text-xs"><div className="p-8 bg-slate-900 text-white font-black uppercase flex justify-between">Suivi Prestataires</div><div className="overflow-x-auto"><table className="w-full text-left min-w-[700px]"><thead className="bg-slate-50 uppercase text-slate-400 border-b"><tr><th className="p-6">Date</th><th className="p-6">Logement</th><th className="p-6">Prestataire</th><th className="p-6 text-right">Montant</th><th className="p-6 text-center">Statut</th></tr></thead><tbody className="divide-y font-bold">{detailedExpenses.map((exp) => (<tr key={exp.id}><td className="p-6">{exp.dateRes}</td><td className="p-6 uppercase">{exp.propertyName}</td><td className="p-6 text-blue-600 uppercase">{exp.person}</td><td className="p-6 text-right">{(exp.amount || 0).toLocaleString('fr-FR')}€</td><td className="p-6 text-center"><span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${exp.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>{exp.paymentDate || 'Attente'}</span></td></tr>))}</tbody></table></div></div></div>
+          )}
+
+          {/* TAB: SETTINGS */}
+          {activeTab === 'settings' && (
+            <div className="space-y-10 animate-in fade-in"><h2 className="text-3xl font-black uppercase">Paramètres</h2><div className="bg-white p-8 rounded-[40px] border-2 border-dashed border-slate-200 shadow-xl flex flex-col items-center justify-center text-center"><UploadCloud size={40} className="text-blue-600 mb-4"/><h3 className="text-xl font-black uppercase">Importation Airbnb</h3><textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder="Collez vos lignes CSV ici..." className="w-full mt-6 p-4 bg-slate-50 border rounded-3xl min-h-[150px] font-mono text-[10px]" />{importStatus && <p className="mt-4 font-black text-emerald-600 uppercase">{importStatus}</p>}{reviewList.length > 0 && (<div className="w-full mt-6 overflow-x-auto"><table className="w-full text-left text-[10px] font-bold min-w-[600px]"><thead className="bg-slate-50 border-b"><tr><th className="p-3">Imp.</th><th className="p-3">Client</th><th className="p-3">Logement</th><th className="p-3">Statut</th></tr></thead><tbody>{reviewList.map(item => (<tr key={item.id} className="border-b"><td className="p-3"><input type="checkbox" checked={item.selected} onChange={() => setReviewList(reviewList.map(r => r.id === item.id ? {...r, selected: !r.selected} : r))} /></td><td className="p-3">{item.name}</td><td className="p-3 uppercase">{item.propertyName}</td><td className="p-3 uppercase">{item.isDuplicate ? 'Doublon' : 'Nouveau'}</td></tr>))}</tbody></table></div>)}<div className="flex gap-4 w-full mt-8">{reviewList.length === 0 ? (<button onClick={startReview} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase shadow-xl">Analyse</button>) : (<button onClick={confirmImport} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase shadow-xl">Importer ({reviewList.filter(r => r.selected).length})</button>)}</div></div></div>
+          )}
         </div>
       </main>
 
-      {/* MODALE RÉSERVATION AVEC SÉCURITÉ */}
+      {/* MODALE RÉSERVATION */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
           <div className="bg-white rounded-[40px] md:rounded-[60px] shadow-2xl w-full max-w-3xl max-h-[95vh] flex flex-col border border-slate-100">
-            <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-white sticky top-0 z-10">
-              <div className="flex items-center gap-4 text-blue-600"><div className="bg-blue-50 p-2 rounded-2xl"><CalendarCheck size={24} /></div><h3 className="font-black text-xl uppercase">Détail Réservation</h3></div>
-              <button onClick={() => setIsModalOpen(false)} className="p-3 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900"><X size={24} /></button>
+            <div className="p-6 md:p-10 border-b flex justify-between items-center bg-white sticky top-0 z-10 text-xs">
+              <div className="flex items-center gap-4 text-blue-600"><CalendarCheck size={24} /><h3 className="font-black text-xl uppercase">Détail Réservation</h3></div>
+              <button onClick={() => setIsModalOpen(false)} className="p-2 bg-slate-50 rounded-full"><X size={24} /></button>
             </div>
-            <form onSubmit={saveRes} className="p-6 md:p-10 space-y-8 overflow-y-auto flex-1 custom-scrollbar text-xs">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-1"><label className="text-[10px] font-black uppercase ml-3 text-slate-400">Logement</label><select required value={formData.propertyId} onChange={e => setFormData({ ...formData, propertyId: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-black">{properties?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
-                <div className="space-y-1"><label className="text-[10px] font-black uppercase ml-3 text-slate-400">Client</label><input required value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-[20px] font-black" /></div>
-              </div>
-              <div className="space-y-6">
-                <div className="flex justify-between items-center border-b border-slate-100 pb-3"><span className="text-[11px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-2"><UserCheck size={16}/> Prestations</span><button type="button" onClick={() => setFormData({ ...formData, resExpenses: [...(formData.resExpenses || []), { id: Date.now().toString(), person: (availableProviders && availableProviders[0]) || '', type: (availableServiceTypes && availableServiceTypes[0]) || '', amount: 0, paymentDate: '' }] })} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest">+ Ajouter</button></div>
-                <div className="space-y-3">
-                   {(formData.resExpenses || []).map(exp => (
-                    <div key={exp.id} className="flex flex-col bg-slate-50 p-4 rounded-3xl border border-slate-100 space-y-3">
-                      <div className="flex gap-3 items-center">
-                        <select value={exp.person} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, person: e.target.value } : x) })} className="flex-1 p-2 border border-slate-200 rounded-xl text-[10px] font-black bg-white">{availableProviders?.map(p => <option key={p} value={p}>{p}</option>)}</select>
-                        <select value={exp.type} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, type: e.target.value } : x) })} className="flex-1 p-2 border border-slate-200 rounded-xl text-[10px] font-black bg-white">{availableServiceTypes?.map(p => <option key={p} value={p}>{p}</option>)}</select>
-                        <input type="number" value={exp.amount || ''} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, amount: e.target.value } : x) })} className="w-16 p-2 border rounded-xl font-black text-right outline-none" />
-                        <button type="button" onClick={() => setFormData({ ...formData, resExpenses: formData.resExpenses.filter(x => x.id !== exp.id) })} className="text-slate-300 hover:text-rose-500"><Trash2 size={18} /></button>
-                      </div>
-                    </div>
-                  ))}
+            <form onSubmit={saveRes} className="p-6 md:p-10 space-y-8 overflow-y-auto flex-1 text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6"><div className="space-y-1 uppercase font-black">Logement<select required value={formData.propertyId} onChange={e => setFormData({ ...formData, propertyId: e.target.value })} className="w-full p-4 bg-slate-50 border rounded-[20px]">{properties?.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div><div className="space-y-1 uppercase font-black">Client<input required value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full p-4 bg-slate-50 border rounded-[20px]" /></div><div className="space-y-1 uppercase font-black">Arrivée<input type="date" required value={formData.startDate || ''} onChange={e => setFormData({ ...formData, startDate: e.target.value })} className="w-full p-4 bg-slate-50 border rounded-[20px]" /></div><div className="space-y-1 uppercase font-black">Départ<input type="date" required value={formData.endDate || ''} onChange={e => setFormData({ ...formData, endDate: e.target.value })} className="w-full p-4 bg-slate-50 border rounded-[20px]" /></div></div>
+              <div className="bg-blue-50 p-6 md:p-8 rounded-[40px] space-y-6"><div className="flex justify-between font-black uppercase text-blue-900 border-b pb-2">Plateforme<select value={formData.platform} onChange={e => setFormData({ ...formData, platform: e.target.value })} className="bg-white rounded-lg px-2">{availablePlatforms.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {isCplxFormModale ? (
+                      <><div>Brut client<input type="number" step="0.01" value={formData.displayedAmount || ''} onChange={e => setFormData({ ...formData, displayedAmount: e.target.value })} className="w-full p-3 border rounded-xl" /></div><div>Taxe séjour<input type="number" step="0.01" value={formData.cityTax || ''} onChange={e => setFormData({ ...formData, cityTax: e.target.value })} className="w-full p-3 border rounded-xl text-rose-500" /></div></>
+                  ) : (
+                      <><div>Brut URSSAF<input type="number" step="0.01" value={formData.grossAmount || ''} onChange={e => setFormData({ ...formData, grossAmount: e.target.value })} className="w-full p-3 border rounded-xl" /></div><div>Com. plateforme<input type="number" step="0.01" value={formData.platformFees || ''} onChange={e => setFormData({ ...formData, platformFees: e.target.value })} className="w-full p-3 border rounded-xl" /></div></>
+                  )}
                 </div>
               </div>
-              <div className="flex justify-between items-center pt-8 border-t border-slate-100 gap-6">
-                <button type="submit" className="w-full bg-slate-900 text-white px-10 py-4 rounded-[20px] font-black shadow-2xl hover:bg-blue-600 uppercase tracking-widest text-[10px] transition-all">Enregistrer</button>
+              <div className="space-y-4">
+                  <div className="flex justify-between uppercase font-black text-slate-400">Prestations<button type="button" onClick={() => setFormData({ ...formData, resExpenses: [...(formData.resExpenses || []), { id: Date.now().toString(), person: availableProviders[0] || '', type: availableServiceTypes[0] || '', amount: 0, paymentDate: '' }] })} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[9px]">+ Ajouter</button></div>
+                  {(formData.resExpenses || []).map(exp => (
+                    <div key={exp.id} className="flex gap-2 bg-slate-50 p-3 rounded-2xl">
+                      <select value={exp.person} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, person: e.target.value } : x) })} className="flex-1 p-2 bg-white rounded-lg border">{availableProviders.map(p => <option key={p} value={p}>{p}</option>)}</select>
+                      <input type="number" value={exp.amount || ''} onChange={e => setFormData({ ...formData, resExpenses: formData.resExpenses.map(x => x.id === exp.id ? { ...x, amount: e.target.value } : x) })} className="w-16 p-2 rounded-lg border text-right" />
+                      <button type="button" onClick={() => setFormData({ ...formData, resExpenses: formData.resExpenses.filter(x => x.id !== exp.id) })} className="text-rose-500 px-2">X</button>
+                    </div>
+                  ))}
               </div>
+              <div className="bg-slate-900 p-8 rounded-[40px] text-white flex flex-col md:flex-row justify-between items-center gap-4"><div className="text-center md:text-left"><p className="text-[10px] font-black uppercase text-slate-400">Profit Estimé</p><p className="text-3xl font-black text-blue-400">{(nModale - curChargesModale).toFixed(2)}€</p></div><button type="submit" className="w-full md:w-auto bg-blue-600 px-12 py-4 rounded-[20px] font-black uppercase tracking-widest shadow-xl">Enregistrer</button></div>
             </form>
           </div>
         </div>
