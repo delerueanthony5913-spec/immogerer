@@ -376,8 +376,6 @@ const App = () => {
     const a2 = parseFloat(formData.acompte2Amount) || 0;
     const s = parseFloat(formData.soldeAmount) || 0;
 
-    // Pour "En direct", grossAmount est défini manuellement par l'utilisateur (Montant Global).
-    // g prendra la valeur grossAmount.
     const g = isDirect ? gross : (isC ? (disp - city) : gross);
     const n = isDirect ? gross : (isC ? (g - plat - bank) : (g - plat));
     
@@ -626,6 +624,45 @@ const App = () => {
     return list.sort((a, b) => b.dateRes.localeCompare(a.dateRes));
   }, [baseTenants, properties, filterProv, filterYear, filterMonth]);
 
+  // CALCULS STATISTIQUES DETAILLES (Onglet Statistiques)
+  const statsCalculations = useMemo(() => {
+    let totalNights = 0;
+    let totalGross = 0;
+    let totalNet = 0;
+    let nbRes = filteredData.length;
+
+    const monthCounts = Array(12).fill(0);
+    const monthRevenues = Array(12).fill(0);
+
+    filteredData.forEach(t => {
+      if (t.startDate && t.endDate) {
+        const s = new Date(t.startDate);
+        const e = new Date(t.endDate);
+        const nights = Math.max(1, Math.round((e - s) / (1000 * 60 * 60 * 24)));
+        totalNights += nights;
+      }
+      
+      const gross = parseFloat(t.grossAmount) || 0;
+      const net = parseFloat(t.netAmount) || 0;
+      totalGross += gross;
+      totalNet += net;
+
+      if (t.startDate) {
+          const m = parseInt(t.startDate.split('-')[1], 10) - 1;
+          if (m >= 0 && m <= 11) {
+              monthCounts[m] += 1;
+              monthRevenues[m] += net;
+          }
+      }
+    });
+
+    const avgStay = nbRes > 0 ? (totalNights / nbRes).toFixed(1) : 0;
+    const avgGrossPerRes = nbRes > 0 ? (totalGross / nbRes).toFixed(2) : 0;
+    const avgNetPerNight = totalNights > 0 ? (totalNet / totalNights).toFixed(2) : 0;
+
+    return { totalNights, nbRes, avgStay, avgGrossPerRes, avgNetPerNight, monthCounts, monthRevenues };
+  }, [filteredData]);
+
   const getTenantProfitForFilters = (t) => {
     let profit = 0;
     if (t.platform === 'En direct') {
@@ -816,7 +853,7 @@ const App = () => {
           <h1 className="font-black uppercase tracking-tighter text-2xl">CADEL</h1><h2 className="font-black uppercase tracking-[0.3em] text-[10px] text-blue-600">MANAGER</h2>
         </div>
         <nav className="flex-1 p-6 space-y-2 overflow-y-auto">
-          {[{ id: 'reservations', label: 'Réservations', icon: <List size={18}/> }, { id: 'agenda', label: 'Agenda', icon: <CalendarRange size={18}/> }, { id: 'dashboard', label: 'Tableau de bord', icon: <LayoutDashboard size={18}/> }, { id: 'finances', label: 'Finances', icon: <Calculator size={18}/> }, { id: 'settings', label: 'Paramètres', icon: <Settings size={18}/> }].map(item => (
+          {[{ id: 'reservations', label: 'Réservations', icon: <List size={18}/> }, { id: 'agenda', label: 'Agenda', icon: <CalendarRange size={18}/> }, { id: 'dashboard', label: 'Tableau de bord', icon: <LayoutDashboard size={18}/> }, { id: 'statistiques', label: 'Statistiques', icon: <Activity size={18}/> }, { id: 'finances', label: 'Finances', icon: <Calculator size={18}/> }, { id: 'settings', label: 'Paramètres', icon: <Settings size={18}/> }].map(item => (
             <button key={item.id} onClick={() => { setActiveTab(item.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-5 py-4 rounded-[20px] font-black text-[11px] uppercase tracking-widest transition-all flex items-center gap-4 ${activeTab === item.id ? 'bg-slate-900 text-white shadow-2xl' : 'text-slate-400 hover:bg-slate-50'}`}>{item.icon} {item.label}</button>
           ))}
         </nav>
@@ -983,6 +1020,57 @@ const App = () => {
               </div>
             </div>
           )}
+          
+          {activeTab === 'statistiques' && (
+             <div className="space-y-10 animate-in fade-in">
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                   <div>
+                      <h2 className="text-3xl md:text-4xl font-black uppercase text-slate-900 tracking-tighter leading-none mb-2">Statistiques</h2>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Analyse détaillée de l'activité (basée sur les filtres)</p>
+                   </div>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                  <div className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-40">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Nuitées Louées</p>
+                    <p className="text-4xl font-black text-indigo-600">{statsCalculations.totalNights}</p>
+                  </div>
+                  <div className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-40">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Durée Moyenne</p>
+                    <p className="text-4xl font-black text-blue-600">{statsCalculations.avgStay} <span className="text-lg">j</span></p>
+                  </div>
+                  <div className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-40">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Panier Moyen</p>
+                    <p className="text-4xl font-black text-emerald-600">{statsCalculations.avgGrossPerRes}€</p>
+                  </div>
+                  <div className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-40">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Revenu Net / Nuit</p>
+                    <p className="text-4xl font-black text-rose-500">{statsCalculations.avgNetPerNight}€</p>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900 p-10 rounded-[48px] shadow-2xl text-white">
+                   <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8 text-center md:text-left">Répartition Mensuelle des Revenus Nets</h3>
+                   <div className="flex items-end gap-2 h-56 mt-4">
+                      {['Janv','Févr','Mars','Avril','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'].map((m, i) => {
+                         const maxRev = Math.max(...statsCalculations.monthRevenues, 100);
+                         const heightPct = (statsCalculations.monthRevenues[i] / maxRev) * 100;
+                         return (
+                           <div key={i} className="flex-1 flex flex-col items-center gap-3 group">
+                              <div className="w-full max-w-[40px] relative bg-slate-800 rounded-t-xl overflow-hidden flex flex-col justify-end h-full">
+                                 <div className="w-full bg-blue-500 hover:bg-blue-400 transition-all duration-700 rounded-t-xl" style={{ height: `${heightPct}%` }}></div>
+                                 <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-white text-slate-900 text-[10px] font-black px-2 py-1 rounded-lg pointer-events-none whitespace-nowrap">
+                                   {Math.round(statsCalculations.monthRevenues[i]).toLocaleString('fr-FR')}€
+                                 </div>
+                              </div>
+                              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{m}</span>
+                           </div>
+                         )
+                      })}
+                   </div>
+                </div>
+             </div>
+          )}
 
           {activeTab === 'finances' && (
             <div className="space-y-10 animate-in fade-in">
@@ -1131,6 +1219,10 @@ const App = () => {
                  <div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Voyageur<input value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" placeholder="Nom du client" /></div>
                  <div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Début<input type="date" value={formData.startDate || ''} onChange={e => setFormData({ ...formData, startDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div>
                  <div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Fin<input type="date" value={formData.endDate || ''} onChange={e => setFormData({ ...formData, endDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div>
+                 <div className="md:col-span-2 space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">
+                    Notes / Commentaires
+                    <textarea value={formData.comment || ''} onChange={e => setFormData({ ...formData, comment: e.target.value })} placeholder="Nombre de personnes, requêtes spéciales, détails supplémentaires..." className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-bold text-slate-700 outline-none min-h-[100px]" />
+                 </div>
               </div>
 
               <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-8 rounded-[48px] border border-blue-50 space-y-6">
