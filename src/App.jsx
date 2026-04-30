@@ -29,7 +29,7 @@ const appId = 'immogerer-prod-final';
 
 const CHART_COLORS = ['#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#6366F1', '#F43F5E', '#06B6D4'];
 
-// --- COMPOSANTS GRAPHIQUES ---
+// --- COMPOSANT GRAPHIQUE ---
 const DonutChart = ({ data, title }) => {
   const visibleData = (data || []).filter(d => d.value > 0);
   const displayTotal = visibleData.reduce((acc, curr) => acc + curr.value, 0);
@@ -123,7 +123,7 @@ const ComparisonChart = ({ data, year1, year2 }) => {
 
   const d1 = getDataForYear(year1);
   const d2 = getDataForYear(year2);
-  const maxVal = Math.max(...d1, ...d2, 1000) * 1.15; // 15% padding top
+  const maxVal = Math.max(...d1, ...d2, 1000) * 1.15; 
 
   const w = 900, h = 300, padX = 40, padY = 30;
   const getX = (i) => padX + (i * (w - 2 * padX) / 11);
@@ -157,28 +157,19 @@ const ComparisonChart = ({ data, year1, year2 }) => {
       <div className="overflow-x-auto no-scrollbar">
         <div className="min-w-[600px] relative">
           <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
-            {/* Grille de fond */}
             {yTicks.map((tick, i) => (
               <g key={`grid-${i}`}>
                 <line x1={padX} y1={getY(tick)} x2={w - padX} y2={getY(tick)} stroke="#F8FAFC" strokeWidth="2" />
                 <text x={w - padX + 10} y={getY(tick) + 4} fill="#CBD5E1" fontSize="11" fontFamily="sans-serif" fontWeight="900">{(tick / 1000).toFixed(1)}k€</text>
               </g>
             ))}
-
-            {/* Labels des mois */}
             {months.map((m, i) => (
               <text key={m} x={getX(i)} y={h - 5} fill={hoveredMonth === i ? "#0F172A" : "#94A3B8"} fontSize="12" fontFamily="sans-serif" fontWeight="900" textAnchor="middle" className="transition-colors cursor-pointer" onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)}>{m}</text>
             ))}
-
-            {/* Lignes Année 2 (Violet) */}
             <path d={path2Solid} stroke="#9333EA" strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
             <path d={path2Dotted} stroke="#9333EA" strokeWidth="4" fill="none" strokeDasharray="6 8" strokeLinecap="round" strokeLinejoin="round" />
-            
-            {/* Lignes Année 1 (Rose/Rouge) */}
             <path d={path1Solid} stroke="#F43F5E" strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
             <path d={path1Dotted} stroke="#F43F5E" strokeWidth="4" fill="none" strokeDasharray="6 8" strokeLinecap="round" strokeLinejoin="round" />
-
-            {/* Points d'interaction */}
             {months.map((_, i) => (
               <g key={`points-${i}`} onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)} className="cursor-pointer">
                 <rect x={getX(i) - 20} y={0} width="40" height={h} fill="transparent" />
@@ -189,8 +180,6 @@ const ComparisonChart = ({ data, year1, year2 }) => {
           </svg>
         </div>
       </div>
-      
-      {/* Cadre de détails au survol */}
       <div className="mt-8 bg-slate-50 border border-slate-100 p-6 rounded-3xl flex justify-between items-center h-[90px] transition-all overflow-hidden">
         {hoveredMonth !== null ? (
           <>
@@ -213,7 +202,6 @@ const ComparisonChart = ({ data, year1, year2 }) => {
 
 // --- COMPOSANT PRINCIPAL ---
 const App = () => {
-  // HELPERS
   const formatMonthYear = (m) => {
     if (!m) return "";
     const [year, month] = m.split('-');
@@ -221,15 +209,6 @@ const App = () => {
     return date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase());
   };
 
-  const getGoogleCalendarUrl = (res, prop) => {
-    if (!res.startDate || !res.endDate) return '#';
-    const text = encodeURIComponent(`Reservation: ${res.name} - ${prop?.name || ''}`);
-    const details = encodeURIComponent(`Client: ${res.name}\nLogement: ${prop?.name || ''}\nPlateforme: ${res.platform}\nNotes: ${res.comment || ''}`);
-    const dates = `${res.startDate.replace(/-/g, '')}/${res.endDate.replace(/-/g, '')}`;
-    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${details}`;
-  };
-
-  // ETATS
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('reservations');
@@ -240,7 +219,6 @@ const App = () => {
   const [availableProviders, setAvailableProviders] = useState(['Justine', 'Marc']);
   const [availableServiceTypes, setAvailableServiceTypes] = useState(['Ménage', 'Entrée/Sortie']);
 
-  // FILTRES PAR DEFAUT
   const [filterYear, setFilterYear] = useState(new Date().getFullYear().toString());
   const [filterMonth, setFilterMonth] = useState('all');
   const [filterProp, setFilterProp] = useState('all');
@@ -248,11 +226,9 @@ const App = () => {
   const [filterProv, setFilterProv] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
 
-  // COMPARAISON ANNEES
   const [compYear1, setCompYear1] = useState(new Date().getFullYear().toString());
   const [compYear2, setCompYear2] = useState((new Date().getFullYear() - 1).toString());
 
-  // FORMULAIRE
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingResId, setEditingResId] = useState(null);
   const [formData, setFormData] = useState({ 
@@ -269,7 +245,6 @@ const App = () => {
   const [importStatus, setImportStatus] = useState('');
   const [reviewList, setReviewList] = useState([]);
 
-  // FIREBASE CONNECTION
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
       if (u) { setUser(u); setLoading(false); }
@@ -317,14 +292,28 @@ const App = () => {
     setIsModalOpen(false);
   };
 
-  const deleteRes = async (id) => {
-    if(window.confirm("Supprimer cette réservation ?")) {
-      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', id));
-      setIsModalOpen(false);
+  // --- NOUVEAU: TOGGLE STATUT PAIEMENT A LA VOLEE ---
+  const toggleStatus = async (e, tenant, type, expId = null) => {
+    e.stopPropagation(); // Empêche l'ouverture de la modale
+    if (!user || user.uid === 'local-test-user') return;
+    
+    const today = new Date().toISOString().split('T')[0];
+    
+    try {
+      if (type === 'global') {
+        const newStatus = tenant.paymentDate ? '' : today;
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', tenant.id), { paymentDate: newStatus }, { merge: true });
+      } else if (type === 'expense') {
+        const newExpenses = (tenant.resExpenses || []).map(exp => 
+          exp.id === expId ? { ...exp, paymentDate: exp.paymentDate ? '' : today } : exp
+        );
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', tenant.id), { resExpenses: newExpenses }, { merge: true });
+      }
+    } catch (error) {
+      console.error("Erreur lors de la mise à jour du statut", error);
     }
   };
 
-  // LOGIQUE FILTRAGE
   const filteredData = useMemo(() => {
     return (tenants || []).filter(t => {
       const dateRef = t.startDate ? new Date(t.startDate) : new Date();
@@ -403,7 +392,6 @@ const App = () => {
     return [...new Set([...years, new Date().getFullYear()])].sort((a,b) => b-a);
   }, [tenants]);
 
-  // IMPORT LOGIQUE
   const parseCSVLine = (text) => {
     const result = []; let current = '', inQuotes = false;
     for (let i = 0; i < text.length; i++) {
@@ -417,7 +405,8 @@ const App = () => {
 
   const startReview = () => {
     if (!importText.trim()) return;
-    const lines = importText.split('\n'); const newList = [];
+    const lines = importText.split('\n'); 
+    const newList = [];
     lines.forEach((line, index) => {
         if (line.toLowerCase().includes('date') || line.trim() === '') return;
         const parts = parseCSVLine(line);
@@ -428,15 +417,18 @@ const App = () => {
         if (typeIndex === 2) {
             rawStart = parts[5]?.trim(); rawEnd = parts[6]?.trim(); guestName = parts[8]?.trim(); listingName = parts[9]?.trim();
             grossStr = parts[18]?.trim() || parts[13]?.trim(); serviceFeeStr = parts[15]?.trim();
-        } else if (typeIndex === 1) {
+        } 
+        else if (typeIndex === 1) {
             rawStart = parts[4]?.trim(); rawEnd = parts[5]?.trim(); guestName = parts[7]?.trim(); listingName = parts[8]?.trim();
             grossStr = parts[15]?.trim() || parts[12]?.trim(); serviceFeeStr = parts[13]?.trim();
         } else return;
-
-        const formatDate = (raw) => { if(!raw) return ''; const [m, d, y] = raw.split('/'); return (m && d && y) ? `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}` : ''; };
+        const formatDate = (raw) => { 
+            if(!raw) return ''; 
+            const [m, d, y] = raw.split('/'); 
+            return (m && d && y) ? `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}` : ''; 
+        };
         const startDate = formatDate(rawStart); const endDate = formatDate(rawEnd);
         if (!startDate || !endDate) return;
-
         const gross = parseFloat(grossStr?.replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
         const fees = parseFloat(serviceFeeStr?.replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
         const matchedProp = properties.find(p => listingName && p.name && (listingName.toLowerCase().includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(listingName.toLowerCase())));
@@ -458,10 +450,21 @@ const App = () => {
 
   const RenderFilters = () => (
     <div className="flex flex-wrap items-center gap-2 bg-white/70 backdrop-blur-md p-3 rounded-[28px] border border-white shadow-xl mb-6 md:mb-8">
-      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100"><Filter size={12} className="text-slate-400" /><select value={filterYear} onChange={e => setFilterYear(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none"><option value="all">Années</option>{yearsAvailable.map(y => <option key={y} value={y}>{y}</option>)}</select></div>
-      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100"><select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none"><option value="all">Mois (Tous)</option>{['Janv','Févr','Mars','Avril','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'].map((m,i)=><option key={i} value={i}>{m}</option>)}</select></div>
-      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100"><select value={filterProp} onChange={e => setFilterProp(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none max-w-[100px] md:max-w-[130px]"><option value="all">Logements</option>{properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
-      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100"><select value={filterPlat} onChange={e => setFilterPlat(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none"><option value="all">Plateformes</option>{availablePlatforms.map(p => <option key={p} value={p}>{p}</option>)}</select></div>
+      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+        <Filter size={12} className="text-slate-400" />
+        <select value={filterYear} onChange={e => setFilterYear(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer">
+          <option value="all">Années</option>{yearsAvailable.map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
+      </div>
+      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+        <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Mois (Tous)</option>{['Janv','Févr','Mars','Avril','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'].map((m,i)=><option key={i} value={i}>{m}</option>)}</select>
+      </div>
+      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+        <select value={filterProp} onChange={e => setFilterProp(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none max-w-[100px] md:max-w-[130px] cursor-pointer"><option value="all">Logements</option>{properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+      </div>
+      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+        <select value={filterPlat} onChange={e => setFilterPlat(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Plateformes</option>{availablePlatforms.map(p => <option key={p} value={p}>{p}</option>)}</select>
+      </div>
     </div>
   );
 
@@ -475,7 +478,10 @@ const App = () => {
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col md:flex-row font-sans text-slate-900 overflow-hidden">
       <aside className={`fixed md:sticky top-0 left-0 z-50 w-72 h-full md:h-screen bg-white border-r transform md:translate-x-0 transition-transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="p-10 border-b flex flex-col items-center"><div className="bg-gradient-to-tr from-blue-600 to-indigo-600 p-4 rounded-2xl text-white shadow-xl mb-2"><Building2 size={28} /></div><h1 className="font-black uppercase tracking-tighter text-2xl">CADEL</h1><h2 className="font-black uppercase tracking-[0.3em] text-[10px] text-blue-600">MANAGER</h2></div>
+        <div className="p-10 border-b flex flex-col items-center">
+          <div className="bg-gradient-to-tr from-blue-600 to-indigo-600 p-4 rounded-2xl text-white shadow-xl mb-2"><Building2 size={28} /></div>
+          <h1 className="font-black uppercase tracking-tighter text-2xl">CADEL</h1><h2 className="font-black uppercase tracking-[0.3em] text-[10px] text-blue-600">MANAGER</h2>
+        </div>
         <nav className="flex-1 p-6 space-y-2 overflow-y-auto">
           {[{ id: 'reservations', label: 'Réservations', icon: <List size={18}/> }, { id: 'agenda', label: 'Agenda', icon: <CalendarRange size={18}/> }, { id: 'dashboard', label: 'Tableau de bord', icon: <LayoutDashboard size={18}/> }, { id: 'finances', label: 'Finances', icon: <Calculator size={18}/> }, { id: 'settings', label: 'Paramètres', icon: <Settings size={18}/> }].map(item => (
             <button key={item.id} onClick={() => { setActiveTab(item.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-5 py-4 rounded-[20px] font-black text-[11px] uppercase tracking-widest transition-all flex items-center gap-4 ${activeTab === item.id ? 'bg-slate-900 text-white shadow-2xl' : 'text-slate-400 hover:bg-slate-50'}`}>{item.icon} {item.label}</button>
@@ -492,8 +498,74 @@ const App = () => {
           {activeTab === 'reservations' && (
             <div className="space-y-8 animate-in fade-in">
               <div className="flex justify-between items-center"><h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2><button onClick={() => { setEditingResId(null); setIsModalOpen(true); }} className="bg-blue-600 text-white px-8 py-4 rounded-[24px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button></div>
-              <div className="grid grid-cols-1 gap-4 md:hidden">{reservationsList.map(t => (<div key={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="bg-white p-6 rounded-[32px] shadow-lg border border-slate-50"><div className="flex justify-between items-start mb-3"><div><h3 className="text-base font-black uppercase">{properties.find(p => p.id === t.propertyId)?.name || '--'}</h3><div className="flex gap-2 text-[10px] text-slate-400"><span>{t.platform}</span><span>{t.name}</span></div></div><span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>{t.paymentDate ? 'Payé' : 'Dû'}</span></div><div className="bg-slate-50 p-3 rounded-2xl flex justify-between font-black text-xs"><span>{t.startDate}</span><ArrowRight size={14} className="text-slate-300"/><span>{t.endDate}</span></div><div className="mt-3 text-right font-black text-lg">{(t.netAmount || 0).toFixed(2)}€</div></div>))}</div>
-              <div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden"><table className="w-full text-left text-xs"><thead className="bg-slate-50 font-black uppercase border-b text-slate-400"><tr><th className="p-6">Logement</th><th className="p-6">Client</th><th className="p-6 text-center">Dates</th><th className="p-6 text-right">Net</th><th className="p-6 text-center">État</th></tr></thead><tbody className="divide-y divide-slate-50 font-bold">{reservationsList.map(t => (<tr key={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="hover:bg-slate-50 cursor-pointer"><td className="p-6 uppercase">{properties.find(p => p.id === t.propertyId)?.name || '--'}<div className="text-blue-600 text-[10px]">{t.platform}</div></td><td className="p-6">{t.name}</td><td className="p-6 text-center text-slate-500">{t.startDate} ➔ {t.endDate}</td><td className="p-6 text-right font-black">{(t.netAmount || 0).toFixed(2)}€</td><td className="p-6 text-center"><span className={`px-3 py-1 rounded-full text-[9px] uppercase ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>{t.paymentDate ? 'Payé' : 'Attente'}</span></td></tr>))}</tbody></table></div>
+              
+              {/* MOBILE RESERVATIONS */}
+              <div className="grid grid-cols-1 gap-4 md:hidden">
+                {reservationsList.map(t => (
+                  <div key={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="bg-white p-6 rounded-[32px] shadow-lg border border-slate-50 cursor-pointer">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <h3 className="text-base font-black uppercase">{properties.find(p => p.id === t.propertyId)?.name || '--'}</h3>
+                        <div className="flex gap-2 text-[10px] text-slate-400"><span>{t.platform}</span><span>{t.name}</span></div>
+                      </div>
+                      <span onClick={(e) => toggleStatus(e, t, 'global')} className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase cursor-pointer hover:scale-105 transition-transform ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                        {t.paymentDate ? 'Payé' : 'Dû'}
+                      </span>
+                    </div>
+                    <div className="bg-slate-50 p-3 rounded-2xl flex justify-between font-black text-xs mb-3"><span>{t.startDate}</span><ArrowRight size={14} className="text-slate-300"/><span>{t.endDate}</span></div>
+                    
+                    {/* Prestations Mobile avec Clic Simple */}
+                    {t.resExpenses && t.resExpenses.length > 0 && (
+                      <div className="space-y-1.5 border-t border-slate-50 pt-3 mb-3">
+                        {(t.resExpenses || []).map((exp, idx) => (
+                          <div key={idx} onClick={(e) => toggleStatus(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-slate-50 p-2 rounded-xl cursor-pointer hover:bg-blue-50 transition-colors">
+                            <span className="uppercase font-black text-slate-500">{exp.type} ({exp.person})</span>
+                            <span className={`font-black flex items-center gap-1 ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€ {exp.paymentDate ? <CheckCircle size={10}/> : <Clock size={10}/>}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="text-right font-black text-lg">{(t.netAmount || 0).toFixed(2)}€</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* DESKTOP RESERVATIONS */}
+              <div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 font-black uppercase border-b text-slate-400">
+                    <tr><th className="p-6">Logement</th><th className="p-6">Client</th><th className="p-6 text-center">Dates</th><th className="p-6">Prestations</th><th className="p-6 text-right">Net</th><th className="p-6 text-center">État</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 font-bold">
+                    {reservationsList.map(t => (
+                      <tr key={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="hover:bg-slate-50 cursor-pointer">
+                        <td className="p-6 uppercase">{properties.find(p => p.id === t.propertyId)?.name || '--'}<div className="text-blue-600 text-[10px]">{t.platform}</div></td>
+                        <td className="p-6">{t.name}</td>
+                        <td className="p-6 text-center text-slate-500">{t.startDate} ➔ {t.endDate}</td>
+                        <td className="p-6">
+                           <div className="space-y-1.5">
+                              {(t.resExpenses || []).map((exp, idx) => (
+                                <div key={idx} onClick={(e) => toggleStatus(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-slate-50 p-1.5 rounded-lg border border-slate-100 cursor-pointer hover:border-blue-300 hover:shadow-sm transition-all">
+                                  <span className="uppercase font-black text-slate-500 leading-none">{exp.type} ({exp.person})</span>
+                                  <div className="flex items-center gap-1.5">
+                                      <span className={`font-black ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€</span>
+                                      {exp.paymentDate ? <CheckCircle size={10} className="text-emerald-500" /> : <Clock size={10} className="text-orange-400" />}
+                                  </div>
+                                </div>
+                              ))}
+                           </div>
+                        </td>
+                        <td className="p-6 text-right font-black">{(t.netAmount || 0).toFixed(2)}€</td>
+                        <td className="p-6 text-center">
+                          <span onClick={(e) => toggleStatus(e, t, 'global')} className={`px-4 py-2 rounded-full text-[9px] uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${t.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
+                            {t.paymentDate ? 'Payé' : 'Attente'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
@@ -522,7 +594,6 @@ const App = () => {
                  </div>
               </div>
 
-              {/* GRAPHIQUE DE COMPARAISON DES ANNÉES */}
               <ComparisonChart data={tenants} year1={compYear1} year2={compYear2} />
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div className="bg-white p-8 rounded-[40px] shadow-xl"><p className="text-[10px] font-black text-slate-400 uppercase">Net Encaissé ({filterYear})</p><p className="text-3xl font-black text-indigo-600">{financials.netB.toLocaleString('fr-FR')}€</p></div><div className="bg-slate-900 p-8 rounded-[40px] shadow-2xl text-white"><p className="text-[10px] font-black uppercase">Profit Réel ({filterYear})</p><p className="text-3xl font-black">{Math.round(financials.profit).toLocaleString('fr-FR')}€</p></div><div className="bg-white p-8 rounded-[40px] shadow-xl"><p className="text-[10px] font-black text-slate-400 uppercase">À venir ({filterYear})</p><p className="text-3xl font-black text-blue-500">{Math.round(financials.netUpcoming).toLocaleString('fr-FR')}€</p></div></div>
@@ -537,12 +608,15 @@ const App = () => {
           {activeTab === 'settings' && (
             <div className="space-y-10 animate-in fade-in">
               <h2 className="text-3xl font-black uppercase">Paramètres</h2>
+              
               <div className="bg-white p-8 rounded-[40px] border-2 border-dashed shadow-xl flex flex-col items-center justify-center text-center">
                 <UploadCloud size={40} className="text-blue-600 mb-4"/>
                 <h3 className="text-xl font-black uppercase">Importation Airbnb</h3>
                 <p className="text-xs text-slate-400 mt-2">Copiez vos lignes CSV ici (Gère les deux formats Airbnb).</p>
                 <textarea value={importText} onChange={(e)=>setImportText(e.target.value)} placeholder="Collez votre CSV Airbnb ici..." className="w-full mt-6 p-4 bg-slate-50 border rounded-3xl min-h-[150px] font-mono text-[10px] outline-none" />
+                
                 {importStatus && <p className="mt-4 font-black text-emerald-600 uppercase">{importStatus}</p>}
+                
                 {reviewList.length>0 && (
                   <div className="w-full mt-6 overflow-x-auto">
                     <table className="w-full text-left text-[10px] font-bold border-collapse">
@@ -562,6 +636,7 @@ const App = () => {
                     </table>
                   </div>
                 )}
+                
                 <div className="flex gap-4 w-full mt-8">
                   {reviewList.length === 0 ? (
                     <button onClick={startReview} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase shadow-xl hover:bg-blue-600 transition-colors">Analyser le texte</button>
