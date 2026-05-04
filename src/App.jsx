@@ -9,7 +9,7 @@ import {
   UserCheck, PlusCircle, TrendingUp, Info, Filter, Loader2,
   Building2, CalendarRange, MessageSquare, CreditCard, Activity, ArrowRight,
   User, Sparkles, Key, UploadCloud, AlertTriangle, Check, TrendingDown, Search, BarChart2,
-  LocateFixed
+  LocateFixed, Lock
 } from 'lucide-react';
 
 // --- CONFIGURATION FIREBASE ---
@@ -412,6 +412,13 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
 
 // --- COMPOSANT PRINCIPAL ---
 const App = () => {
+  // --- NOUVEAU : GESTION DU CODE PIN ---
+  const [isUnlocked, setIsUnlocked] = useState(() => {
+    return localStorage.getItem('cadel_unlocked') === 'true';
+  });
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState(false);
+
   const formatMonthYear = (m) => {
     if (!m) return "";
     const [year, month] = m.split('-');
@@ -1094,183 +1101,54 @@ const App = () => {
     }).sort((a,b) => (a.startDate||"").localeCompare(b.startDate||""));
   }, [statsDetailConfig, baseTenants, filterYear]);
 
-  const getTenantProfitForFilters = (t) => {
-    let profit = 0;
-    if (t.platform === 'En direct') {
-        const a1 = parseFloat(t.acompte1Amount) || 0;
-        const a2 = parseFloat(t.acompte2Amount) || 0;
-        const s = parseFloat(t.soldeAmount) || 0;
-        
-        if (t.acompte1Date && checkDateFilter(t.acompte1Date)) profit += a1;
-        if (t.acompte2Date && checkDateFilter(t.acompte2Date)) profit += a2;
-        
-        if (t.soldeDate && checkDateFilter(t.soldeDate)) {
-            profit += s;
-            if (t.isUrssaf !== false) profit -= (parseFloat(t.grossAmount) || 0) * 0.077;
-        }
+  // --- ECRAN DE VERROUILLAGE (OPTION 1) ---
+  const handlePinSubmit = (e) => {
+    e.preventDefault();
+    if (pinInput === 'Cadel2026') { 
+      localStorage.setItem('cadel_unlocked', 'true');
+      setIsUnlocked(true);
     } else {
-        if (t.paymentDate && checkDateFilter(t.paymentDate)) {
-            profit += (parseFloat(t.netAmount) || 0);
-            if (t.isUrssaf !== false) profit -= (parseFloat(t.grossAmount) || 0) * 0.077;
-        }
+      setPinError(true);
+      setPinInput('');
     }
-
-    (t.resExpenses || []).forEach(exp => {
-        if (exp.paymentDate && checkDateFilter(exp.paymentDate)) {
-            profit -= (parseFloat(exp.amount) || 0);
-        }
-    });
-
-    return profit;
   };
 
-  const handleMonthChange = (direction) => {
-    let m = filterMonth === 'all' ? new Date().getMonth() : parseInt(filterMonth);
-    let y = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
-    if (direction === 'next') { if (m === 11) { m = 0; y += 1; } else m += 1; }
-    else { if (m === 0) { m = 11; y -= 1; } else m -= 1; }
-    setFilterMonth(m.toString()); setFilterYear(y.toString());
-  };
+  if (!isUnlocked) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-4 font-sans relative overflow-hidden">
+        {/* Cercles décoratifs en fond */}
+        <div className="absolute top-[-10%] left-[-10%] w-64 h-64 bg-blue-100 rounded-full blur-3xl opacity-50"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-indigo-100 rounded-full blur-3xl opacity-50"></div>
+        
+        <div className="bg-white p-8 md:p-12 rounded-[40px] shadow-2xl max-w-sm w-full border border-slate-100 flex flex-col items-center text-center animate-in zoom-in-95 relative z-10">
+          <div className="bg-slate-50 p-4 rounded-3xl mb-6 shadow-inner border border-slate-100">
+             <Key size={48} className="text-blue-600" />
+          </div>
+          <h1 className="font-black text-2xl uppercase tracking-tighter text-slate-900 mb-1">Cadel Manager</h1>
+          <p className="text-[10px] uppercase tracking-widest text-slate-400 mb-8 font-bold">Espace Sécurisé</p>
 
-  const agendaDays = useMemo(() => {
-    const y = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
-    const m = filterMonth === 'all' ? new Date().getMonth() : parseInt(filterMonth);
-    const firstDay = new Date(y, m, 1), lastDay = new Date(y, m + 1, 0), days = [];
-    let offset = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
-    for (let i = 0; i < offset; i++) days.push({ empty: true });
-    for (let i = 1; i <= lastDay.getDate(); i++) days.push({ day: i, dateStr: `${y}-${(m+1).toString().padStart(2, '0')}-${i.toString().padStart(2, '0')}` });
-    return days;
-  }, [filterYear, filterMonth]);
-
-  const yearsAvailable = useMemo(() => {
-    const years = new Set([new Date().getFullYear()]);
-    tenants.forEach(t => {
-      if (t.startDate) years.add(parseInt(t.startDate.split('-')[0], 10));
-      if (t.endDate) years.add(parseInt(t.endDate.split('-')[0], 10));
-      if (t.soldeDate) years.add(parseInt(t.soldeDate.split('-')[0], 10));
-      if (t.paymentDate) years.add(parseInt(t.paymentDate.split('-')[0], 10));
-    });
-    return Array.from(years).filter(y => !isNaN(y)).sort((a, b) => b - a).map(String);
-  }, [tenants]);
-
-  const parseCSVLine = (text) => {
-    const result = []; let current = '', inQuotes = false;
-    for (let i = 0; i < text.length; i++) {
-        const char = text[i];
-        if (char === '"') inQuotes = !inQuotes;
-        else if (char === ',' && !inQuotes) { result.push(current); current = ''; }
-        else current += char;
-    }
-    result.push(current); return result;
-  };
-
-  const startReview = () => {
-    if (!importText.trim()) return;
-    const lines = importText.split('\n').filter(l => l.trim() !== ''); 
-    if (lines.length < 2) return;
-
-    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
-    const voyageurIdx = headers.findIndex(h => h.includes('voyageur') || h.includes('client') || h.includes('nom'));
-    
-    const newList = [];
-    
-    lines.forEach((line, index) => {
-        if (index === 0) return; 
-        const parts = parseCSVLine(line);
-        if (parts.length < 5) return;
-
-        let guestName, startDate, endDate, listingName;
-        let gross = 0, fees = 0, cityTax = 0, bankFees = 0, dispAmount = 0, net = 0;
-
-        if (importSource === 'Airbnb') {
-            const typeIndex = parts.findIndex(p => p.toLowerCase().includes('réservation') || p.toLowerCase().includes('reservation'));
-            if (typeIndex === -1) return;
-            let rawStart, rawEnd, grossStr, serviceFeeStr;
-            if (typeIndex === 2) {
-                rawStart = parts[5]?.trim(); rawEnd = parts[6]?.trim(); guestName = parts[8]?.trim(); listingName = parts[9]?.trim();
-                grossStr = parts[18]?.trim() || parts[13]?.trim(); serviceFeeStr = parts[15]?.trim();
-            } else if (typeIndex === 1) {
-                rawStart = parts[4]?.trim(); rawEnd = parts[5]?.trim(); guestName = parts[7]?.trim(); listingName = parts[8]?.trim();
-                grossStr = parts[15]?.trim() || parts[12]?.trim(); serviceFeeStr = parts[13]?.trim();
-            } else return;
-
-            const formatDateStr = (raw) => { if(!raw) return ''; const [m, d, y] = raw.split('/'); return (m && d && y) ? `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}` : ''; };
-            startDate = formatDateStr(rawStart); endDate = formatDateStr(rawEnd);
-            if (!startDate || !endDate) return;
-
-            gross = parseFloat(grossStr?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
-            fees = Math.abs(parseFloat(serviceFeeStr?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
-            dispAmount = gross;
-            net = gross - fees;
-        } 
-        else if (importSource === 'Booking') {
-            const typeCol = parts[0]?.toLowerCase() || '';
-            if (!typeCol.includes('rã©servation') && !typeCol.includes('réservation') && !typeCol.includes('reservation')) return;
-
-            guestName = voyageurIdx !== -1 && parts[voyageurIdx] ? parts[voyageurIdx].trim() : `Réf: ${parts[2]?.trim()}`; 
-            
-            startDate = parts[3]?.trim(); 
-            endDate = parts[4]?.trim();   
-            listingName = parts[10]?.trim();
-
-            if (!startDate || !endDate) return;
-
-            dispAmount = parseFloat(parts[15]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
-            cityTax = Math.abs(parseFloat(parts[16]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
-            fees = Math.abs(parseFloat(parts[17]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
-            bankFees = Math.abs(parseFloat(parts[19]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
-
-            gross = dispAmount - cityTax;
-            net = gross - fees - bankFees;
-        }
-
-        const matchedProp = properties.find(p => listingName && p.name && (listingName.toLowerCase().includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(listingName.toLowerCase())));
-        const isDuplicate = tenants.some(t => t.startDate === startDate && t.propertyId === (matchedProp?.id || 'none'));
-        const hasProperty = !!matchedProp;
-
-        newList.push({ 
-            id: index, propertyId: matchedProp?.id || '', propertyName: matchedProp?.name || listingName || 'Inconnu', 
-            name: guestName || 'Client Inconnu', startDate, endDate, grossAmount: gross, platformFees: fees, 
-            displayedAmount: dispAmount, cityTax: cityTax, bankFees: bankFees,
-            netAmount: net, isDuplicate, hasProperty, selected: !isDuplicate && hasProperty 
-        });
-    });
-    setReviewList(newList);
-  };
-
-  const confirmImport = async () => {
-      const toImport = reviewList.filter(i => i.selected && i.hasProperty);
-      for (let item of toImport) {
-          const { id, selected, isDuplicate, hasProperty, propertyName, ...cleanItem } = item;
-          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), { ...cleanItem, platform: importSource, isUrssaf: true, comment: `Importé via CSV ${importSource}`, resExpenses: [], paymentDate: '' });
-      }
-      setReviewList([]); setImportText(''); setImportStatus(`${toImport.length} réservation(s) importée(s) !`);
-      setTimeout(() => setImportStatus(''), 5000);
-  };
-
-  // NOUVEAU COMPOSANT : Filtres en mode "Sticky" (fixé en haut)
-  const RenderFilters = () => (
-    <div className="sticky top-0 z-30 bg-[#F8FAFC]/95 backdrop-blur-md pt-2 pb-4 mb-2 md:-mx-4 md:px-4">
-      <div className="flex flex-wrap items-center gap-2 bg-white/80 p-3 rounded-[28px] border border-white shadow-lg mx-2 md:mx-0">
-        <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-          <Filter size={12} className="text-slate-400" />
-          <select value={filterYear} onChange={e => {setFilterYear(e.target.value); setHasScrolledToNext(false);}} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer">
-            <option value="all">Toutes Années</option>{(yearsAvailable || []).map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </div>
-        <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-          <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Mois (Tous)</option>{['Janv','Févr','Mars','Avril','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'].map((m,i)=><option key={i} value={i}>{m}</option>)}</select>
-        </div>
-        <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-          <select value={filterProp} onChange={e => setFilterProp(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none max-w-[100px] md:max-w-[130px] cursor-pointer"><option value="all">Logements</option>{(properties || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
-        </div>
-        <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-          <select value={filterPlat} onChange={e => setFilterPlat(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Plateformes</option>{(availablePlatforms || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
+          <form onSubmit={handlePinSubmit} className="w-full flex flex-col gap-4">
+            <div>
+              <input
+                type="password"
+                value={pinInput}
+                onChange={(e) => { setPinInput(e.target.value); setPinError(false); }}
+                placeholder="Votre mot de passe"
+                className={`w-full p-4 bg-slate-50 border rounded-2xl font-black text-center text-lg tracking-widest outline-none transition-all ${pinError ? 'border-rose-500 bg-rose-50/50 text-rose-500 placeholder-rose-300' : 'border-slate-200 focus:border-blue-500 focus:bg-white focus:shadow-md'}`}
+                autoFocus
+              />
+              {pinError && <p className="text-rose-500 text-[10px] font-black uppercase tracking-widest mt-2 animate-pulse">Mot de passe incorrect</p>}
+            </div>
+            <button type="submit" className="w-full bg-blue-600 text-white p-4 rounded-2xl font-black uppercase text-sm shadow-xl shadow-blue-200 hover:bg-indigo-600 transition-all hover:-translate-y-0.5 active:translate-y-0">
+              Déverrouiller
+            </button>
+          </form>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
 
+  // --- ECRAN DE CHARGEMENT ---
   if (loading) return <div className="h-screen w-full flex items-center justify-center bg-slate-50 font-black uppercase text-xs"><Loader2 className="animate-spin text-blue-600 mr-2" /> CADEL MANAGER...</div>;
 
   const curChargesModale = (formData?.resExpenses || []).reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
@@ -1286,8 +1164,11 @@ const App = () => {
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col md:flex-row font-sans text-slate-900">
       <aside className={`fixed md:sticky top-0 left-0 z-50 w-72 h-[100dvh] bg-white border-r transform md:translate-x-0 transition-transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="p-10 border-b flex flex-col items-center">
+        <div className="p-10 border-b flex flex-col items-center relative">
           <img src="/icon.svg" alt="Cadel Manager Logo" className="w-24 h-24 rounded-3xl shadow-xl mb-2 object-contain" />
+          <button onClick={() => { localStorage.removeItem('cadel_unlocked'); setIsUnlocked(false); }} className="absolute top-4 right-4 p-2 text-slate-300 hover:text-slate-900 transition-colors" title="Verrouiller l'application">
+             <Lock size={16} />
+          </button>
         </div>
         <nav className="flex-1 p-6 space-y-2 overflow-y-auto">
           {[{ id: 'reservations', label: 'Réservations', icon: <List size={18}/> }, { id: 'agenda', label: 'Agenda', icon: <CalendarRange size={18}/> }, { id: 'statistiques', label: 'Statistiques', icon: <BarChart2 size={18}/> }, { id: 'finances', label: 'Finances', icon: <Calculator size={18}/> }, { id: 'settings', label: 'Paramètres', icon: <Settings size={18}/> }].map(item => (
