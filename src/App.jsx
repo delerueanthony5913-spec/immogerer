@@ -81,7 +81,7 @@ const DonutChart = ({ data, title }) => {
   );
 };
 
-// GRAPHIQUE MULTI-COURBES INTELLIGENT
+// GRAPHIQUE MULTI-COURBES INTELLIGENT (Gère le Réel vs Prévisionnel)
 const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) => {
   const currentYear = new Date().getFullYear().toString();
   
@@ -288,21 +288,21 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
          <div className="w-full lg:w-px h-px lg:h-auto bg-slate-200"></div>
          <div className="flex flex-col gap-3 min-w-[200px]">
              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-black uppercase text-slate-400 w-16">Analyser :</span>
-                <select value={metric} onChange={e=>setMetric(e.target.value)} className="flex-1 bg-slate-900 text-white border-none rounded-xl px-3 py-2 text-[10px] font-black uppercase outline-none shadow-md cursor-pointer hover:bg-blue-600 transition-colors">
-                   <option value="net">Profit Net Réel</option>
-                   <option value="gross">CA Brut</option>
-                   <option value="expenses">Coût Prestations</option>
-                </select>
+                 <span className="text-[10px] font-black uppercase text-slate-400 w-16">Analyser :</span>
+                 <select value={metric} onChange={e=>setMetric(e.target.value)} className="flex-1 bg-slate-900 text-white border-none rounded-xl px-3 py-2 text-[10px] font-black uppercase outline-none shadow-md cursor-pointer hover:bg-blue-600 transition-colors">
+                    <option value="net">Profit Net Réel</option>
+                    <option value="gross">CA Brut</option>
+                    <option value="expenses">Coût Prestations</option>
+                 </select>
              </div>
              <div className="flex items-center gap-2">
-                <Filter size={12} className="text-slate-400" />
-                <span className="text-[10px] font-black uppercase text-slate-400">Filtres :</span>
+                 <Filter size={12} className="text-slate-400" />
+                 <span className="text-[10px] font-black uppercase text-slate-400">Filtres :</span>
              </div>
              <div className="flex flex-col gap-2 pl-5">
-                {mode !== 'years' && <select value={contextYear} onChange={e=>setContextYear(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none cursor-pointer text-slate-700">{safeYears.map(y=><option key={y} value={y}>Année {y}</option>)}</select>}
-                {mode !== 'properties' && <select value={contextProp} onChange={e=>setContextProp(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none cursor-pointer text-slate-700 truncate"><option value="all">Tous Logements</option>{properties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>}
-                {mode !== 'platforms' && <select value={contextPlat} onChange={e=>setContextPlat(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none cursor-pointer text-slate-700 truncate"><option value="all">Toutes Plateformes</option>{platforms.map(p=><option key={p} value={p}>{p}</option>)}</select>}
+                 {mode !== 'years' && <select value={contextYear} onChange={e=>setContextYear(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none cursor-pointer text-slate-700">{safeYears.map(y=><option key={y} value={y}>Année {y}</option>)}</select>}
+                 {mode !== 'properties' && <select value={contextProp} onChange={e=>setContextProp(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none cursor-pointer text-slate-700 truncate"><option value="all">Tous Logements</option>{properties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>}
+                 {mode !== 'platforms' && <select value={contextPlat} onChange={e=>setContextPlat(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none cursor-pointer text-slate-700 truncate"><option value="all">Toutes Plateformes</option>{platforms.map(p=><option key={p} value={p}>{p}</option>)}</select>}
              </div>
          </div>
       </div>
@@ -314,6 +314,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
           <div className="overflow-x-auto no-scrollbar">
             <div className="min-w-[600px] relative">
               <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
+                {/* Lignes de grille horizontales */}
                 {yTicks.map((tick, i) => (
                   <g key={`grid-${i}`}>
                     <line x1={padX} y1={getY(tick)} x2={w - padX} y2={getY(tick)} stroke="#F1F5F9" strokeWidth="2" />
@@ -321,21 +322,27 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
                   </g>
                 ))}
 
+                {/* Highlight vertical line pour le survol */}
                 {hoveredMonth !== null && (
                     <line x1={getX(hoveredMonth)} y1={padY} x2={getX(hoveredMonth)} y2={h - padY} stroke="#CBD5E1" strokeWidth="2" strokeDasharray="4 4" />
                 )}
                 
+                {/* Lignes de mois */}
                 {months.map((m, i) => (
                   <text key={m} x={getX(i)} y={h - 5} fill={hoveredMonth === i ? "#0F172A" : "#94A3B8"} fontSize="12" fontFamily="sans-serif" fontWeight="900" textAnchor="middle" className="transition-colors cursor-pointer" onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)}>{m}</text>
                 ))}
                 
+                {/* Tracer chaque courbe avec pointillé intelligent */}
                 {series.map((s, idx) => (
                    <g key={`series-${s.id}`}>
+                      {/* Ligne Pleine (Réel) */}
                       <path d={buildPath(s.data, 0, Math.max(0, s.splitIndex))} stroke={s.color} strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />
+                      {/* Ligne Pointillée (Prévisionnel) */}
                       <path d={buildPath(s.data, Math.max(0, s.splitIndex), 11)} stroke={s.color} strokeWidth="4" fill="none" strokeDasharray="6 8" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />
                    </g>
                 ))}
 
+                {/* Tracer les points pour le hover */}
                 {months.map((_, i) => (
                   <g key={`points-${i}`} onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)} className="cursor-pointer">
                     <rect x={getX(i) - 20} y={0} width="40" height={h} fill="transparent" />
@@ -699,9 +706,10 @@ const App = () => {
     // On enlève les accents et met en minuscules pour ne pas rater le nom
     const name = prop.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     
-    if (name.includes('villa cadelia')) return { bg: 'bg-red-50', hover: 'hover:bg-red-100' };
-    if (name.includes('signes de cadelio')) return { bg: 'bg-blue-50', hover: 'hover:bg-blue-100' };
-    if (name.includes('cocon de kadelia')) return { bg: 'bg-emerald-50', hover: 'hover:bg-emerald-100' };
+    // Mots clés plus larges pour éviter les bugs de frappe
+    if (name.includes('cocon') || name.includes('kadelia')) return { bg: 'bg-emerald-50', hover: 'hover:bg-emerald-100' };
+    if (name.includes('signes') || name.includes('cadelio')) return { bg: 'bg-blue-50', hover: 'hover:bg-blue-100' };
+    if (name.includes('villa') || name.includes('cadelia')) return { bg: 'bg-red-50', hover: 'hover:bg-red-100' };
     
     return { bg: 'bg-white', hover: 'hover:bg-slate-50' };
   };
@@ -730,7 +738,7 @@ const App = () => {
     }).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
   }, [filteredData, filterStatus]);
 
-  // LOGIQUE D'AUTO-SCROLL RESTREINTE A LA ZONE DEROULANTE
+  // LOGIQUE D'AUTO-SCROLL AVEC CLIGNOTEMENT JAUNE CLAIR
   useEffect(() => {
     if (activeTab !== 'reservations') {
        setHasScrolledToNext(false);
@@ -754,13 +762,13 @@ const App = () => {
                 if (el.offsetParent !== null) {
                     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     
-                    // On force un clignotement bleu temporaire
+                    // On force un clignotement JAUNE clair (Highlight générique)
                     const originalBg = el.style.backgroundColor;
-                    el.style.backgroundColor = '#EFF6FF';
-                    el.style.transition = 'background-color 1s ease';
+                    el.style.backgroundColor = '#FEF9C3'; // jaune-100
+                    el.style.transition = 'background-color 0.8s ease';
                     setTimeout(() => { 
-                        el.style.backgroundColor = originalBg; // Retour à la couleur définie par la classe
-                    }, 3000);
+                        el.style.backgroundColor = originalBg; 
+                    }, 2500);
                     
                     scrolled = true;
                     break;
