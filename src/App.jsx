@@ -69,21 +69,6 @@ const isSundayOrHoliday = (dateStr) => {
   return holidays.includes(dateStr);
 };
 
-// --- COMPOSANT ICONE VILLA SUR-MESURE ---
-const VillaIcon = ({ size = 24, className = "" }) => (
-  <svg width={size} height={size} viewBox="0 0 512 512" fill="currentColor" className={className} xmlns="http://www.w3.org/2000/svg">
-    <g transform="translate(6, -10)">
-      <rect x="120" y="160" width="140" height="120" rx="8" fill="currentColor" opacity="0.6" />
-      <rect x="220" y="100" width="160" height="180" rx="8" fill="currentColor" />
-      <rect x="100" y="150" width="180" height="16" rx="8" fill="currentColor" opacity="0.9" />
-      <rect x="200" y="90" width="200" height="16" rx="8" fill="currentColor" opacity="0.9" />
-      <rect x="140" y="200" width="60" height="80" rx="6" fill="#fff" opacity="0.3" />
-      <rect x="260" y="140" width="80" height="140" rx="6" fill="#fff" opacity="0.3" />
-      <rect x="100" y="280" width="300" height="12" rx="6" fill="currentColor" opacity="0.4" />
-    </g>
-  </svg>
-);
-
 const DonutChart = ({ data, title }) => {
   const visibleData = (data || []).filter(d => d && d.value > 0);
   const displayTotal = visibleData.reduce((acc, curr) => acc + curr.value, 0);
@@ -307,7 +292,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
         : platforms.map(p => ({ id: p, label: p }));
 
   return (
-    <div className="w-auto mx-2 md:mx-0 bg-white p-4 md:p-8 rounded-[32px] md:rounded-[48px] shadow-2xl border border-slate-50 animate-in fade-in relative mt-8" style={{ touchAction: 'pan-x pan-y pinch-zoom' }}>
+    <div className="w-auto mx-2 md:mx-0 bg-white p-4 md:p-8 rounded-[32px] md:rounded-[48px] shadow-2xl border border-slate-50 animate-in fade-in relative mt-8">
       <div className="flex bg-slate-100 p-1.5 rounded-[20px] w-max mb-6">
          <button onClick={()=>{setMode('years'); setContextProp('all'); setContextPlat('all');}} className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1 md:gap-2 ${mode === 'years' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>📅 Années</button>
          <button onClick={()=>{setMode('properties'); setContextYear(currentYear); setContextPlat('all');}} className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1 md:gap-2 ${mode === 'properties' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>🏠 Logements</button>
@@ -355,7 +340,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
       {series.length === 0 ? (
           <div className="h-[200px] md:h-[300px] flex items-center justify-center text-slate-300 font-black uppercase text-[9px] md:text-xs text-center">Cochez au moins une option pour voir le graphique</div>
       ) : (
-          <div className="overflow-x-auto no-scrollbar no-swipe touch-manipulation" style={{ touchAction: 'pan-x pan-y pinch-zoom' }}>
+          <div className="overflow-x-auto hide-scroll touch-manipulation">
             <div className="min-w-[450px] md:min-w-[600px] relative">
               <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
                 {yTicks.map((tick, i) => (
@@ -477,11 +462,13 @@ const App = () => {
 
   const [quickPayConfig, setQuickPayConfig] = useState(null); 
   const [statsDetailConfig, setStatsDetailConfig] = useState(null);
-  const [hasScrolledToNext, setHasScrolledToNext] = useState(false);
   
-  const touchStartX = useRef(null);
-  const touchStartY = useRef(null);
   const todayStr = new Date().toISOString().split('T')[0];
+
+  // --- REFS POUR LE CARROUSEL NATIF ---
+  const scrollContainerRef = useRef(null);
+  const isScrollingRef = useRef(false);
+  const TABS_ORDER = ['reservations', 'agenda', 'statistiques', 'finances', 'settings'];
 
   // 2. EFFETS FIREBASE
   useEffect(() => {
@@ -732,11 +719,34 @@ const App = () => {
     return Array.from(years).filter(y => !isNaN(y)).sort((a, b) => b - a).map(String);
   }, [tenants]);
 
+  // 4. GESTION DU CARROUSEL NATIF (CSS SCROLL SNAP)
+  const handleScroll = () => {
+    if (!scrollContainerRef.current || isScrollingRef.current) return;
+    const scrollLeft = scrollContainerRef.current.scrollLeft;
+    const width = scrollContainerRef.current.clientWidth;
+    const newIndex = Math.round(scrollLeft / width);
 
-  // 4. FONCTIONS DE SCROLL ET TOUCH (DE RETOUR)
-  const scrollToCurrentRes = (withFlash = false) => {
+    if (TABS_ORDER[newIndex] && TABS_ORDER[newIndex] !== activeTab) {
+      setActiveTab(TABS_ORDER[newIndex]);
+    }
+  };
+
+  const changeTab = (tabId) => {
+    setActiveTab(tabId);
+    setIsMobileMenuOpen(false);
+    const index = TABS_ORDER.indexOf(tabId);
+    if (scrollContainerRef.current) {
+      isScrollingRef.current = true;
+      scrollContainerRef.current.scrollTo({
+        left: index * scrollContainerRef.current.clientWidth,
+        behavior: 'smooth'
+      });
+      setTimeout(() => { isScrollingRef.current = false; }, 600);
+    }
+  };
+
+  const scrollToCurrentRes = () => {
     if (reservationsList.length === 0) return;
-    
     let targetRes = reservationsList.find(t => t.startDate >= todayStr || (t.endDate && t.endDate >= todayStr));
     if (!targetRes) targetRes = reservationsList[reservationsList.length - 1];
 
@@ -744,74 +754,16 @@ const App = () => {
         const els = document.querySelectorAll(`[data-res-id="${targetRes.id}"]`);
         for (let el of els) {
             if (el.offsetParent !== null) {
-                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                
-                if (withFlash) {
-                    const originalBg = el.style.backgroundColor;
-                    el.style.backgroundColor = '#FEF9C3';
-                    el.style.transition = 'background-color 0.8s ease';
-                    setTimeout(() => { el.style.backgroundColor = originalBg; }, 2500);
-                }
+                el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+                const originalBg = el.style.backgroundColor;
+                el.style.backgroundColor = '#FEF9C3';
+                el.style.transition = 'background-color 0.8s ease';
+                setTimeout(() => { el.style.backgroundColor = originalBg; }, 2500);
                 break;
             }
         }
     }
   };
-
-  useEffect(() => {
-    if (activeTab !== 'reservations') { setHasScrolledToNext(false); return; }
-    if (hasScrolledToNext || reservationsList.length === 0) return;
-    const timer = setTimeout(() => { scrollToCurrentRes(false); setHasScrolledToNext(true); }, 500); 
-    return () => clearTimeout(timer);
-  }, [activeTab, reservationsList, hasScrolledToNext, todayStr]);
-
-  const onTouchStart = (e) => {
-    if (e.touches && e.touches.length > 1) {
-       touchStartX.current = null;
-       touchStartY.current = null;
-       return;
-    }
-    if (e.target.closest('.no-swipe')) {
-      touchStartX.current = null;
-      touchStartY.current = null;
-      return;
-    }
-    touchStartX.current = e.targetTouches[0].clientX;
-    touchStartY.current = e.targetTouches[0].clientY;
-  };
-
-  const onTouchMove = (e) => {
-    if (e.touches && e.touches.length > 1) {
-       touchStartX.current = null;
-       touchStartY.current = null;
-       return;
-    }
-  };
-
-  const onTouchEnd = (e) => {
-    if (touchStartX.current === null || touchStartY.current === null) return;
-    const endX = e.changedTouches[0].clientX;
-    const endY = e.changedTouches[0].clientY;
-    const distanceX = touchStartX.current - endX;
-    const distanceY = touchStartY.current - endY;
-    
-    if (Math.abs(distanceY) > 50) return;
-    
-    const isLeftSwipe = distanceX > 60;
-    const isRightSwipe = distanceX < -60;
-    const currentIndex = TABS_ORDER.indexOf(activeTab);
-    
-    if (isLeftSwipe && currentIndex < TABS_ORDER.length - 1) {
-      setActiveTab(TABS_ORDER[currentIndex + 1]);
-    }
-    if (isRightSwipe && currentIndex > 0) {
-      setActiveTab(TABS_ORDER[currentIndex - 1]);
-    }
-    
-    touchStartX.current = null;
-    touchStartY.current = null;
-  };
-
 
   // 5. FONCTIONS OUTILS ET LOGIQUE METIER
   const formatMonthYear = (m) => {
@@ -873,7 +825,6 @@ const App = () => {
     return url;
   };
 
-  // --- NOUVEAU : URL POUR AGENDA PRESTATAIRE (DIAS) ---
   const getProviderCalendarUrl = (exp, prop, type) => {
     const isEntry = type === 'ENTREE';
     const dateStr = isEntry ? exp.dateEntry : exp.dateExit;
@@ -961,8 +912,8 @@ const App = () => {
           rateEntry: parseFloat(r.rateEntry) || 0,
           hoursExit: parseFloat(r.hoursExit) || 0,
           rateExit: parseFloat(r.rateExit) || 0,
-          timeEntry: r.timeEntry || '',
-          timeExit: r.timeExit || '',
+          timeEntry: r.timeEntry || '10:00',
+          timeExit: r.timeExit || '10:00',
           providerNote: r.providerNote || ''
       })) 
     };
@@ -1153,20 +1104,6 @@ const App = () => {
       setTimeout(() => setImportStatus(''), 5000);
   };
 
-  const getTenantProfitForFilters = (t) => {
-    let profit = 0;
-    if (t.platform === 'En direct') {
-        const a1 = parseFloat(t.acompte1Amount) || 0, a2 = parseFloat(t.acompte2Amount) || 0, s = parseFloat(t.soldeAmount) || 0;
-        if (t.acompte1Date && checkDateFilter(t.acompte1Date)) profit += a1;
-        if (t.acompte2Date && checkDateFilter(t.acompte2Date)) profit += a2;
-        if (t.soldeDate && checkDateFilter(t.soldeDate)) { profit += s; if (t.isUrssaf !== false) profit -= (parseFloat(t.grossAmount) || 0) * 0.077; }
-    } else {
-        if (t.paymentDate && checkDateFilter(t.paymentDate)) { profit += (parseFloat(t.netAmount) || 0); if (t.isUrssaf !== false) profit -= (parseFloat(t.grossAmount) || 0) * 0.077; }
-    }
-    (t.resExpenses || []).forEach(exp => { if (exp.paymentDate && checkDateFilter(exp.paymentDate)) { profit -= (parseFloat(exp.amount) || 0); } });
-    return profit;
-  };
-
   // --- ECRAN DE VERROUILLAGE ---
   const handlePinSubmit = (e) => {
     e.preventDefault();
@@ -1233,6 +1170,13 @@ const App = () => {
   // --- RENDU PRINCIPAL DE L'APPLICATION ---
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col md:flex-row font-sans text-slate-900">
+      
+      {/* INJECTION DE CSS POUR CACHER LA BARRE DE DEFILEMENT DU CARROUSEL NATIVEMENT */}
+      <style>{`
+        .hide-scroll::-webkit-scrollbar { display: none; }
+        .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+      `}</style>
+
       <aside className={`fixed md:sticky top-0 left-0 z-50 w-72 h-[100dvh] bg-white border-r transform md:translate-x-0 transition-transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-10 border-b flex flex-col items-center relative">
           <img src="/icon.svg" alt="Cadel Manager Logo" className="w-24 h-24 rounded-3xl shadow-xl mb-2 object-contain" />
@@ -1240,7 +1184,7 @@ const App = () => {
         </div>
         <nav className="flex-1 p-6 space-y-2 overflow-y-auto">
           {[{ id: 'reservations', label: 'Réservations', icon: <List size={18}/> }, { id: 'agenda', label: 'Agenda', icon: <CalendarRange size={18}/> }, { id: 'statistiques', label: 'Statistiques', icon: <BarChart2 size={18}/> }, { id: 'finances', label: 'Finances', icon: <Calculator size={18}/> }, { id: 'settings', label: 'Paramètres', icon: <Settings size={18}/> }].map(item => (
-            <button key={item.id} onClick={() => { setActiveTab(item.id); setIsMobileMenuOpen(false); }} className={`w-full text-left px-5 py-4 rounded-[20px] font-black text-[11px] uppercase tracking-widest transition-all flex items-center gap-4 ${activeTab === item.id ? 'bg-slate-900 text-white shadow-2xl' : 'text-slate-400 hover:bg-slate-50'}`}>{item.icon} {item.label}</button>
+            <button key={item.id} onClick={() => changeTab(item.id)} className={`w-full text-left px-5 py-4 rounded-[20px] font-black text-[11px] uppercase tracking-widest transition-all flex items-center gap-4 ${activeTab === item.id ? 'bg-slate-900 text-white shadow-2xl' : 'text-slate-400 hover:bg-slate-50'}`}>{item.icon} {item.label}</button>
           ))}
         </nav>
       </aside>
@@ -1253,7 +1197,7 @@ const App = () => {
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2">{isMobileMenuOpen ? <X /> : <Menu />}</button>
       </div>
 
-      <main onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} className="flex-1 w-full px-0 md:px-12 py-6 md:py-12 min-h-screen relative" style={{ touchAction: 'pan-x pan-y pinch-zoom' }}>
+      <main className="flex-1 w-full min-h-screen relative flex flex-col">
         
         {quickPayConfig && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
@@ -1301,124 +1245,132 @@ const App = () => {
            </div>
         )}
 
-        <div className="max-w-7xl mx-auto pb-32">
-          
-          <RenderFilters />
+        {/* --- DÉBUT DE LA ZONE DE CARROUSEL --- */}
+        <RenderFilters />
+        
+        <div 
+          ref={scrollContainerRef} 
+          onScroll={handleScroll} 
+          className="flex-1 w-full flex overflow-x-auto snap-x snap-mandatory hide-scroll"
+        >
 
-          {activeTab === 'reservations' && (
-            <div className="space-y-8 animate-in fade-in">
-              <div className="flex justify-between items-center mx-2 md:mx-0 mb-6">
-                 <h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2>
-                 <div className="flex items-center gap-2 md:gap-4">
-                    <button onClick={() => scrollToCurrentRes(true)} className="p-3 md:px-4 md:py-3 bg-white text-blue-600 rounded-full md:rounded-[20px] shadow-lg border border-slate-100 hover:bg-blue-50 transition-all flex items-center justify-center gap-2" title="Aller à aujourd'hui">
-                       <LocateFixed size={18} /><span className="hidden md:inline font-black text-[10px] uppercase">Aujourd'hui</span>
-                    </button>
-                    <button onClick={() => { setEditingResId(null); setFormData({ propertyId: properties[0]?.id || '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '', acompte1Amount: '', acompte1Date: '', acompte2Amount: '', acompte2Date: '', soldeAmount: '', soldeDate: '' }); setIsModalOpen(true); }} className="bg-blue-600 text-white px-6 py-3 md:px-8 md:py-4 rounded-[20px] md:rounded-[24px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button>
-                 </div>
-              </div>
-              
-              <div className="md:hidden max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain p-1 rounded-[20px] border border-slate-100 bg-slate-50/50 shadow-inner mx-2 touch-manipulation" style={{ touchAction: 'manipulation' }}>
-                <div className="grid grid-cols-1 gap-2.5">
-                  {(groupedReservationsList || []).map(item => {
-                    if (item.isSeparator) return (<div key={item.id} className="flex items-center justify-center mt-2 mb-0.5"><span className="bg-slate-800 text-white px-4 py-1.5 rounded-[10px] text-[8px] font-black uppercase tracking-[0.2em] shadow-sm">{item.label}</span></div>);
-                    
-                    const t = item;
-                    const colors = getRowColors(t.propertyId);
-                    return (
-                    <div key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className={`${colors.bg} p-3 rounded-[16px] shadow-sm border border-slate-50 cursor-pointer transition-colors`}>
-                      <div className="flex justify-between items-start mb-1.5">
-                        <div>
-                          <h3 className="text-sm font-black uppercase leading-tight">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</h3>
-                          <div className="flex items-center gap-1.5 mt-1 leading-tight"><span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{t.platform}</span><span className="text-[11px] font-black text-slate-700">{t.name}</span></div>
-                        </div>
-                        <div className="flex flex-col items-end">
-                          <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>{getStatusProps(t).label}</span>
-                          {t.paymentDate && t.platform !== 'En direct' && <span className="text-[7px] text-slate-400 mt-1 font-bold">{formatDateFr(t.paymentDate)}</span>}
-                          {t.platform === 'En direct' && t.soldeDate && <span className="text-[7px] text-slate-400 mt-1 font-bold">{formatDateFr(t.soldeDate)}</span>}
-                        </div>
-                      </div>
-                      
-                      <div className="bg-white/60 p-2 rounded-[12px] flex justify-between font-black text-[9px] mb-1.5 items-center"><span>{formatDateFr(t.startDate)}</span><ArrowRight size={10} className="text-slate-300"/><span>{formatDateFr(t.endDate)}</span></div>
-                      
-                      {t.comment && (<div className="text-[9px] italic text-slate-600 mb-1.5 px-1 leading-tight whitespace-pre-wrap">📝 {t.comment}</div>)}
-
-                      {t.resExpenses && t.resExpenses.length > 0 && (
-                        <div className="space-y-1 border-t border-slate-100 pt-1.5 mb-1.5">
-                          {(t.resExpenses || []).map((exp, idx) => (
-                            <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[8px] bg-white/60 p-1.5 rounded-xl cursor-pointer hover:bg-white transition-colors leading-tight">
-                              <span className="uppercase font-black text-slate-500 min-w-0 truncate pr-2">{exp.type} ({exp.person}) {exp.sendEmail !== false && providerEmails[exp.person] && !exp.person.toLowerCase().includes('dias') && <Mail size={8} className="inline text-blue-500 flex-shrink-0"/>}</span>
-                              <div className="text-right flex-shrink-0">
-                                <span className={`font-black flex items-center justify-end gap-1 ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€ {exp.paymentDate ? <CheckCircle size={8}/> : <Clock size={8}/>}</span>
-                                {exp.paymentDate && <div className="text-[7px] text-slate-400 mt-0.5">{formatDateFr(exp.paymentDate)}</div>}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      <div className="text-right font-black text-sm">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</div>
-                    </div>
-                  )})}
+          {/* 1. ONGLETS RESERVATIONS */}
+          <div className="min-w-full flex-shrink-0 snap-center px-0 md:px-12 py-6 md:py-12">
+            <div className="max-w-7xl mx-auto pb-32">
+                <div className="flex justify-between items-center mx-2 md:mx-0 mb-6">
+                   <h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2>
+                   <div className="flex items-center gap-2 md:gap-4">
+                      <button onClick={() => scrollToCurrentRes(true)} className="p-3 md:px-4 md:py-3 bg-white text-blue-600 rounded-full md:rounded-[20px] shadow-lg border border-slate-100 hover:bg-blue-50 transition-all flex items-center justify-center gap-2" title="Aller à aujourd'hui">
+                         <LocateFixed size={18} /><span className="hidden md:inline font-black text-[10px] uppercase">Aujourd'hui</span>
+                      </button>
+                      <button onClick={() => { setEditingResId(null); setFormData({ propertyId: properties[0]?.id || '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '', acompte1Amount: '', acompte1Date: '', acompte2Amount: '', acompte2Date: '', soldeAmount: '', soldeDate: '' }); setIsModalOpen(true); }} className="bg-blue-600 text-white px-6 py-3 md:px-8 md:py-4 rounded-[20px] md:rounded-[24px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button>
+                   </div>
                 </div>
-              </div>
-
-              <div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden border border-slate-100">
-                <div className="max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain relative touch-manipulation" style={{ touchAction: 'manipulation' }}>
-                    <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-50 font-black uppercase border-b text-slate-400 sticky top-0 z-20 shadow-sm">
-                        <tr><th className="p-4 w-[15%]">Logement</th><th className="p-4 w-[15%]">Client</th><th className="p-4 w-[12%] text-center">Dates</th><th className="p-4 w-[25%]">Notes</th><th className="p-4 w-[18%]">Prestations</th><th className="p-4 text-right">Net</th><th className="p-4 text-center">État</th></tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50 font-bold">
-                        {(groupedReservationsList || []).map(item => {
-                        if (item.isSeparator) return (<tr key={item.id} className="bg-slate-100/50"><td colSpan="7" className="p-3 text-center"><span className="bg-slate-800 text-white px-5 py-2 rounded-[14px] text-[10px] font-black uppercase tracking-[0.2em] shadow-md inline-block">{item.label}</span></td></tr>);
-
-                        const t = item;
-                        const colors = getRowColors(t.propertyId);
+                
+                <div className="md:hidden max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain p-1 rounded-[20px] border border-slate-100 bg-slate-50/50 shadow-inner mx-2 touch-manipulation" style={{ touchAction: 'manipulation' }}>
+                  <div className="grid grid-cols-1 gap-2.5">
+                    {(groupedReservationsList || []).map(item => {
+                      if (item.isSeparator) return (<div key={item.id} className="flex items-center justify-center mt-2 mb-0.5"><span className="bg-slate-800 text-white px-4 py-1.5 rounded-[10px] text-[8px] font-black uppercase tracking-[0.2em] shadow-sm">{item.label}</span></div>);
+                      
+                      const t = item;
+                      const colors = getRowColors(t.propertyId);
+                      return (
+                      <div key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className={`${colors.bg} p-3 rounded-[16px] shadow-sm border border-slate-50 cursor-pointer transition-colors`}>
+                        <div className="flex justify-between items-start mb-1.5">
+                          <div>
+                            <h3 className="text-sm font-black uppercase leading-tight">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</h3>
+                            <div className="flex items-center gap-1.5 mt-1 leading-tight"><span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{t.platform}</span><span className="text-[11px] font-black text-slate-700">{t.name}</span></div>
+                          </div>
+                          <div className="flex flex-col items-end">
+                            <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>{getStatusProps(t).label}</span>
+                            {t.paymentDate && t.platform !== 'En direct' && <span className="text-[7px] text-slate-400 mt-1 font-bold">{formatDateFr(t.paymentDate)}</span>}
+                            {t.platform === 'En direct' && t.soldeDate && <span className="text-[7px] text-slate-400 mt-1 font-bold">{formatDateFr(t.soldeDate)}</span>}
+                          </div>
+                        </div>
                         
-                        return (
-                        <tr key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className={`${colors.bg} ${colors.hover} cursor-pointer transition-colors`}>
-                            <td className="p-4 uppercase"><div className="font-black">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</div><div className="text-blue-600 text-xs font-black tracking-widest mt-0.5">{t.platform}</div></td>
-                            <td className="p-4"><div className="text-sm font-black">{t.name}</div>{t.phone && <div className="text-slate-400 text-[10px] mt-0.5">{t.phone}</div>}</td>
-                            <td className="p-4 text-center text-slate-500 whitespace-nowrap">{formatDateFr(t.startDate)} <ArrowRight size={10} className="inline text-slate-300" /> {formatDateFr(t.endDate)}</td>
-                            <td className="p-4 text-[11px] text-slate-600 font-medium">{t.comment ? (<div className="bg-slate-50/50 p-2 rounded-xl border border-slate-100/50 italic whitespace-pre-wrap" title={t.comment}>📝 {t.comment}</div>) : ''}</td>
-                            <td className="p-4">
-                            <div className="space-y-1.5">
-                                {(t.resExpenses || []).map((exp, idx) => (
-                                    <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-white/50 p-1.5 rounded-lg border border-slate-100/50 cursor-pointer hover:border-blue-300 hover:bg-white hover:shadow-sm transition-all">
-                                    <span className="uppercase font-black text-slate-500 leading-none">{exp.type} ({exp.person}) {exp.sendEmail !== false && providerEmails[exp.person] && !exp.person.toLowerCase().includes('dias') && <Mail size={10} className="inline text-blue-500 ml-1"/>}</span>
-                                    <div className="text-right">
-                                        <div className="flex items-center justify-end gap-1.5"><span className={`font-black ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€</span>{exp.paymentDate ? <CheckCircle size={10} className="text-emerald-500" /> : <Clock size={10} className="text-orange-400" />}</div>
-                                        {exp.paymentDate && <div className="text-[8px] text-slate-400 mt-0.5 leading-none">{formatDateFr(exp.paymentDate)}</div>}
-                                    </div>
-                                    </div>
-                                ))}
-                            </div>
-                            </td>
-                            <td className="p-4 text-right font-black">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</td>
-                            <td className="p-4 text-center">
-                            <div className="flex flex-col items-center">
-                                <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-4 py-2 rounded-full text-[9px] uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>{getStatusProps(t).label}</span>
-                                {t.platform !== 'En direct' && t.paymentDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.paymentDate)}</span>}
-                                {t.platform === 'En direct' && t.soldeDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.soldeDate)}</span>}
-                            </div>
-                            </td>
-                        </tr>
-                        )})}
-                    </tbody>
-                    </table>
+                        <div className="bg-white/60 p-2 rounded-[12px] flex justify-between font-black text-[9px] mb-1.5 items-center"><span>{formatDateFr(t.startDate)}</span><ArrowRight size={10} className="text-slate-300"/><span>{formatDateFr(t.endDate)}</span></div>
+                        
+                        {t.comment && (<div className="text-[9px] italic text-slate-600 mb-1.5 px-1 leading-tight whitespace-pre-wrap">📝 {t.comment}</div>)}
+
+                        {t.resExpenses && t.resExpenses.length > 0 && (
+                          <div className="space-y-1 border-t border-slate-100 pt-1.5 mb-1.5">
+                            {(t.resExpenses || []).map((exp, idx) => (
+                              <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[8px] bg-white/60 p-1.5 rounded-xl cursor-pointer hover:bg-white transition-colors leading-tight">
+                                <span className="uppercase font-black text-slate-500 min-w-0 truncate pr-2">{exp.type} ({exp.person}) {exp.sendEmail !== false && providerEmails[exp.person] && !exp.person.toLowerCase().includes('dias') && <Mail size={8} className="inline text-blue-500 flex-shrink-0"/>}</span>
+                                <div className="text-right flex-shrink-0">
+                                  <span className={`font-black flex items-center justify-end gap-1 ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€ {exp.paymentDate ? <CheckCircle size={8}/> : <Clock size={8}/>}</span>
+                                  {exp.paymentDate && <div className="text-[7px] text-slate-400 mt-0.5">{formatDateFr(exp.paymentDate)}</div>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="text-right font-black text-sm">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</div>
+                      </div>
+                    )})}
+                  </div>
                 </div>
+
+                <div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden border border-slate-100">
+                  <div className="max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain relative touch-manipulation" style={{ touchAction: 'manipulation' }}>
+                      <table className="w-full text-left text-xs">
+                      <thead className="bg-slate-50 font-black uppercase border-b text-slate-400 sticky top-0 z-20 shadow-sm">
+                          <tr><th className="p-4 w-[15%]">Logement</th><th className="p-4 w-[15%]">Client</th><th className="p-4 w-[12%] text-center">Dates</th><th className="p-4 w-[25%]">Notes</th><th className="p-4 w-[18%]">Prestations</th><th className="p-4 text-right">Net</th><th className="p-4 text-center">État</th></tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50 font-bold">
+                          {(groupedReservationsList || []).map(item => {
+                          if (item.isSeparator) return (<tr key={item.id} className="bg-slate-100/50"><td colSpan="7" className="p-3 text-center"><span className="bg-slate-800 text-white px-5 py-2 rounded-[14px] text-[10px] font-black uppercase tracking-[0.2em] shadow-md inline-block">{item.label}</span></td></tr>);
+
+                          const t = item;
+                          const colors = getRowColors(t.propertyId);
+                          
+                          return (
+                          <tr key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className={`${colors.bg} ${colors.hover} cursor-pointer transition-colors`}>
+                              <td className="p-4 uppercase"><div className="font-black">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</div><div className="text-blue-600 text-xs font-black tracking-widest mt-0.5">{t.platform}</div></td>
+                              <td className="p-4"><div className="text-sm font-black">{t.name}</div>{t.phone && <div className="text-slate-400 text-[10px] mt-0.5">{t.phone}</div>}</td>
+                              <td className="p-4 text-center text-slate-500 whitespace-nowrap">{formatDateFr(t.startDate)} <ArrowRight size={10} className="inline text-slate-300" /> {formatDateFr(t.endDate)}</td>
+                              <td className="p-4 text-[11px] text-slate-600 font-medium">{t.comment ? (<div className="bg-slate-50/50 p-2 rounded-xl border border-slate-100/50 italic whitespace-pre-wrap" title={t.comment}>📝 {t.comment}</div>) : ''}</td>
+                              <td className="p-4">
+                              <div className="space-y-1.5">
+                                  {(t.resExpenses || []).map((exp, idx) => (
+                                      <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-white/50 p-1.5 rounded-lg border border-slate-100/50 cursor-pointer hover:border-blue-300 hover:bg-white hover:shadow-sm transition-all">
+                                      <span className="uppercase font-black text-slate-500 leading-none">{exp.type} ({exp.person}) {exp.sendEmail !== false && providerEmails[exp.person] && !exp.person.toLowerCase().includes('dias') && <Mail size={10} className="inline text-blue-500 ml-1"/>}</span>
+                                      <div className="text-right">
+                                          <div className="flex items-center justify-end gap-1.5"><span className={`font-black ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€</span>{exp.paymentDate ? <CheckCircle size={10} className="text-emerald-500" /> : <Clock size={10} className="text-orange-400" />}</div>
+                                          {exp.paymentDate && <div className="text-[8px] text-slate-400 mt-0.5 leading-none">{formatDateFr(exp.paymentDate)}</div>}
+                                      </div>
+                                      </div>
+                                  ))}
+                              </div>
+                              </td>
+                              <td className="p-4 text-right font-black">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</td>
+                              <td className="p-4 text-center">
+                              <div className="flex flex-col items-center">
+                                  <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-4 py-2 rounded-full text-[9px] uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>{getStatusProps(t).label}</span>
+                                  {t.platform !== 'En direct' && t.paymentDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.paymentDate)}</span>}
+                                  {t.platform === 'En direct' && t.soldeDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.soldeDate)}</span>}
+                              </div>
+                              </td>
+                          </tr>
+                          )})}
+                      </tbody>
+                      </table>
+                  </div>
               </div>
             </div>
-          )}
+          </div>
 
-          {activeTab === 'agenda' && (
-            <div className="space-y-8 animate-in fade-in">
-              <div className="flex justify-between items-center mx-2 md:mx-0"><div><h2 className="text-2xl font-black uppercase">Agenda</h2></div><div className="flex items-center gap-4 bg-white px-4 py-2 rounded-2xl shadow-lg"><button onClick={()=>handleMonthChange('prev')}><ChevronLeft/></button><div className="text-center font-black min-w-[120px] uppercase text-xs">{['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][filterMonth==='all'?new Date().getMonth():parseInt(filterMonth)]}</div><button onClick={()=>handleMonthChange('next')}><ChevronRight/></button></div></div>
+          {/* 2. ONGLET AGENDA */}
+          <div className="min-w-full flex-shrink-0 snap-center px-0 md:px-12 py-6 md:py-12">
+            <div className="max-w-7xl mx-auto pb-32">
+              <div className="flex justify-between items-center mx-2 md:mx-0 mb-6"><div><h2 className="text-2xl md:text-3xl font-black uppercase">Agenda</h2></div><div className="flex items-center gap-4 bg-white px-4 py-2 rounded-2xl shadow-lg"><button onClick={()=>handleMonthChange('prev')}><ChevronLeft/></button><div className="text-center font-black min-w-[120px] uppercase text-xs">{['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][filterMonth==='all'?new Date().getMonth():parseInt(filterMonth)]}</div><button onClick={()=>handleMonthChange('next')}><ChevronRight/></button></div></div>
               <div className="bg-white p-4 md:p-6 rounded-[32px] md:rounded-[40px] shadow-2xl overflow-x-auto mx-2 md:mx-0 touch-manipulation" style={{ touchAction: 'manipulation' }}><div className="min-w-[320px] md:min-w-[700px]"><div className="grid grid-cols-7 text-center font-black text-slate-300 text-[8px] md:text-[10px] uppercase mb-2 md:mb-4">{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d=><div key={d}>{d}</div>)}</div><div className="grid grid-cols-7 gap-1 md:gap-2">{(agendaDays || []).map((item,idx)=>{ if(item.empty) return <div key={idx} className="h-16 md:h-32 bg-slate-50/30 rounded-xl md:rounded-2xl"></div>; const dayRes = (reservationsList || []).filter(r=>item.dateStr>=r.startDate && item.dateStr<=r.endDate); return (<div key={item.dateStr} className={`h-16 md:h-32 border rounded-xl md:rounded-2xl p-1 md:p-2 relative flex flex-col ${item.dateStr===todayStr?'border-blue-500 bg-blue-50/10':'border-slate-100'}`}><span className="text-[8px] md:text-[10px] font-black text-slate-300">{item.day}</span><div className="flex-1 space-y-0.5 md:space-y-1 overflow-y-auto no-scrollbar">{dayRes.map(r=>(<div key={r.id} onClick={(e)=>{e.stopPropagation();setEditingResId(r.id);setFormData(r);setIsModalOpen(true)}} className="text-[6px] md:text-[8px] font-black text-white p-0.5 md:p-1 rounded truncate cursor-pointer leading-tight" style={{backgroundColor: CHART_COLORS[(properties || []).findIndex(p=>p.id===r.propertyId)%CHART_COLORS.length]}}>{r.name?.split(' ')[0] || 'Résa'}</div>))}</div></div>);})}</div></div></div>
             </div>
-          )}
-          
-          {activeTab === 'statistiques' && (
-             <div className="space-y-10 animate-in fade-in">
+          </div>
+
+          {/* 3. ONGLET STATISTIQUES */}
+          <div className="min-w-full flex-shrink-0 snap-center px-0 md:px-12 py-6 md:py-12">
+             <div className="max-w-7xl mx-auto pb-32 space-y-10">
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mx-2 md:mx-0">
                    <div><h2 className="text-3xl md:text-4xl font-black uppercase text-slate-900 tracking-tighter leading-none mb-2">Statistiques</h2><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tableau de bord et croisements dynamiques</p></div>
                 </div>
@@ -1450,10 +1402,11 @@ const App = () => {
                    <DonutChart title={"Net Reçu (Banque) par Plateforme (" + (filterYear === 'all' ? 'Toutes années' : filterYear) + ")"} data={(availablePlatforms || []).map((p,idx)=>({label:p,value:(baseTenants || []).reduce((acc,t) => t.platform===p ? acc + getTenantProfitForFilters(t) : acc, 0),color:CHART_COLORS[(idx+4)%CHART_COLORS.length]}))} />
                 </div>
              </div>
-          )}
+          </div>
 
-          {activeTab === 'finances' && (
-            <div className="space-y-10 animate-in fade-in">
+          {/* 4. ONGLET FINANCES */}
+          <div className="min-w-full flex-shrink-0 snap-center px-0 md:px-12 py-6 md:py-12">
+             <div className="max-w-7xl mx-auto pb-32 space-y-10">
               <h2 className="text-3xl font-black uppercase mx-2 md:mx-0">Comptabilité</h2>
               <div className="bg-white rounded-[24px] md:rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100 mx-2 md:mx-0">
                 <div className="p-3 md:p-8 bg-slate-900 text-white font-black uppercase flex justify-between items-center text-[10px] md:text-xs"><div>Bilan Global</div></div>
@@ -1512,12 +1465,13 @@ const App = () => {
                 </div>
               </div>
             </div>
-          )}
+          </div>
 
-          {activeTab === 'settings' && (
-            <div className="space-y-10 animate-in fade-in mx-2 md:mx-0">
-              <h2 className="text-3xl font-black uppercase">Paramètres</h2>
-              <div className="bg-white p-8 rounded-[40px] border-2 border-dashed shadow-xl flex flex-col items-center justify-center text-center">
+          {/* 5. ONGLET SETTINGS */}
+          <div className="min-w-full flex-shrink-0 snap-center px-0 md:px-12 py-6 md:py-12">
+            <div className="max-w-7xl mx-auto pb-32 space-y-10">
+              <h2 className="text-3xl font-black uppercase mx-2 md:mx-0">Paramètres</h2>
+              <div className="bg-white p-8 rounded-[40px] border-2 border-dashed shadow-xl flex flex-col items-center justify-center text-center mx-2 md:mx-0">
                 <UploadCloud size={40} className="text-blue-600 mb-4"/>
                 <h3 className="text-xl font-black uppercase">Importation de Réservations (CSV)</h3>
                 <p className="text-xs text-slate-400 mt-2 mb-6">Sélectionnez la plateforme source et collez votre export CSV.</p>
@@ -1551,7 +1505,7 @@ const App = () => {
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-8 mx-2 md:mx-0">
                 <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full">
                   <h3 className="text-[10px] font-black uppercase text-slate-400 mb-4">Plateformes</h3>
                   <div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">
@@ -1614,7 +1568,7 @@ const App = () => {
                 <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full border-2 border-blue-50"><h3 className="text-[10px] font-black uppercase text-blue-600 mb-4">Logements</h3><div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">{(properties || []).map(p=>(<div key={p.id} className="flex justify-between items-center p-3 bg-blue-50 rounded-xl"><span>{p.name}</span><button onClick={async()=>{if(window.confirm('Supprimer ?'))await deleteDoc(doc(db,'artifacts',appId,'public', 'data', 'properties', p.id))}} className="text-slate-300 hover:text-rose-500"><Trash2 size={14}/></button></div>))}</div><form onSubmit={async(e)=>{e.preventDefault(); if(inputProp.name.trim()){await addDoc(collection(db,'artifacts',appId,'public','data','properties'),{name:inputProp.name.trim(),address:inputProp.address.trim()}); setInputProp({name:'',address:''})}}} className="flex flex-col gap-2"><input required value={inputProp.name} onChange={e=>setInputProp({...inputProp,name:e.target.value})} className="p-3 bg-slate-50 rounded-xl text-[10px] outline-none" placeholder="Nom du bien" /><button type="submit" className="bg-slate-900 text-white p-3 rounded-xl font-black text-[10px] uppercase shadow-md">+ Ajouter</button></form></div>
               </div>
             </div>
-          )}
+          </div>
         </div>
       </main>
 
