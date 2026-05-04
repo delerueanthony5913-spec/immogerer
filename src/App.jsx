@@ -703,10 +703,8 @@ const App = () => {
     const prop = (properties || []).find(p => p.id === propertyId);
     if (!prop || !prop.name) return { bg: 'bg-white', hover: 'hover:bg-slate-50' };
     
-    // On enlève les accents et met en minuscules pour ne pas rater le nom
     const name = prop.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     
-    // Mots clés plus larges pour éviter les bugs de frappe
     if (name.includes('cocon') || name.includes('kadelia')) return { bg: 'bg-emerald-50', hover: 'hover:bg-emerald-100' };
     if (name.includes('signes') || name.includes('cadelio')) return { bg: 'bg-blue-50', hover: 'hover:bg-blue-100' };
     if (name.includes('villa') || name.includes('cadelia')) return { bg: 'bg-red-50', hover: 'hover:bg-red-100' };
@@ -738,7 +736,32 @@ const App = () => {
     }).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
   }, [filteredData, filterStatus]);
 
-  // LOGIQUE D'AUTO-SCROLL AVEC CLIGNOTEMENT JAUNE CLAIR
+  // LOGIQUE POUR CREER LES SÉPARATEURS DE MOIS DANS LA LISTE
+  const groupedReservationsList = useMemo(() => {
+      const groups = [];
+      let currentMonthYear = '';
+      
+      reservationsList.forEach(t => {
+          const start = t.startDate || '';
+          if (start) {
+              const [year, month] = start.split('-');
+              const dateObj = new Date(parseInt(year), parseInt(month) - 1);
+              const monthYearString = dateObj.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+              // Mettre la première lettre en majuscule : "Juillet 2026"
+              const formattedLabel = monthYearString.charAt(0).toUpperCase() + monthYearString.slice(1);
+              
+              if (formattedLabel !== currentMonthYear) {
+                  groups.push({ isSeparator: true, label: formattedLabel, id: `sep-${year}-${month}` });
+                  currentMonthYear = formattedLabel;
+              }
+          }
+          groups.push(t);
+      });
+      return groups;
+  }, [reservationsList]);
+
+
+  // LOGIQUE D'AUTO-SCROLL SANS LE FLASH JAUNE
   useEffect(() => {
     if (activeTab !== 'reservations') {
        setHasScrolledToNext(false);
@@ -760,16 +783,8 @@ const App = () => {
             
             for (let el of els) {
                 if (el.offsetParent !== null) {
+                    // On fait défiler jusqu'à l'élément, sans changer sa couleur
                     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    
-                    // On force un clignotement JAUNE clair (Highlight générique)
-                    const originalBg = el.style.backgroundColor;
-                    el.style.backgroundColor = '#FEF9C3'; // jaune-100
-                    el.style.transition = 'background-color 0.8s ease';
-                    setTimeout(() => { 
-                        el.style.backgroundColor = originalBg; 
-                    }, 2500);
-                    
                     scrolled = true;
                     break;
                 }
@@ -1237,7 +1252,18 @@ const App = () => {
               {/* VUE MOBILE : Liste déroulante indépendante */}
               <div className="md:hidden max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain p-1 rounded-[32px] border border-slate-100 bg-slate-50/50 shadow-inner">
                 <div className="grid grid-cols-1 gap-4">
-                  {(reservationsList || []).map(t => {
+                  {(groupedReservationsList || []).map(item => {
+                    if (item.isSeparator) {
+                      return (
+                        <div key={item.id} className="flex items-center justify-center mt-2 mb-1">
+                            <span className="bg-slate-800 text-white px-5 py-2 rounded-[14px] text-[10px] font-black uppercase tracking-[0.2em] shadow-lg">
+                                {item.label}
+                            </span>
+                        </div>
+                      );
+                    }
+                    
+                    const t = item;
                     const colors = getRowColors(t.propertyId);
                     return (
                     <div key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className={`${colors.bg} p-6 rounded-[32px] shadow-lg border border-slate-50 cursor-pointer transition-colors`}>
@@ -1275,7 +1301,7 @@ const App = () => {
                 </div>
               </div>
 
-              {/* VUE ORDINATEUR : Liste déroulante indépendante */}
+              {/* VUE ORDINATEUR : Liste déroulante indépendante avec séparateurs de mois */}
               <div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden border border-slate-100">
                 <div className="max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain relative">
                     <table className="w-full text-left text-xs">
@@ -1283,8 +1309,23 @@ const App = () => {
                         <tr><th className="p-6">Logement</th><th className="p-6">Client</th><th className="p-6 text-center">Dates</th><th className="p-6">Prestations</th><th className="p-6 text-right">Net</th><th className="p-6 text-center">État</th></tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 font-bold">
-                        {(reservationsList || []).map(t => {
+                        {(groupedReservationsList || []).map(item => {
+                        
+                        if (item.isSeparator) {
+                           return (
+                               <tr key={item.id} className="bg-slate-100/50">
+                                   <td colSpan="6" className="p-3 text-center">
+                                       <span className="bg-slate-800 text-white px-5 py-2 rounded-[14px] text-[10px] font-black uppercase tracking-[0.2em] shadow-md inline-block">
+                                           {item.label}
+                                       </span>
+                                   </td>
+                               </tr>
+                           );
+                        }
+
+                        const t = item;
                         const colors = getRowColors(t.propertyId);
+                        
                         return (
                         <tr key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className={`${colors.bg} ${colors.hover} cursor-pointer transition-colors`}>
                             <td className="p-6 uppercase">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}<div className="text-blue-600 text-[10px]">{t.platform}</div></td>
