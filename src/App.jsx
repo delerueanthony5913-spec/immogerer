@@ -8,7 +8,8 @@ import {
   ChevronLeft, ChevronRight, BarChart3, List, Wallet, Settings, Calculator,
   UserCheck, PlusCircle, TrendingUp, Info, Filter, Loader2,
   Building2, CalendarRange, MessageSquare, CreditCard, Activity, ArrowRight,
-  User, Sparkles, Key, UploadCloud, AlertTriangle, Check, TrendingDown, Search, BarChart2
+  User, Sparkles, Key, UploadCloud, AlertTriangle, Check, TrendingDown, Search, BarChart2,
+  LocateFixed
 } from 'lucide-react';
 
 // --- CONFIGURATION FIREBASE ---
@@ -525,7 +526,6 @@ const App = () => {
     return () => { unsubAuth(); unsubProps(); unsubTenants(); unsubSettings(); };
   }, []);
 
-  // Injection 2025 auto
   useEffect(() => {
     if (!user || loading) return;
     
@@ -762,40 +762,44 @@ const App = () => {
       return groups;
   }, [reservationsList]);
 
+  // NOUVELLE FONCTION DE SCROLL RAPIDE (Bouton et Auto)
+  const scrollToCurrentRes = (withFlash = false) => {
+    if (reservationsList.length === 0) return;
+    
+    let targetRes = reservationsList.find(t => t.startDate >= todayStr || (t.endDate && t.endDate >= todayStr));
+    if (!targetRes) targetRes = reservationsList[reservationsList.length - 1];
+
+    if (targetRes) {
+        const els = document.querySelectorAll(`[data-res-id="${targetRes.id}"]`);
+        for (let el of els) {
+            if (el.offsetParent !== null) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                if (withFlash) {
+                    const originalBg = el.style.backgroundColor;
+                    el.style.backgroundColor = '#FEF9C3';
+                    el.style.transition = 'background-color 0.8s ease';
+                    setTimeout(() => { el.style.backgroundColor = originalBg; }, 2500);
+                }
+                break;
+            }
+        }
+    }
+  };
+
   useEffect(() => {
     if (activeTab !== 'reservations') {
        setHasScrolledToNext(false);
        return;
     }
-    
     if (hasScrolledToNext || reservationsList.length === 0) return;
 
-    let targetRes = reservationsList.find(t => t.startDate >= todayStr || (t.endDate && t.endDate >= todayStr));
-    
-    if (!targetRes) {
-        targetRes = reservationsList[reservationsList.length - 1];
-    }
+    const timer = setTimeout(() => {
+        scrollToCurrentRes(false);
+        setHasScrolledToNext(true);
+    }, 500); 
 
-    if (targetRes) {
-        const timer = setTimeout(() => {
-            const els = document.querySelectorAll(`[data-res-id="${targetRes.id}"]`);
-            let scrolled = false;
-            
-            for (let el of els) {
-                if (el.offsetParent !== null) {
-                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    scrolled = true;
-                    break;
-                }
-            }
-            
-            if (scrolled) {
-                setHasScrolledToNext(true);
-            }
-        }, 500); 
-
-        return () => clearTimeout(timer);
-    }
+    return () => clearTimeout(timer);
   }, [activeTab, reservationsList, hasScrolledToNext, todayStr]);
 
   const onTouchStart = (e) => {
@@ -1181,22 +1185,25 @@ const App = () => {
       setTimeout(() => setImportStatus(''), 5000);
   };
 
+  // NOUVEAU COMPOSANT : Filtres en mode "Sticky" (fixé en haut)
   const RenderFilters = () => (
-    <div className="flex flex-wrap items-center gap-2 bg-white/70 backdrop-blur-md p-3 rounded-[28px] border border-white shadow-xl mb-6 md:mb-8 mx-2 md:mx-0">
-      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-        <Filter size={12} className="text-slate-400" />
-        <select value={filterYear} onChange={e => {setFilterYear(e.target.value); setHasScrolledToNext(false);}} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer">
-          <option value="all">Toutes Années</option>{(yearsAvailable || []).map(y => <option key={y} value={y}>{y}</option>)}
-        </select>
-      </div>
-      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-        <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Mois (Tous)</option>{['Janv','Févr','Mars','Avril','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'].map((m,i)=><option key={i} value={i}>{m}</option>)}</select>
-      </div>
-      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-        <select value={filterProp} onChange={e => setFilterProp(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none max-w-[100px] md:max-w-[130px] cursor-pointer"><option value="all">Logements</option>{(properties || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
-      </div>
-      <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-        <select value={filterPlat} onChange={e => setFilterPlat(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Plateformes</option>{(availablePlatforms || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
+    <div className="sticky top-0 z-30 bg-[#F8FAFC]/95 backdrop-blur-md pt-2 pb-4 mb-2 md:-mx-4 md:px-4">
+      <div className="flex flex-wrap items-center gap-2 bg-white/80 p-3 rounded-[28px] border border-white shadow-lg mx-2 md:mx-0">
+        <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+          <Filter size={12} className="text-slate-400" />
+          <select value={filterYear} onChange={e => {setFilterYear(e.target.value); setHasScrolledToNext(false);}} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer">
+            <option value="all">Toutes Années</option>{(yearsAvailable || []).map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+        <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+          <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Mois (Tous)</option>{['Janv','Févr','Mars','Avril','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'].map((m,i)=><option key={i} value={i}>{m}</option>)}</select>
+        </div>
+        <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+          <select value={filterProp} onChange={e => setFilterProp(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none max-w-[100px] md:max-w-[130px] cursor-pointer"><option value="all">Logements</option>{(properties || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+        </div>
+        <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+          <select value={filterPlat} onChange={e => setFilterPlat(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Plateformes</option>{(availablePlatforms || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
+        </div>
       </div>
     </div>
   );
@@ -1293,11 +1300,21 @@ const App = () => {
 
         <div className="max-w-7xl mx-auto pb-32">
           
+          {/* LES FILTRES (Maintenant FIGÉS EN HAUT) */}
           <RenderFilters />
 
           {activeTab === 'reservations' && (
             <div className="space-y-8 animate-in fade-in">
-              <div className="flex justify-between items-center mx-2 md:mx-0"><h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2><button onClick={() => { setEditingResId(null); setFormData({ propertyId: properties[0]?.id || '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '', acompte1Amount: '', acompte1Date: '', acompte2Amount: '', acompte2Date: '', soldeAmount: '', soldeDate: '' }); setIsModalOpen(true); }} className="bg-blue-600 text-white px-8 py-4 rounded-[24px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button></div>
+              <div className="flex justify-between items-center mx-2 md:mx-0 mb-6">
+                 <h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2>
+                 <div className="flex items-center gap-2 md:gap-4">
+                    <button onClick={() => scrollToCurrentRes(true)} className="p-3 md:px-4 md:py-3 bg-white text-blue-600 rounded-full md:rounded-[20px] shadow-lg border border-slate-100 hover:bg-blue-50 transition-all flex items-center justify-center gap-2" title="Aller à aujourd'hui">
+                       <LocateFixed size={18} />
+                       <span className="hidden md:inline font-black text-[10px] uppercase">Aujourd'hui</span>
+                    </button>
+                    <button onClick={() => { setEditingResId(null); setFormData({ propertyId: properties[0]?.id || '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '', acompte1Amount: '', acompte1Date: '', acompte2Amount: '', acompte2Date: '', soldeAmount: '', soldeDate: '' }); setIsModalOpen(true); }} className="bg-blue-600 text-white px-6 py-3 md:px-8 md:py-4 rounded-[20px] md:rounded-[24px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button>
+                 </div>
+              </div>
               
               {/* VUE MOBILE : Liste déroulante indépendante avec marge mx-2 */}
               <div className="md:hidden max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain p-1 rounded-[32px] border border-slate-100 bg-slate-50/50 shadow-inner mx-2 touch-manipulation" style={{ touchAction: 'manipulation' }}>
