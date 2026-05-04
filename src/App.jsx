@@ -259,26 +259,26 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
         : platforms.map(p => ({ id: p, label: p }));
 
   return (
-    <div className="w-auto mx-2 md:mx-0 bg-white p-6 md:p-8 rounded-[48px] shadow-2xl border border-slate-50 animate-in fade-in relative mt-8" style={{ touchAction: 'pan-x pan-y pinch-zoom' }}>
+    <div className="w-auto mx-2 md:mx-0 bg-white p-4 md:p-8 rounded-[32px] md:rounded-[48px] shadow-2xl border border-slate-50 animate-in fade-in relative mt-8" style={{ touchAction: 'pan-x pan-y pinch-zoom' }}>
       
       {/* 1. SELECTION DU MODE */}
       <div className="flex bg-slate-100 p-1.5 rounded-[20px] w-max mb-6">
-         <button onClick={()=>{setMode('years'); setContextProp('all'); setContextPlat('all');}} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${mode === 'years' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>📅 Années</button>
-         <button onClick={()=>{setMode('properties'); setContextYear(currentYear); setContextPlat('all');}} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${mode === 'properties' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>🏠 Logements</button>
-         <button onClick={()=>{setMode('platforms'); setContextYear(currentYear); setContextProp('all');}} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${mode === 'platforms' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>💻 Plateformes</button>
+         <button onClick={()=>{setMode('years'); setContextProp('all'); setContextPlat('all');}} className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1 md:gap-2 ${mode === 'years' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>📅 Années</button>
+         <button onClick={()=>{setMode('properties'); setContextYear(currentYear); setContextPlat('all');}} className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1 md:gap-2 ${mode === 'properties' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>🏠 Logements</button>
+         <button onClick={()=>{setMode('platforms'); setContextYear(currentYear); setContextProp('all');}} className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1 md:gap-2 ${mode === 'platforms' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>💻 Platefs.</button>
       </div>
 
       {/* 2. BOUTONS DE SELECTION MULTIPLE + FILTRES */}
-      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6 mb-8 bg-slate-50 p-4 md:p-6 rounded-3xl border border-slate-100">
+      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 md:gap-6 mb-6 md:mb-8 bg-slate-50 p-3 md:p-6 rounded-[24px] md:rounded-3xl border border-slate-100">
          <div className="flex-1">
-            <span className="text-[10px] font-black uppercase text-slate-400 mb-3 block">Que voulez-vous afficher ? (Cochez)</span>
-            <div className="flex flex-wrap gap-2">
+            <span className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 mb-2 md:mb-3 block">Que voulez-vous afficher ? (Cochez)</span>
+            <div className="flex flex-wrap gap-1.5 md:gap-2">
                {availableOptions.map((opt, i) => {
                   const isSelected = selectedKeys.includes(opt.id);
                   const color = isSelected ? CHART_COLORS[selectedKeys.indexOf(opt.id) % CHART_COLORS.length] : '#CBD5E1';
                   return (
-                     <button key={opt.id} onClick={() => toggleKey(opt.id)} className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase transition-all flex items-center gap-2 border ${isSelected ? 'bg-white shadow-sm border-transparent' : 'bg-transparent border-slate-200 text-slate-400 hover:border-slate-400'}`} style={{ color: isSelected ? color : undefined }}>
-                        <div className="w-2.5 h-2.5 rounded-full shadow-inner" style={{ backgroundColor: color }}></div>
+                     <button key={opt.id} onClick={() => toggleKey(opt.id)} className={`px-2.5 md:px-3 py-1 md:py-1.5 rounded-full text-[8px] md:text-[10px] font-black uppercase transition-all flex items-center gap-1.5 md:gap-2 border ${isSelected ? 'bg-white shadow-sm border-transparent' : 'bg-transparent border-slate-200 text-slate-400 hover:border-slate-400'}`} style={{ color: isSelected ? color : undefined }}>
+                        <div className="w-1.5 h-1.5 md:w-2.5 md:h-2.5 rounded-full shadow-inner" style={{ backgroundColor: color }}></div>
                         {opt.label}
                      </button>
                   );
@@ -286,33 +286,33 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
             </div>
          </div>
          <div className="w-full lg:w-px h-px lg:h-auto bg-slate-200"></div>
-         <div className="flex flex-col gap-3 min-w-[200px]">
+         <div className="flex flex-col gap-2 md:gap-3 min-w-full md:min-w-[200px]">
              <div className="flex items-center gap-2">
-                 <span className="text-[10px] font-black uppercase text-slate-400 w-16">Analyser :</span>
-                 <select value={metric} onChange={e=>setMetric(e.target.value)} className="flex-1 bg-slate-900 text-white border-none rounded-xl px-3 py-2 text-[10px] font-black uppercase outline-none shadow-md cursor-pointer hover:bg-blue-600 transition-colors">
+                 <span className="text-[8px] md:text-[10px] font-black uppercase text-slate-400 w-12 md:w-16">Analyser:</span>
+                 <select value={metric} onChange={e=>setMetric(e.target.value)} className="flex-1 bg-slate-900 text-white border-none rounded-xl px-2 py-1.5 md:px-3 md:py-2 text-[8px] md:text-[10px] font-black uppercase outline-none shadow-md cursor-pointer hover:bg-blue-600 transition-colors">
                     <option value="net">Profit Net Réel</option>
                     <option value="gross">CA Brut</option>
                     <option value="expenses">Coût Prestations</option>
                  </select>
              </div>
              <div className="flex items-center gap-2">
-                 <Filter size={12} className="text-slate-400" />
-                 <span className="text-[10px] font-black uppercase text-slate-400">Filtres :</span>
+                 <Filter size={10} className="text-slate-400 md:w-[12px] md:h-[12px]" />
+                 <span className="text-[8px] md:text-[10px] font-black uppercase text-slate-400">Filtres :</span>
              </div>
-             <div className="flex flex-col gap-2 pl-5">
-                 {mode !== 'years' && <select value={contextYear} onChange={e=>setContextYear(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none cursor-pointer text-slate-700">{safeYears.map(y=><option key={y} value={y}>Année {y}</option>)}</select>}
-                 {mode !== 'properties' && <select value={contextProp} onChange={e=>setContextProp(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none cursor-pointer text-slate-700 truncate"><option value="all">Tous Logements</option>{properties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>}
-                 {mode !== 'platforms' && <select value={contextPlat} onChange={e=>setContextPlat(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none cursor-pointer text-slate-700 truncate"><option value="all">Toutes Plateformes</option>{platforms.map(p=><option key={p} value={p}>{p}</option>)}</select>}
+             <div className="flex flex-col gap-1.5 md:gap-2 pl-4 md:pl-5">
+                 {mode !== 'years' && <select value={contextYear} onChange={e=>setContextYear(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[8px] md:text-[10px] font-bold outline-none cursor-pointer text-slate-700">{safeYears.map(y=><option key={y} value={y}>Année {y}</option>)}</select>}
+                 {mode !== 'properties' && <select value={contextProp} onChange={e=>setContextProp(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[8px] md:text-[10px] font-bold outline-none cursor-pointer text-slate-700 truncate"><option value="all">Tous Logements</option>{properties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>}
+                 {mode !== 'platforms' && <select value={contextPlat} onChange={e=>setContextPlat(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[8px] md:text-[10px] font-bold outline-none cursor-pointer text-slate-700 truncate"><option value="all">Toutes Plateformes</option>{platforms.map(p=><option key={p} value={p}>{p}</option>)}</select>}
              </div>
          </div>
       </div>
 
-      {/* 3. LE GRAPHIQUE - CLASSE NO-SWIPE */}
+      {/* 3. LE GRAPHIQUE */}
       {series.length === 0 ? (
-          <div className="h-[300px] flex items-center justify-center text-slate-300 font-black uppercase text-xs">Cochez au moins une option pour voir le graphique</div>
+          <div className="h-[200px] md:h-[300px] flex items-center justify-center text-slate-300 font-black uppercase text-[9px] md:text-xs text-center">Cochez au moins une option pour voir le graphique</div>
       ) : (
           <div className="overflow-x-auto no-scrollbar no-swipe touch-manipulation" style={{ touchAction: 'pan-x pan-y pinch-zoom' }}>
-            <div className="min-w-[600px] relative">
+            <div className="min-w-[450px] md:min-w-[600px] relative">
               <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
                 {/* Lignes de grille horizontales */}
                 {yTicks.map((tick, i) => (
@@ -356,19 +356,19 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
               {/* TOOLTIP INTERACTIF AU SURVOL */}
               {hoveredMonth !== null && series.length > 0 && (
                 <div 
-                  className="absolute z-20 bg-slate-900/95 backdrop-blur-sm text-white p-4 rounded-2xl shadow-2xl pointer-events-none transition-all duration-200 min-w-[160px] border border-slate-700"
+                  className="absolute z-20 bg-slate-900/95 backdrop-blur-sm text-white p-3 md:p-4 rounded-[16px] md:rounded-2xl shadow-2xl pointer-events-none transition-all duration-200 min-w-[130px] md:min-w-[160px] border border-slate-700"
                   style={{ 
                     left: `${(getX(hoveredMonth) / w) * 100}%`, 
                     top: '15%', 
                     transform: hoveredMonth > 7 ? 'translateX(calc(-100% - 15px))' : hoveredMonth < 4 ? 'translateX(15px)' : 'translateX(-50%)' 
                   }}
                 >
-                   <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-3 border-b border-slate-700 pb-2">{months[hoveredMonth]}</div>
-                   <div className="flex flex-col gap-2.5">
+                   <div className="text-[8px] md:text-[10px] text-slate-400 font-black uppercase tracking-widest mb-2 md:mb-3 border-b border-slate-700 pb-1.5 md:pb-2">{months[hoveredMonth]}</div>
+                   <div className="flex flex-col gap-1.5 md:gap-2.5">
                       {series.map(s => (
-                         <div key={`tt-${s.id}`} className="flex justify-between items-center gap-6">
-                            <div className="text-[10px] font-black uppercase flex items-center gap-2 truncate max-w-[120px]"><div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{backgroundColor: s.color}}></div>{s.label}</div>
-                            <div className="font-black text-sm">{s.data[hoveredMonth].toFixed(2)}€</div>
+                         <div key={`tt-${s.id}`} className="flex justify-between items-center gap-4 md:gap-6">
+                            <div className="text-[8px] md:text-[10px] font-black uppercase flex items-center gap-1.5 md:gap-2 truncate max-w-[90px] md:max-w-[120px]"><div className="w-1.5 h-1.5 md:w-2.5 md:h-2.5 rounded-full shadow-sm" style={{backgroundColor: s.color}}></div>{s.label}</div>
+                            <div className="font-black text-[10px] md:text-sm">{s.data[hoveredMonth].toFixed(0)}€</div>
                          </div>
                       ))}
                    </div>
@@ -380,12 +380,12 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
       
       {/* 4. TOTAUX GLOBAUX */}
       {series.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mt-4 md:mt-6">
             {series.map(s => (
-                <div key={`total-${s.id}`} className="bg-white border border-slate-100 p-5 rounded-[24px] shadow-sm flex flex-col justify-center relative overflow-hidden">
+                <div key={`total-${s.id}`} className="bg-white border border-slate-100 p-3 md:p-5 rounded-[16px] md:rounded-[24px] shadow-sm flex flex-col justify-center relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-1" style={{backgroundColor: s.color}}></div>
-                  <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1 truncate" title={s.label}>Total {s.label}</p>
-                  <p className="text-xl font-black text-slate-800 tracking-tighter">{s.total.toLocaleString('fr-FR')}€</p>
+                  <p className="text-[7px] md:text-[9px] font-black uppercase text-slate-400 tracking-widest mb-0.5 md:mb-1 truncate" title={s.label}>Total {s.label}</p>
+                  <p className="text-xs md:text-xl font-black text-slate-800 tracking-tighter">{s.total.toLocaleString('fr-FR')}€</p>
                 </div>
             ))}
           </div>
@@ -1422,7 +1422,7 @@ const App = () => {
           {activeTab === 'agenda' && (
             <div className="space-y-8 animate-in fade-in">
               <div className="flex justify-between items-center mx-2 md:mx-0"><div><h2 className="text-2xl font-black uppercase">Agenda</h2></div><div className="flex items-center gap-4 bg-white px-4 py-2 rounded-2xl shadow-lg"><button onClick={()=>handleMonthChange('prev')}><ChevronLeft/></button><div className="text-center font-black min-w-[120px] uppercase text-xs">{['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][filterMonth==='all'?new Date().getMonth():parseInt(filterMonth)]}</div><button onClick={()=>handleMonthChange('next')}><ChevronRight/></button></div></div>
-              <div className="bg-white p-6 rounded-[40px] shadow-2xl overflow-x-auto no-swipe mx-2 md:mx-0 touch-manipulation" style={{ touchAction: 'manipulation' }}><div className="min-w-[700px]"><div className="grid grid-cols-7 text-center font-black text-slate-300 text-[10px] uppercase mb-4">{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d=><div key={d}>{d}</div>)}</div><div className="grid grid-cols-7 gap-2">{(agendaDays || []).map((item,idx)=>{ if(item.empty) return <div key={idx} className="h-24 bg-slate-50/30 rounded-2xl"></div>; const dayRes = (reservationsList || []).filter(r=>item.dateStr>=r.startDate && item.dateStr<=r.endDate); return (<div key={item.dateStr} className={`h-24 md:h-32 border rounded-2xl p-2 relative flex flex-col ${item.dateStr===todayStr?'border-blue-500 bg-blue-50/10':'border-slate-100'}`}><span className="text-[10px] font-black text-slate-300">{item.day}</span><div className="flex-1 space-y-1 overflow-y-auto no-scrollbar">{dayRes.map(r=>(<div key={r.id} onClick={(e)=>{e.stopPropagation();setEditingResId(r.id);setFormData(r);setIsModalOpen(true)}} className="text-[8px] font-black text-white p-1 rounded truncate cursor-pointer" style={{backgroundColor: CHART_COLORS[(properties || []).findIndex(p=>p.id===r.propertyId)%CHART_COLORS.length]}}>{r.name?.split(' ')[0] || 'Résa'}</div>))}</div></div>);})}</div></div></div>
+              <div className="bg-white p-4 md:p-6 rounded-[32px] md:rounded-[40px] shadow-2xl overflow-x-auto no-swipe mx-2 md:mx-0 touch-manipulation" style={{ touchAction: 'manipulation' }}><div className="min-w-[320px] md:min-w-[700px]"><div className="grid grid-cols-7 text-center font-black text-slate-300 text-[8px] md:text-[10px] uppercase mb-2 md:mb-4">{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d=><div key={d}>{d}</div>)}</div><div className="grid grid-cols-7 gap-1 md:gap-2">{(agendaDays || []).map((item,idx)=>{ if(item.empty) return <div key={idx} className="h-16 md:h-32 bg-slate-50/30 rounded-xl md:rounded-2xl"></div>; const dayRes = (reservationsList || []).filter(r=>item.dateStr>=r.startDate && item.dateStr<=r.endDate); return (<div key={item.dateStr} className={`h-16 md:h-32 border rounded-xl md:rounded-2xl p-1 md:p-2 relative flex flex-col ${item.dateStr===todayStr?'border-blue-500 bg-blue-50/10':'border-slate-100'}`}><span className="text-[8px] md:text-[10px] font-black text-slate-300">{item.day}</span><div className="flex-1 space-y-0.5 md:space-y-1 overflow-y-auto no-scrollbar">{dayRes.map(r=>(<div key={r.id} onClick={(e)=>{e.stopPropagation();setEditingResId(r.id);setFormData(r);setIsModalOpen(true)}} className="text-[6px] md:text-[8px] font-black text-white p-0.5 md:p-1 rounded truncate cursor-pointer leading-tight" style={{backgroundColor: CHART_COLORS[(properties || []).findIndex(p=>p.id===r.propertyId)%CHART_COLORS.length]}}>{r.name?.split(' ')[0] || 'Résa'}</div>))}</div></div>);})}</div></div></div>
             </div>
           )}
           
@@ -1498,50 +1498,57 @@ const App = () => {
               <h2 className="text-3xl font-black uppercase mx-2 md:mx-0">Comptabilité</h2>
               
               {/* TABLEAU BILAN GLOBAL (Avec isolation overscroll et Sticky Footer/Header) */}
-              <div className="bg-white rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100 mx-2 md:mx-0">
+              <div className="bg-white rounded-[32px] md:rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100 mx-2 md:mx-0">
                 <div className="p-4 md:p-8 bg-slate-900 text-white font-black uppercase flex justify-between items-center"><div>Bilan Global</div></div>
                 <div className="max-h-[60vh] overflow-y-auto overflow-x-auto custom-scrollbar overscroll-contain relative no-swipe touch-manipulation" style={{ touchAction: 'manipulation' }}>
-                  <table className="w-full text-left min-w-[500px] md:min-w-[700px]">
-                    <thead className="bg-slate-50 uppercase text-slate-400 border-b sticky top-0 z-10 shadow-sm text-[9px] md:text-xs">
+                  <table className="w-full text-left min-w-[340px] md:min-w-[700px]">
+                    <thead className="bg-slate-50 uppercase text-slate-400 border-b sticky top-0 z-10 shadow-sm text-[7px] md:text-xs">
                       <tr>
-                        <th className="p-3 md:p-6">Période</th>
-                        <th className="p-3 md:p-6 text-right">Brut URSSAF</th>
-                        <th className="p-3 md:p-6 text-right text-emerald-600">Direct (hors URSSAF)</th>
-                        <th className="p-3 md:p-6 text-right text-indigo-600">Virement Reçu</th>
-                        <th className="p-3 md:p-6 text-right text-slate-500">Prestations</th>
-                        <th className="p-3 md:p-6 text-right text-rose-500">Cotis. (7.7%)</th>
-                        <th className="p-3 md:p-6 text-right font-black">Profit Réel</th>
+                        <th className="p-1.5 md:p-6">Période</th>
+                        <th className="p-1.5 md:p-6 text-right">Brut URSSAF</th>
+                        <th className="p-1.5 md:p-6 text-right text-emerald-600">Direct (hors)</th>
+                        <th className="p-1.5 md:p-6 text-right text-indigo-600">Virement Reçu</th>
+                        <th className="p-1.5 md:p-6 text-right text-slate-500">Prestations</th>
+                        <th className="p-1.5 md:p-6 text-right text-rose-500">Cotis. (7.7%)</th>
+                        <th className="p-1.5 md:p-6 text-right font-black">Profit Réel</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y font-bold">
                       {(monthlyRecapData || []).map(([m, d]) => (
                         <tr key={m} className="group hover:bg-slate-50/50 transition-colors">
-                          <td className="p-3 md:p-6 capitalize text-xs md:text-sm">{formatMonthYear(m)}</td>
-                          <td className="p-3 md:p-6 text-right text-slate-500">
-                             <div className="text-xs md:text-sm">{d.urssafGross.toLocaleString('fr-FR')}€</div>
-                             <div className="mt-1 flex flex-col items-end gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
-                               {(availablePlatforms || []).map(p => d.platforms[p] > 0 && <span key={p} className="text-[8px] md:text-[9px] text-slate-400 font-bold uppercase">{p}: {d.platforms[p].toLocaleString('fr-FR')}€</span>)}
+                          <td className="p-1.5 md:p-6 capitalize text-[9px] md:text-sm leading-tight">{formatMonthYear(m)}</td>
+                          <td className="p-1.5 md:p-6 text-right text-slate-500">
+                             <div className="text-[9px] md:text-sm leading-tight">{d.urssafGross.toLocaleString('fr-FR')}€</div>
+                             <div className="mt-0.5 md:mt-1 flex flex-col items-end gap-0 md:gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                               {(availablePlatforms || []).map(p => d.platforms[p] > 0 && <span key={p} className="text-[6px] md:text-[9px] text-slate-400 font-bold uppercase leading-none">{p}: {d.platforms[p].toLocaleString('fr-FR')}€</span>)}
                              </div>
                           </td>
-                          <td className="p-3 md:p-6 text-right text-emerald-600 font-black text-xs md:text-sm">{d.directNet > 0 ? `${d.directNet.toLocaleString('fr-FR')}€` : '-'}</td>
-                          <td className="p-3 md:p-6 text-right text-indigo-600 font-black text-xs md:text-sm">{d.totalBank.toLocaleString('fr-FR')}€</td>
-                          <td className="p-3 md:p-6 text-right text-slate-500 text-xs md:text-sm">-{d.charges.toLocaleString('fr-FR')}€</td>
-                          <td className="p-3 md:p-6 text-right text-rose-500 text-xs md:text-sm">-{d.taxes.toFixed(2)}€</td>
-                          <td className={`p-3 md:p-6 text-right font-black text-xs md:text-sm ${d.totalBank - d.taxes - d.charges >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{(d.totalBank - d.taxes - d.charges).toLocaleString('fr-FR')}€</td>
+                          <td className="p-1.5 md:p-6 text-right text-emerald-600 font-black text-[9px] md:text-sm leading-tight">{d.directNet > 0 ? `${d.directNet.toLocaleString('fr-FR')}€` : '-'}</td>
+                          <td className="p-1.5 md:p-6 text-right text-indigo-600 font-black text-[9px] md:text-sm leading-tight">{d.totalBank.toLocaleString('fr-FR')}€</td>
+                          <td className="p-1.5 md:p-6 text-right text-slate-500 text-[9px] md:text-sm leading-tight">-{d.charges.toLocaleString('fr-FR')}€</td>
+                          <td className="p-1.5 md:p-6 text-right text-rose-500 text-[9px] md:text-sm leading-tight">-{d.taxes.toFixed(2)}€</td>
+                          <td className={`p-1.5 md:p-6 text-right font-black text-[9px] md:text-sm leading-tight ${d.totalBank - d.taxes - d.charges >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{(d.totalBank - d.taxes - d.charges).toLocaleString('fr-FR')}€</td>
                         </tr>
                       ))}
                     </tbody>
-                    <tfoot className="bg-indigo-600 text-white font-black text-sm md:text-lg sticky bottom-0 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+                    <tfoot className="bg-indigo-600 text-white font-black text-[10px] md:text-lg sticky bottom-0 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
                       <tr>
-                        <td className="p-4 md:p-8 uppercase text-[9px] md:text-[10px]">TOTAL</td>
-                        <td className="p-4 md:p-8 text-right opacity-90">
-                           <div>{monthlyRecapData.reduce((acc, [m, d]) => acc + d.urssafGross, 0).toLocaleString('fr-FR')}€</div>
+                        <td className="p-2 md:p-8 uppercase text-[7px] md:text-[10px] leading-tight">TOTAL</td>
+                        <td className="p-2 md:p-8 text-right opacity-90">
+                           <div className="leading-tight">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.urssafGross, 0).toLocaleString('fr-FR')}€</div>
+                           <div className="mt-0.5 md:mt-1 flex flex-col items-end gap-0 md:gap-0.5">
+                               {(availablePlatforms || []).map(p => {
+                                 const platTotal = monthlyRecapData.reduce((acc, [m, d]) => acc + (d.platforms[p] || 0), 0);
+                                 if(platTotal > 0) return <span key={p} className="text-[6px] md:text-[9px] text-indigo-200 font-bold uppercase leading-none">{p}: {platTotal.toLocaleString('fr-FR')}€</span>;
+                                 return null;
+                               })}
+                           </div>
                         </td>
-                        <td className="p-4 md:p-8 text-right text-emerald-300">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.directNet, 0).toLocaleString('fr-FR')}€</td>
-                        <td className="p-4 md:p-8 text-right">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0).toLocaleString('fr-FR')}€</td>
-                        <td className="p-4 md:p-8 text-right text-indigo-200">-{monthlyRecapData.reduce((acc, [m, d]) => acc + d.charges, 0).toLocaleString('fr-FR')}€</td>
-                        <td className="p-4 md:p-8 text-right text-rose-300">-{monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes, 0).toLocaleString('fr-FR')}€</td>
-                        <td className="p-4 md:p-8 text-right bg-indigo-700/50">{(monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0) - monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes + d.charges, 0)).toLocaleString('fr-FR')}€</td>
+                        <td className="p-2 md:p-8 text-right text-emerald-300 leading-tight">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.directNet, 0).toLocaleString('fr-FR')}€</td>
+                        <td className="p-2 md:p-8 text-right leading-tight">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0).toLocaleString('fr-FR')}€</td>
+                        <td className="p-2 md:p-8 text-right text-indigo-200 leading-tight">-{monthlyRecapData.reduce((acc, [m, d]) => acc + d.charges, 0).toLocaleString('fr-FR')}€</td>
+                        <td className="p-2 md:p-8 text-right text-rose-300 leading-tight">-{monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes, 0).toLocaleString('fr-FR')}€</td>
+                        <td className="p-2 md:p-8 text-right bg-indigo-700/50 leading-tight">{(monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0) - monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes + d.charges, 0)).toLocaleString('fr-FR')}€</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -1549,21 +1556,21 @@ const App = () => {
               </div>
 
               {/* TABLEAU SUIVI PRESTATAIRES (Avec isolation overscroll et Sticky Header) */}
-              <div className="bg-white rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100 mx-2 md:mx-0">
+              <div className="bg-white rounded-[32px] md:rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100 mx-2 md:mx-0">
                 <div className="p-4 md:p-8 bg-slate-900 text-white font-black uppercase flex justify-between">Suivi Prestataires</div>
                 <div className="max-h-[60vh] overflow-y-auto overflow-x-auto custom-scrollbar overscroll-contain relative no-swipe touch-manipulation" style={{ touchAction: 'manipulation' }}>
-                    <table className="w-full text-left min-w-[400px] md:min-w-[700px]">
-                        <thead className="bg-slate-50 uppercase text-slate-400 border-b sticky top-0 z-10 shadow-sm text-[9px] md:text-xs">
-                            <tr><th className="p-3 md:p-6">Date</th><th className="p-3 md:p-6">Logement</th><th className="p-3 md:p-6">Prestataire</th><th className="p-3 md:p-6 text-right">Montant</th><th className="p-3 md:p-6 text-center">Statut</th></tr>
+                    <table className="w-full text-left min-w-[280px] md:min-w-[700px]">
+                        <thead className="bg-slate-50 uppercase text-slate-400 border-b sticky top-0 z-10 shadow-sm text-[7px] md:text-xs">
+                            <tr><th className="p-1.5 md:p-6">Date</th><th className="p-1.5 md:p-6">Logement</th><th className="p-1.5 md:p-6">Prestataire</th><th className="p-1.5 md:p-6 text-right">Montant</th><th className="p-1.5 md:p-6 text-center">Statut</th></tr>
                         </thead>
                         <tbody className="divide-y font-bold">
                             {(detailedExpenses || []).map((exp) => (
                                 <tr key={exp.id}>
-                                    <td className="p-3 md:p-6">{formatDateFr(exp.dateRes)}</td>
-                                    <td className="p-3 md:p-6 uppercase text-[10px] md:text-xs">{exp.propertyName}</td>
-                                    <td className="p-3 md:p-6 text-blue-600 uppercase text-[10px] md:text-xs">{exp.person}</td>
-                                    <td className="p-3 md:p-6 text-right">{(exp.amount || 0).toLocaleString('fr-FR')}€</td>
-                                    <td className="p-3 md:p-6 text-center"><span className={`px-2 py-1 md:px-3 md:py-1 rounded-full text-[8px] md:text-[9px] font-black uppercase ${exp.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>{exp.paymentDate ? 'Payé' : 'Attente'}</span></td>
+                                    <td className="p-1.5 md:p-6 text-[8px] md:text-sm">{formatDateFr(exp.dateRes)}</td>
+                                    <td className="p-1.5 md:p-6 uppercase text-[8px] md:text-xs">{exp.propertyName}</td>
+                                    <td className="p-1.5 md:p-6 text-blue-600 uppercase text-[8px] md:text-xs">{exp.person}</td>
+                                    <td className="p-1.5 md:p-6 text-right text-[8px] md:text-sm">{(exp.amount || 0).toLocaleString('fr-FR')}€</td>
+                                    <td className="p-1.5 md:p-6 text-center"><span className={`px-1.5 py-0.5 md:px-3 md:py-1 rounded-full text-[6px] md:text-[9px] font-black uppercase ${exp.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>{exp.paymentDate ? 'Payé' : 'Attente'}</span></td>
                                 </tr>
                             ))}
                         </tbody>
@@ -1597,15 +1604,15 @@ const App = () => {
                 
                 {(reviewList || []).length > 0 && (
                   <div className="w-full mt-6 overflow-x-auto no-swipe">
-                    <table className="w-full text-left text-[10px] font-bold border-collapse">
-                      <thead className="bg-slate-50 border-b text-slate-500"><tr><th className="p-3">Imp.</th><th className="p-3">Client</th><th className="p-3">Logement</th><th className="p-3">Statut</th></tr></thead>
+                    <table className="w-full text-left text-[8px] md:text-[10px] font-bold border-collapse">
+                      <thead className="bg-slate-50 border-b text-slate-500"><tr><th className="p-1.5 md:p-3">Imp.</th><th className="p-1.5 md:p-3">Client</th><th className="p-1.5 md:p-3">Logement</th><th className="p-1.5 md:p-3">Statut</th></tr></thead>
                       <tbody>
                         {reviewList.map(item => (
                           <tr key={item.id} className={`border-b ${!item.hasProperty ? 'bg-rose-50' : item.isDuplicate ? 'bg-orange-50' : ''}`}>
-                            <td className="p-3"><input type="checkbox" checked={item.selected} disabled={!item.hasProperty} onChange={()=>setReviewList(reviewList.map(r=>r.id===item.id?{...r,selected:!r.selected}:r))} /></td>
-                            <td className="p-3">{item.name}<div className="text-slate-400">{formatDateFr(item.startDate)}</div></td>
-                            <td className="p-3 uppercase">{item.propertyName}</td>
-                            <td className="p-3 uppercase">
+                            <td className="p-1.5 md:p-3"><input type="checkbox" checked={item.selected} disabled={!item.hasProperty} onChange={()=>setReviewList(reviewList.map(r=>r.id===item.id?{...r,selected:!r.selected}:r))} /></td>
+                            <td className="p-1.5 md:p-3">{item.name}<div className="text-slate-400">{formatDateFr(item.startDate)}</div></td>
+                            <td className="p-1.5 md:p-3 uppercase">{item.propertyName}</td>
+                            <td className="p-1.5 md:p-3 uppercase">
                               {!item.hasProperty ? <span className="text-rose-600 flex items-center gap-1"><AlertTriangle size={10}/> Logement Inconnu</span> : item.isDuplicate ? <span className="text-orange-600 flex items-center gap-1"><AlertTriangle size={10}/> Doublon</span> : <span className="text-emerald-600 flex items-center gap-1"><Check size={10}/> Nouveau</span>}
                             </td>
                           </tr>
