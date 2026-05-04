@@ -307,11 +307,11 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
          </div>
       </div>
 
-      {/* 3. LE GRAPHIQUE */}
+      {/* 3. LE GRAPHIQUE - CLASSE NO-SWIPE AJOUTÉE */}
       {series.length === 0 ? (
           <div className="h-[300px] flex items-center justify-center text-slate-300 font-black uppercase text-xs">Cochez au moins une option pour voir le graphique</div>
       ) : (
-          <div className="overflow-x-auto no-scrollbar">
+          <div className="overflow-x-auto no-scrollbar no-swipe">
             <div className="min-w-[600px] relative">
               <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
                 {/* Lignes de grille horizontales */}
@@ -804,13 +804,20 @@ const App = () => {
   }, [activeTab, reservationsList, hasScrolledToNext, todayStr]);
 
 
-  // LOGIQUE DU SWIPE (Glissement Tactile)
+  // LOGIQUE DU SWIPE AVEC LA CLASSE DE PROTECTION (no-swipe)
   const onTouchStart = (e) => {
+    // Si l'utilisateur touche une zone avec la classe 'no-swipe', on annule le swipe
+    if (e.target.closest('.no-swipe')) {
+      setTouchStart(null);
+      setTouchEnd(null);
+      return;
+    }
     setTouchEnd(null);
     setTouchStart({ x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY });
   };
 
   const onTouchMove = (e) => {
+    if (!touchStart) return;
     setTouchEnd({ x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY });
   };
 
@@ -820,7 +827,6 @@ const App = () => {
     const distanceX = touchStart.x - touchEnd.x;
     const distanceY = touchStart.y - touchEnd.y;
     
-    // Si on a scrollé verticalement, on annule (pour ne pas changer d'onglet en lisant)
     if (Math.abs(distanceY) > 50) return;
     
     const isLeftSwipe = distanceX > 60;
@@ -1408,7 +1414,7 @@ const App = () => {
           {activeTab === 'agenda' && (
             <div className="space-y-8 animate-in fade-in">
               <div className="flex justify-between items-center"><div><h2 className="text-2xl font-black uppercase">Agenda</h2></div><div className="flex items-center gap-4 bg-white px-4 py-2 rounded-2xl shadow-lg"><button onClick={()=>handleMonthChange('prev')}><ChevronLeft/></button><div className="text-center font-black min-w-[120px] uppercase text-xs">{['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][filterMonth==='all'?new Date().getMonth():parseInt(filterMonth)]}</div><button onClick={()=>handleMonthChange('next')}><ChevronRight/></button></div></div>
-              <div className="bg-white p-6 rounded-[40px] shadow-2xl overflow-x-auto"><div className="min-w-[700px]"><div className="grid grid-cols-7 text-center font-black text-slate-300 text-[10px] uppercase mb-4">{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d=><div key={d}>{d}</div>)}</div><div className="grid grid-cols-7 gap-2">{(agendaDays || []).map((item,idx)=>{ if(item.empty) return <div key={idx} className="h-24 bg-slate-50/30 rounded-2xl"></div>; const dayRes = (reservationsList || []).filter(r=>item.dateStr>=r.startDate && item.dateStr<=r.endDate); return (<div key={item.dateStr} className={`h-24 md:h-32 border rounded-2xl p-2 relative flex flex-col ${item.dateStr===todayStr?'border-blue-500 bg-blue-50/10':'border-slate-100'}`}><span className="text-[10px] font-black text-slate-300">{item.day}</span><div className="flex-1 space-y-1 overflow-y-auto no-scrollbar">{dayRes.map(r=>(<div key={r.id} onClick={(e)=>{e.stopPropagation();setEditingResId(r.id);setFormData(r);setIsModalOpen(true)}} className="text-[8px] font-black text-white p-1 rounded truncate cursor-pointer" style={{backgroundColor: CHART_COLORS[(properties || []).findIndex(p=>p.id===r.propertyId)%CHART_COLORS.length]}}>{r.name?.split(' ')[0] || 'Résa'}</div>))}</div></div>);})}</div></div></div>
+              <div className="bg-white p-6 rounded-[40px] shadow-2xl overflow-x-auto no-swipe"><div className="min-w-[700px]"><div className="grid grid-cols-7 text-center font-black text-slate-300 text-[10px] uppercase mb-4">{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d=><div key={d}>{d}</div>)}</div><div className="grid grid-cols-7 gap-2">{(agendaDays || []).map((item,idx)=>{ if(item.empty) return <div key={idx} className="h-24 bg-slate-50/30 rounded-2xl"></div>; const dayRes = (reservationsList || []).filter(r=>item.dateStr>=r.startDate && item.dateStr<=r.endDate); return (<div key={item.dateStr} className={`h-24 md:h-32 border rounded-2xl p-2 relative flex flex-col ${item.dateStr===todayStr?'border-blue-500 bg-blue-50/10':'border-slate-100'}`}><span className="text-[10px] font-black text-slate-300">{item.day}</span><div className="flex-1 space-y-1 overflow-y-auto no-scrollbar">{dayRes.map(r=>(<div key={r.id} onClick={(e)=>{e.stopPropagation();setEditingResId(r.id);setFormData(r);setIsModalOpen(true)}} className="text-[8px] font-black text-white p-1 rounded truncate cursor-pointer" style={{backgroundColor: CHART_COLORS[(properties || []).findIndex(p=>p.id===r.propertyId)%CHART_COLORS.length]}}>{r.name?.split(' ')[0] || 'Résa'}</div>))}</div></div>);})}</div></div></div>
             </div>
           )}
           
@@ -1486,7 +1492,7 @@ const App = () => {
               {/* TABLEAU BILAN GLOBAL (Avec isolation overscroll et Sticky Footer/Header) */}
               <div className="bg-white rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100">
                 <div className="p-8 bg-slate-900 text-white font-black uppercase flex justify-between items-center"><div>Bilan Global</div></div>
-                <div className="max-h-[60vh] overflow-y-auto custom-scrollbar overscroll-contain relative">
+                <div className="max-h-[60vh] overflow-y-auto overflow-x-auto custom-scrollbar overscroll-contain relative no-swipe">
                   <table className="w-full text-left min-w-[700px]">
                     <thead className="bg-slate-50 uppercase text-slate-400 border-b sticky top-0 z-10 shadow-sm">
                       <tr>
@@ -1544,7 +1550,7 @@ const App = () => {
               {/* TABLEAU SUIVI PRESTATAIRES (Avec isolation overscroll et Sticky Header) */}
               <div className="bg-white rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100">
                 <div className="p-8 bg-slate-900 text-white font-black uppercase flex justify-between">Suivi Prestataires</div>
-                <div className="max-h-[60vh] overflow-y-auto custom-scrollbar overscroll-contain relative">
+                <div className="max-h-[60vh] overflow-y-auto overflow-x-auto custom-scrollbar overscroll-contain relative no-swipe">
                     <table className="w-full text-left min-w-[700px]">
                         <thead className="bg-slate-50 uppercase text-slate-400 border-b sticky top-0 z-10 shadow-sm">
                             <tr><th className="p-6">Date</th><th className="p-6">Logement</th><th className="p-6">Prestataire</th><th className="p-6 text-right">Montant</th><th className="p-6 text-center">Statut</th></tr>
@@ -1589,7 +1595,7 @@ const App = () => {
                 {importStatus && <p className="mt-4 font-black text-emerald-600 uppercase">{importStatus}</p>}
                 
                 {(reviewList || []).length > 0 && (
-                  <div className="w-full mt-6 overflow-x-auto">
+                  <div className="w-full mt-6 overflow-x-auto no-swipe">
                     <table className="w-full text-left text-[10px] font-bold border-collapse">
                       <thead className="bg-slate-50 border-b text-slate-500"><tr><th className="p-3">Imp.</th><th className="p-3">Client</th><th className="p-3">Logement</th><th className="p-3">Statut</th></tr></thead>
                       <tbody>
