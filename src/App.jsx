@@ -113,7 +113,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
 
   const buildSeriesFor = (targetYear, targetProp, targetPlat) => {
       const res = Array(12).fill(0);
-      const prov = Array(12).fill(false); // Tableau pour traquer les mois avec du prévisionnel
+      const prov = Array(12).fill(false);
 
       const processItem = (dateStr, amount, isProv) => {
           if (!dateStr || !dateStr.startsWith(targetYear)) return;
@@ -137,63 +137,56 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
 
           let totalPaidGross = 0;
 
-          // 1. GESTION DES REVENUS & URSSAF
           if (metric === 'net' || metric === 'gross') {
               if (isDirect) {
                   const a1 = parseFloat(t.acompte1Amount) || 0;
                   const a2 = parseFloat(t.acompte2Amount) || 0;
                   const s = parseFloat(t.soldeAmount) || 0;
 
-                  // Acomptes réels
                   if (t.acompte1Date) { processItem(t.acompte1Date, a1, false); totalPaidGross += a1; }
                   if (t.acompte2Date) { processItem(t.acompte2Date, a2, false); totalPaidGross += a2; }
                   
-                  // Solde réel
                   if (t.soldeDate) {
                       processItem(t.soldeDate, s, false);
                       if (metric === 'net' && tax > 0) processItem(t.soldeDate, -tax, false);
                       totalPaidGross += s;
                   }
 
-                  // Solde prévisionnel (S'il n'y a pas de date de solde)
                   if (!t.soldeDate) {
                       const remaining = g - totalPaidGross;
                       if (remaining > 0) {
-                          processItem(expectedDate, remaining, true); // True = Prévisionnel
+                          processItem(expectedDate, remaining, true); 
                       }
                       if (metric === 'net' && tax > 0) processItem(expectedDate, -tax, true);
                   }
 
               } else {
-                  // Plateformes classiques
                   if (t.paymentDate) {
                       processItem(t.paymentDate, metric === 'gross' ? g : n, false);
                       if (metric === 'net' && tax > 0) processItem(t.paymentDate, -tax, false);
                   } else {
-                      processItem(expectedDate, metric === 'gross' ? g : n, true); // True = Prévisionnel
+                      processItem(expectedDate, metric === 'gross' ? g : n, true); 
                       if (metric === 'net' && tax > 0) processItem(expectedDate, -tax, true);
                   }
               }
           }
 
-          // 2. GESTION DES PRESTATIONS (DÉPENSES)
           if (metric === 'net' || metric === 'expenses') {
               (t.resExpenses || []).forEach(exp => {
                   const amt = parseFloat(exp.amount) || 0;
                   if (exp.paymentDate) {
                       processItem(exp.paymentDate, metric === 'expenses' ? amt : -amt, false);
                   } else {
-                      processItem(expectedDate, metric === 'expenses' ? amt : -amt, true); // True = Prévisionnel
+                      processItem(expectedDate, metric === 'expenses' ? amt : -amt, true);
                   }
               });
           }
       });
 
-      // Calcul de la coupure (splitIndex) : Le premier mois qui contient du prévisionnel
-      let splitIndex = 11; // Par défaut, ligne 100% pleine
+      let splitIndex = 11; 
       for (let i = 0; i < 12; i++) {
           if (prov[i]) {
-              splitIndex = i - 1; // La ligne pleine s'arrête au mois précédent
+              splitIndex = i - 1; 
               break;
           }
       }
@@ -268,14 +261,12 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
   return (
     <div className="w-full bg-white p-6 md:p-8 rounded-[48px] shadow-2xl border border-slate-50 animate-in fade-in relative mt-8">
       
-      {/* 1. SELECTION DU MODE */}
       <div className="flex bg-slate-100 p-1.5 rounded-[20px] w-max mb-6">
          <button onClick={()=>{setMode('years'); setContextProp('all'); setContextPlat('all');}} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${mode === 'years' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>📅 Années</button>
          <button onClick={()=>{setMode('properties'); setContextYear(currentYear); setContextPlat('all');}} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${mode === 'properties' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>🏠 Logements</button>
          <button onClick={()=>{setMode('platforms'); setContextYear(currentYear); setContextProp('all');}} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${mode === 'platforms' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>💻 Plateformes</button>
       </div>
 
-      {/* 2. BOUTONS DE SELECTION MULTIPLE + FILTRES */}
       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6 mb-8 bg-slate-50 p-4 md:p-6 rounded-3xl border border-slate-100">
          <div className="flex-1">
             <span className="text-[10px] font-black uppercase text-slate-400 mb-3 block">Que voulez-vous afficher ? (Cochez)</span>
@@ -314,14 +305,12 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
          </div>
       </div>
 
-      {/* 3. LE GRAPHIQUE */}
       {series.length === 0 ? (
           <div className="h-[300px] flex items-center justify-center text-slate-300 font-black uppercase text-xs">Cochez au moins une option pour voir le graphique</div>
       ) : (
           <div className="overflow-x-auto no-scrollbar">
             <div className="min-w-[600px] relative">
               <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
-                {/* Lignes de grille horizontales */}
                 {yTicks.map((tick, i) => (
                   <g key={`grid-${i}`}>
                     <line x1={padX} y1={getY(tick)} x2={w - padX} y2={getY(tick)} stroke="#F1F5F9" strokeWidth="2" />
@@ -329,27 +318,21 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
                   </g>
                 ))}
 
-                {/* Highlight vertical line pour le survol */}
                 {hoveredMonth !== null && (
                     <line x1={getX(hoveredMonth)} y1={padY} x2={getX(hoveredMonth)} y2={h - padY} stroke="#CBD5E1" strokeWidth="2" strokeDasharray="4 4" />
                 )}
                 
-                {/* Lignes de mois */}
                 {months.map((m, i) => (
                   <text key={m} x={getX(i)} y={h - 5} fill={hoveredMonth === i ? "#0F172A" : "#94A3B8"} fontSize="12" fontFamily="sans-serif" fontWeight="900" textAnchor="middle" className="transition-colors cursor-pointer" onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)}>{m}</text>
                 ))}
                 
-                {/* Tracer chaque courbe avec pointillé intelligent */}
                 {series.map((s, idx) => (
                    <g key={`series-${s.id}`}>
-                      {/* Ligne Pleine (Réel) */}
                       <path d={buildPath(s.data, 0, Math.max(0, s.splitIndex))} stroke={s.color} strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />
-                      {/* Ligne Pointillée (Prévisionnel) */}
                       <path d={buildPath(s.data, Math.max(0, s.splitIndex), 11)} stroke={s.color} strokeWidth="4" fill="none" strokeDasharray="6 8" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />
                    </g>
                 ))}
 
-                {/* Tracer les points pour le hover */}
                 {months.map((_, i) => (
                   <g key={`points-${i}`} onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)} className="cursor-pointer">
                     <rect x={getX(i) - 20} y={0} width="40" height={h} fill="transparent" />
@@ -360,7 +343,6 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
                 ))}
               </svg>
 
-              {/* TOOLTIP INTERACTIF AU SURVOL */}
               {hoveredMonth !== null && series.length > 0 && (
                 <div 
                   className="absolute z-20 bg-slate-900/95 backdrop-blur-sm text-white p-4 rounded-2xl shadow-2xl pointer-events-none transition-all duration-200 min-w-[160px] border border-slate-700"
@@ -385,7 +367,6 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
           </div>
       )}
       
-      {/* 4. TOTAUX GLOBAUX */}
       {series.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
             {series.map(s => (
@@ -452,7 +433,6 @@ const App = () => {
   const [availableProviders, setAvailableProviders] = useState(['Justine', 'Marc']);
   const [availableServiceTypes, setAvailableServiceTypes] = useState(['Ménage', 'Entrée/Sortie']);
 
-  // Par défaut sur "all" pour voir toutes les années et pouvoir trouver la prochaine réservation
   const [filterYear, setFilterYear] = useState('all');
   const [filterMonth, setFilterMonth] = useState('all');
   const [filterProp, setFilterProp] = useState('all');
@@ -728,7 +708,7 @@ const App = () => {
     }).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
   }, [filteredData, filterStatus]);
 
-  // LOGIQUE D'AUTO-SCROLL INTELLIGENTE ET ROBUSTE
+  // LOGIQUE D'AUTO-SCROLL RESTREINTE A LA ZONE DEROULANTE
   useEffect(() => {
     if (activeTab !== 'reservations') {
        setHasScrolledToNext(false);
@@ -738,7 +718,6 @@ const App = () => {
     if (hasScrolledToNext || reservationsList.length === 0) return;
 
     const todayStr = new Date().toISOString().split('T')[0];
-
     let targetRes = reservationsList.find(t => t.startDate >= todayStr || (t.endDate && t.endDate >= todayStr));
     
     if (!targetRes) {
@@ -766,7 +745,7 @@ const App = () => {
             if (scrolled) {
                 setHasScrolledToNext(true);
             }
-        }, 150);
+        }, 500); 
 
         return () => clearTimeout(timer);
     }
@@ -998,7 +977,6 @@ const App = () => {
     return days;
   }, [filterYear, filterMonth]);
 
-  // LA CORRECTION DU TABLEAU DES ANNÉES (Ajout des dates de solde et de paiements pour voir 2027)
   const yearsAvailable = useMemo(() => {
     const years = new Set([new Date().getFullYear()]);
     tenants.forEach(t => {
@@ -1223,88 +1201,92 @@ const App = () => {
             <div className="space-y-8 animate-in fade-in">
               <div className="flex justify-between items-center"><h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2><button onClick={() => { setEditingResId(null); setFormData({ propertyId: properties[0]?.id || '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '', acompte1Amount: '', acompte1Date: '', acompte2Amount: '', acompte2Date: '', soldeAmount: '', soldeDate: '' }); setIsModalOpen(true); }} className="bg-blue-600 text-white px-8 py-4 rounded-[24px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button></div>
               
-              {/* VUE MOBILE : Liste naturelle */}
-              <div className="grid grid-cols-1 gap-4 md:hidden">
-                {(reservationsList || []).map(t => (
-                  <div key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="bg-white p-6 rounded-[32px] shadow-lg border border-slate-50 cursor-pointer">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <h3 className="text-base font-black uppercase">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</h3>
-                        <div className="flex gap-2 text-[10px] text-slate-400"><span>{t.platform}</span><span>{t.name}</span></div>
+              {/* VUE MOBILE : Liste déroulante indépendante (overscroll-contain) */}
+              <div className="md:hidden max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain p-1 rounded-[32px] border border-slate-100 bg-slate-50/50 shadow-inner">
+                <div className="grid grid-cols-1 gap-4">
+                  {(reservationsList || []).map(t => (
+                    <div key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="bg-white p-6 rounded-[32px] shadow-lg border border-slate-50 cursor-pointer">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <h3 className="text-base font-black uppercase">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</h3>
+                          <div className="flex gap-2 text-[10px] text-slate-400"><span>{t.platform}</span><span>{t.name}</span></div>
+                        </div>
+                        <div className="flex flex-col items-end">
+                          <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>
+                            {getStatusProps(t).label}
+                          </span>
+                          {t.paymentDate && t.platform !== 'En direct' && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.paymentDate)}</span>}
+                          {t.platform === 'En direct' && t.soldeDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.soldeDate)}</span>}
+                        </div>
                       </div>
-                      <div className="flex flex-col items-end">
-                        <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>
-                          {getStatusProps(t).label}
-                        </span>
-                        {t.paymentDate && t.platform !== 'En direct' && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.paymentDate)}</span>}
-                        {t.platform === 'En direct' && t.soldeDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.soldeDate)}</span>}
-                      </div>
-                    </div>
-                    <div className="bg-slate-50 p-3 rounded-2xl flex justify-between font-black text-xs mb-3"><span>{formatDateFr(t.startDate)}</span><ArrowRight size={14} className="text-slate-300"/><span>{formatDateFr(t.endDate)}</span></div>
-                    
-                    {t.resExpenses && t.resExpenses.length > 0 && (
-                      <div className="space-y-1.5 border-t border-slate-50 pt-3 mb-3">
-                        {(t.resExpenses || []).map((exp, idx) => (
-                          <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-slate-50 p-2 rounded-xl cursor-pointer hover:bg-blue-50 transition-colors">
-                            <span className="uppercase font-black text-slate-500">{exp.type} ({exp.person})</span>
-                            <div className="text-right">
-                              <span className={`font-black flex items-center justify-end gap-1 ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€ {exp.paymentDate ? <CheckCircle size={10}/> : <Clock size={10}/>}</span>
-                              {exp.paymentDate && <div className="text-[8px] text-slate-400 mt-0.5">{formatDateFr(exp.paymentDate)}</div>}
+                      <div className="bg-slate-50 p-3 rounded-2xl flex justify-between font-black text-xs mb-3"><span>{formatDateFr(t.startDate)}</span><ArrowRight size={14} className="text-slate-300"/><span>{formatDateFr(t.endDate)}</span></div>
+                      
+                      {t.resExpenses && t.resExpenses.length > 0 && (
+                        <div className="space-y-1.5 border-t border-slate-50 pt-3 mb-3">
+                          {(t.resExpenses || []).map((exp, idx) => (
+                            <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-slate-50 p-2 rounded-xl cursor-pointer hover:bg-blue-50 transition-colors">
+                              <span className="uppercase font-black text-slate-500">{exp.type} ({exp.person})</span>
+                              <div className="text-right">
+                                <span className={`font-black flex items-center justify-end gap-1 ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€ {exp.paymentDate ? <CheckCircle size={10}/> : <Clock size={10}/>}</span>
+                                {exp.paymentDate && <div className="text-[8px] text-slate-400 mt-0.5">{formatDateFr(exp.paymentDate)}</div>}
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div className="text-right font-black text-lg">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</div>
-                  </div>
-                ))}
+                          ))}
+                        </div>
+                      )}
+                      <div className="text-right font-black text-lg">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              {/* VUE ORDINATEUR : Liste naturelle sans restriction de hauteur */}
-              <div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 font-black uppercase border-b text-slate-400">
-                      <tr><th className="p-6">Logement</th><th className="p-6">Client</th><th className="p-6 text-center">Dates</th><th className="p-6">Prestations</th><th className="p-6 text-right">Net</th><th className="p-6 text-center">État</th></tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50 font-bold">
-                      {(reservationsList || []).map(t => (
-                      <tr key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="hover:bg-slate-50 cursor-pointer">
-                          <td className="p-6 uppercase">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}<div className="text-blue-600 text-[10px]">{t.platform}</div></td>
-                          <td className="p-6">
-                          <div>{t.name}</div>
-                          {t.phone && <div className="text-slate-400 text-[9px] mt-0.5">{t.phone}</div>}
-                          </td>
-                          <td className="p-6 text-center text-slate-500">{formatDateFr(t.startDate)} ➔ {formatDateFr(t.endDate)}</td>
-                          <td className="p-6">
-                          <div className="space-y-1.5">
-                              {(t.resExpenses || []).map((exp, idx) => (
-                                  <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-slate-50 p-1.5 rounded-lg border border-slate-100 cursor-pointer hover:border-blue-300 hover:shadow-sm transition-all">
-                                  <span className="uppercase font-black text-slate-500 leading-none">{exp.type} ({exp.person})</span>
-                                  <div className="text-right">
-                                      <div className="flex items-center justify-end gap-1.5">
-                                          <span className={`font-black ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€</span>
-                                          {exp.paymentDate ? <CheckCircle size={10} className="text-emerald-500" /> : <Clock size={10} className="text-orange-400" />}
-                                      </div>
-                                      {exp.paymentDate && <div className="text-[8px] text-slate-400 mt-0.5 leading-none">{formatDateFr(exp.paymentDate)}</div>}
-                                  </div>
-                                  </div>
-                              ))}
-                          </div>
-                          </td>
-                          <td className="p-6 text-right font-black">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</td>
-                          <td className="p-6 text-center">
-                          <div className="flex flex-col items-center">
-                              <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-4 py-2 rounded-full text-[9px] uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>
-                              {getStatusProps(t).label}
-                              </span>
-                              {t.platform !== 'En direct' && t.paymentDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.paymentDate)}</span>}
-                              {t.platform === 'En direct' && t.soldeDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.soldeDate)}</span>}
-                          </div>
-                          </td>
-                      </tr>
-                      ))}
-                  </tbody>
-                </table>
+              {/* VUE ORDINATEUR : Liste déroulante indépendante (overscroll-contain) */}
+              <div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden border border-slate-100">
+                <div className="max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain relative">
+                    <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 font-black uppercase border-b text-slate-400 sticky top-0 z-20 shadow-sm">
+                        <tr><th className="p-6">Logement</th><th className="p-6">Client</th><th className="p-6 text-center">Dates</th><th className="p-6">Prestations</th><th className="p-6 text-right">Net</th><th className="p-6 text-center">État</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 font-bold">
+                        {(reservationsList || []).map(t => (
+                        <tr key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="hover:bg-slate-50 cursor-pointer">
+                            <td className="p-6 uppercase">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}<div className="text-blue-600 text-[10px]">{t.platform}</div></td>
+                            <td className="p-6">
+                            <div>{t.name}</div>
+                            {t.phone && <div className="text-slate-400 text-[9px] mt-0.5">{t.phone}</div>}
+                            </td>
+                            <td className="p-6 text-center text-slate-500">{formatDateFr(t.startDate)} ➔ {formatDateFr(t.endDate)}</td>
+                            <td className="p-6">
+                            <div className="space-y-1.5">
+                                {(t.resExpenses || []).map((exp, idx) => (
+                                    <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-slate-50 p-1.5 rounded-lg border border-slate-100 cursor-pointer hover:border-blue-300 hover:shadow-sm transition-all">
+                                    <span className="uppercase font-black text-slate-500 leading-none">{exp.type} ({exp.person})</span>
+                                    <div className="text-right">
+                                        <div className="flex items-center justify-end gap-1.5">
+                                            <span className={`font-black ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€</span>
+                                            {exp.paymentDate ? <CheckCircle size={10} className="text-emerald-500" /> : <Clock size={10} className="text-orange-400" />}
+                                        </div>
+                                        {exp.paymentDate && <div className="text-[8px] text-slate-400 mt-0.5 leading-none">{formatDateFr(exp.paymentDate)}</div>}
+                                    </div>
+                                    </div>
+                                ))}
+                            </div>
+                            </td>
+                            <td className="p-6 text-right font-black">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</td>
+                            <td className="p-6 text-center">
+                            <div className="flex flex-col items-center">
+                                <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-4 py-2 rounded-full text-[9px] uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>
+                                {getStatusProps(t).label}
+                                </span>
+                                {t.platform !== 'En direct' && t.paymentDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.paymentDate)}</span>}
+                                {t.platform === 'En direct' && t.soldeDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.soldeDate)}</span>}
+                            </div>
+                            </td>
+                        </tr>
+                        ))}
+                    </tbody>
+                    </table>
+                </div>
               </div>
             </div>
           )}
@@ -1630,12 +1612,12 @@ const App = () => {
 
               <div className="bg-slate-900 p-8 rounded-[48px] text-white flex flex-col md:flex-row justify-between items-center gap-6">
                  <div className="text-center md:text-left leading-none">
-                     <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Net Estimé</p>
-                     <p className="text-4xl font-black text-blue-400 tracking-tighter">
-                       {formData.platform === 'En direct' 
-                         ? (parseFloat(formData?.grossAmount) || 0).toFixed(2)
-                         : (nModale - curChargesModale).toFixed(2)}€
-                     </p>
+                    <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Net Estimé</p>
+                    <p className="text-4xl font-black text-blue-400 tracking-tighter">
+                      {formData.platform === 'En direct' 
+                        ? (parseFloat(formData?.grossAmount) || 0).toFixed(2)
+                        : (nModale - curChargesModale).toFixed(2)}€
+                    </p>
                  </div>
                  <div className="flex items-center gap-4 w-full md:w-auto">
                    {editingResId && <button type="button" onClick={() => deleteRes(editingResId)} className="p-4 text-rose-500 bg-rose-50 rounded-[24px] hover:bg-rose-500 hover:text-white transition-colors"><Trash2 size={24}/></button>}
