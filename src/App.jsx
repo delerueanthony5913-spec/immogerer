@@ -423,7 +423,16 @@ const App = () => {
     const phoneText = res.phone ? `\nContact : ${res.phone}` : '';
     
     const details = encodeURIComponent(`Client : ${res.name}${phoneText}\nLogement : ${prop?.name || ''}\nPlateforme : ${res.platform}\nNotes : ${res.comment || ''}${expensesText}`);
-    const dates = `${res.startDate.replace(/-/g, '')}/${res.endDate.replace(/-/g, '')}`;
+    
+    // Correction Google Calendar : l'ajout d'une journée à la date de fin
+    const endDateObj = new Date(res.endDate);
+    endDateObj.setDate(endDateObj.getDate() + 1);
+    const endYear = endDateObj.getFullYear();
+    const endMonth = String(endDateObj.getMonth() + 1).padStart(2, '0');
+    const endDay = String(endDateObj.getDate()).padStart(2, '0');
+    const formattedEnd = `${endYear}${endMonth}${endDay}`;
+    
+    const dates = `${res.startDate.replace(/-/g, '')}/${formattedEnd}`;
     return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${details}`;
   };
 
@@ -526,6 +535,7 @@ const App = () => {
     return () => { unsubAuth(); unsubProps(); unsubTenants(); unsubSettings(); };
   }, []);
 
+  // Injection 2025 auto
   useEffect(() => {
     if (!user || loading) return;
     
