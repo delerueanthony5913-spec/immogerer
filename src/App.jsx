@@ -30,6 +30,14 @@ const appId = 'immogerer-prod-final';
 
 const CHART_COLORS = ['#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#6366F1', '#F43F5E', '#06B6D4'];
 
+// --- LISTE DES CRENEAUX HORAIRES (Toutes les 30 min) ---
+const TIME_SLOTS = [];
+for (let h = 0; h <= 23; h++) {
+  const hour = h.toString().padStart(2, '0');
+  TIME_SLOTS.push(`${hour}:00`);
+  TIME_SLOTS.push(`${hour}:30`);
+}
+
 // --- UTILITAIRE : CALCULATEUR DE DIMANCHES ET JOURS FERIES FRANCAIS ---
 const isSundayOrHoliday = (dateStr) => {
   if (!dateStr) return false;
@@ -1554,6 +1562,7 @@ const App = () => {
                   </form>
                 </div>
                 
+                {/* --- NOUVEAU BLOC : PRESTATAIRES AVEC EMAIL --- */}
                 <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full border-2 border-blue-50">
                   <h3 className="text-[10px] font-black uppercase text-blue-600 mb-4">Prestataires (Emails)</h3>
                   <div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">
@@ -1756,7 +1765,12 @@ const App = () => {
                                           <div className="flex justify-between items-center"><span className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Entrée</span>{isSundayOrHoliday(exp.dateEntry) && <span className="text-[8px] font-black text-white bg-rose-500 px-2 py-0.5 rounded-full shadow-sm">Férié / Dim</span>}</div>
                                           <input type="date" value={exp.dateEntry || ''} onChange={e => updateDiasField(exp.id, 'dateEntry', e.target.value)} className="w-full p-2 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-600 outline-none cursor-pointer" />
                                           <div className="flex gap-2">
-                                              <div className="w-1/3 min-w-0"><label className="text-[7px] uppercase text-slate-400 font-bold block mb-1">Heure</label><input type="time" step="1800" value={exp.timeEntry || ''} onChange={e => updateDiasField(exp.id, 'timeEntry', e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg font-black text-center text-[10px] outline-none focus:border-blue-400" /></div>
+                                              <div className="w-1/3 min-w-0">
+                                                  <label className="text-[7px] uppercase text-slate-400 font-bold block mb-1">Heure</label>
+                                                  <select value={exp.timeEntry || '10:00'} onChange={e => updateDiasField(exp.id, 'timeEntry', e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg font-black text-center text-[10px] outline-none focus:border-blue-400 bg-white">
+                                                      {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
+                                                  </select>
+                                              </div>
                                               <div className="w-1/3 min-w-0"><label className="text-[7px] uppercase text-slate-400 font-bold block mb-1">Durée (h)</label><input type="number" step="0.5" value={exp.hoursEntry || ''} onChange={e => updateDiasField(exp.id, 'hoursEntry', e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg font-black text-center text-[10px] outline-none focus:border-blue-400" placeholder="0" /></div>
                                               <div className="w-1/3 min-w-0"><label className="text-[7px] uppercase text-slate-400 font-bold block mb-1">Tarif (€)</label><input type="number" step="0.5" value={exp.rateEntry || ''} onChange={e => updateDiasField(exp.id, 'rateEntry', e.target.value)} className={`w-full p-2 border rounded-lg font-black text-center text-[10px] outline-none focus:border-blue-400 transition-colors ${isSundayOrHoliday(exp.dateEntry) ? 'bg-rose-50 border-rose-200 text-rose-700' : 'border-slate-200 text-slate-900'}`} placeholder="0" /></div>
                                           </div>
@@ -1766,7 +1780,12 @@ const App = () => {
                                           <div className="flex justify-between items-center"><span className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Sortie</span>{isSundayOrHoliday(exp.dateExit) && <span className="text-[8px] font-black text-white bg-rose-500 px-2 py-0.5 rounded-full shadow-sm">Férié / Dim</span>}</div>
                                           <input type="date" value={exp.dateExit || ''} onChange={e => updateDiasField(exp.id, 'dateExit', e.target.value)} className="w-full p-2 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-600 outline-none cursor-pointer" />
                                           <div className="flex gap-2">
-                                              <div className="w-1/3 min-w-0"><label className="text-[7px] uppercase text-slate-400 font-bold block mb-1">Heure</label><input type="time" step="1800" value={exp.timeExit || ''} onChange={e => updateDiasField(exp.id, 'timeExit', e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg font-black text-center text-[10px] outline-none focus:border-blue-400" /></div>
+                                              <div className="w-1/3 min-w-0">
+                                                  <label className="text-[7px] uppercase text-slate-400 font-bold block mb-1">Heure</label>
+                                                  <select value={exp.timeExit || '10:00'} onChange={e => updateDiasField(exp.id, 'timeExit', e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg font-black text-center text-[10px] outline-none focus:border-blue-400 bg-white">
+                                                      {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
+                                                  </select>
+                                              </div>
                                               <div className="w-1/3 min-w-0"><label className="text-[7px] uppercase text-slate-400 font-bold block mb-1">Durée (h)</label><input type="number" step="0.5" value={exp.hoursExit || ''} onChange={e => updateDiasField(exp.id, 'hoursExit', e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg font-black text-center text-[10px] outline-none focus:border-blue-400" placeholder="0" /></div>
                                               <div className="w-1/3 min-w-0"><label className="text-[7px] uppercase text-slate-400 font-bold block mb-1">Tarif (€)</label><input type="number" step="0.5" value={exp.rateExit || ''} onChange={e => updateDiasField(exp.id, 'rateExit', e.target.value)} className={`w-full p-2 border rounded-lg font-black text-center text-[10px] outline-none focus:border-blue-400 transition-colors ${isSundayOrHoliday(exp.dateExit) ? 'bg-rose-50 border-rose-200 text-rose-700' : 'border-slate-200 text-slate-900'}`} placeholder="0" /></div>
                                           </div>
