@@ -37,16 +37,16 @@ const DonutChart = ({ data, title }) => {
 
   if (!displayTotal) {
     return (
-      <div className="bg-white p-6 rounded-[40px] border border-gray-100 flex flex-col items-center justify-center min-h-[300px] shadow-sm">
+      <div className="bg-white p-4 md:p-6 rounded-[24px] md:rounded-[40px] border border-gray-100 flex flex-col items-center justify-center min-h-[150px] md:min-h-[300px] shadow-sm">
         <PieChartIcon size={24} className="text-gray-200 mb-2" />
-        <p className="text-gray-400 font-black text-[10px] uppercase tracking-widest text-center">{title}</p>
+        <p className="text-gray-400 font-black text-[8px] md:text-[10px] uppercase tracking-widest text-center">{title}</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white p-10 rounded-[48px] border border-gray-50 flex flex-col md:flex-row items-center gap-10 animate-in fade-in shadow-xl shadow-slate-200/50 mx-2 md:mx-0">
-      <div className="relative w-48 h-48 flex-shrink-0">
+    <div className="bg-white p-4 md:p-10 rounded-[24px] md:rounded-[48px] border border-gray-50 flex flex-col md:flex-row items-center gap-4 md:gap-10 animate-in fade-in shadow-xl shadow-slate-200/50 mx-2 md:mx-0">
+      <div className="relative w-24 h-24 md:w-48 md:h-48 flex-shrink-0">
         <svg viewBox="0 0 32 32" className="w-full h-full transform -rotate-90">
           {visibleData.map((slice, i) => {
             const percent = (slice.value / displayTotal) * 100;
@@ -59,18 +59,18 @@ const DonutChart = ({ data, title }) => {
           })}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-          <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest leading-none mb-1">Total Net</span>
-          <span className="text-xl font-black text-slate-900">{Math.round(displayTotal).toLocaleString('fr-FR')}€</span>
+          <span className="text-[7px] md:text-[9px] text-slate-400 font-black uppercase tracking-widest leading-none mb-0.5 md:mb-1">Total Net</span>
+          <span className="text-sm md:text-xl font-black text-slate-900">{Math.round(displayTotal).toLocaleString('fr-FR')}€</span>
         </div>
       </div>
-      <div className="flex-1 w-full space-y-3">
-        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">{title}</h3>
-        <div className="space-y-2">
+      <div className="flex-1 w-full space-y-1.5 md:space-y-3">
+        <h3 className="text-[9px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-2 md:mb-4 text-center md:text-left">{title}</h3>
+        <div className="space-y-1 md:space-y-2">
           {visibleData.map((slice, i) => (
-            <div key={i} className="flex items-center justify-between text-[11px] group">
-              <div className="flex items-center gap-3">
-                <div className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: slice.color }}></div>
-                <span className="font-bold text-slate-600 truncate max-w-[140px]">{slice.label}</span>
+            <div key={i} className="flex items-center justify-between text-[9px] md:text-[11px] group">
+              <div className="flex items-center gap-1.5 md:gap-3">
+                <div className="w-1.5 h-1.5 md:w-3 md:h-3 rounded-full shadow-sm" style={{ backgroundColor: slice.color }}></div>
+                <span className="font-bold text-slate-600 truncate max-w-[120px] md:max-w-[140px]">{slice.label}</span>
               </div>
               <span className="font-black text-slate-900 tabular-nums">{Math.round(slice.value).toLocaleString('fr-FR')} €</span>
             </div>
@@ -1435,50 +1435,50 @@ const App = () => {
                    </div>
                 </div>
 
-                {/* Blocs indicateurs clés */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mx-2 md:mx-0">
-                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `CA Généré Brut (${statsCalculations.year})` })} className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-40 relative overflow-hidden group hover:scale-[1.03] transition-transform cursor-pointer hover:ring-2 ring-blue-500 ring-offset-4">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 z-10">CA Brut ({statsCalculations.year})</p>
-                    <p className="text-3xl font-black text-indigo-600 z-10">{Math.round(statsCalculations.currentYearGross).toLocaleString('fr-FR')}€</p>
-                    <div className={`mt-2 flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded-full z-10 ${statsCalculations.grossGrowth >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                        {statsCalculations.grossGrowth >= 0 ? <TrendingUp size={12}/> : <TrendingDown size={12}/>} {statsCalculations.grossGrowth}% vs {statsCalculations.prevYear}
+                {/* Blocs indicateurs clés (Réduits de moitié sur mobile) */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mx-2 md:mx-0">
+                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `CA Généré Brut (${statsCalculations.year})` })} className="bg-white p-3 md:p-6 rounded-[20px] md:rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-24 md:h-40 relative overflow-hidden group hover:scale-[1.03] transition-transform cursor-pointer hover:ring-2 ring-blue-500 ring-offset-4">
+                    <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 md:mb-2 z-10">CA Brut ({statsCalculations.year})</p>
+                    <p className="text-xl md:text-3xl font-black text-indigo-600 z-10">{Math.round(statsCalculations.currentYearGross).toLocaleString('fr-FR')}€</p>
+                    <div className={`mt-1 md:mt-2 flex items-center gap-1 text-[8px] md:text-[10px] font-black px-2 py-0.5 md:py-1 rounded-full z-10 ${statsCalculations.grossGrowth >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                        {statsCalculations.grossGrowth >= 0 ? <TrendingUp size={10}/> : <TrendingDown size={10}/>} {statsCalculations.grossGrowth}% vs {statsCalculations.prevYear}
                     </div>
                     <div className="absolute inset-0 bg-blue-50/0 group-hover:bg-blue-50/50 transition-colors pointer-events-none"></div>
                   </div>
                   
-                  <div onClick={() => setStatsDetailConfig({ type: 'upcoming', title: `CA à venir (Impayés)` })} className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-40 relative group hover:scale-[1.03] transition-transform cursor-pointer hover:ring-2 ring-blue-500 ring-offset-4">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">CA à venir (Impayés)</p>
-                    <p className="text-3xl font-black text-blue-600">{Math.round(statsCalculations.upcomingGross).toLocaleString('fr-FR')}€</p>
-                    <p className="text-[9px] text-blue-400 mt-2 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">👉 Clic pour voir</p>
+                  <div onClick={() => setStatsDetailConfig({ type: 'upcoming', title: `CA à venir (Impayés)` })} className="bg-white p-3 md:p-6 rounded-[20px] md:rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-24 md:h-40 relative group hover:scale-[1.03] transition-transform cursor-pointer hover:ring-2 ring-blue-500 ring-offset-4">
+                    <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 md:mb-2">CA à venir (Impayés)</p>
+                    <p className="text-xl md:text-3xl font-black text-blue-600">{Math.round(statsCalculations.upcomingGross).toLocaleString('fr-FR')}€</p>
+                    <p className="text-[7px] md:text-[9px] text-blue-400 mt-1 md:mt-2 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">👉 Clic pour voir</p>
                   </div>
                   
-                  <div onClick={() => setStatsDetailConfig({ type: 'expenses', title: `Réservations avec Prestations (${statsCalculations.year})` })} className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-40 group hover:scale-[1.03] transition-transform cursor-pointer hover:ring-2 ring-blue-500 ring-offset-4">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Coût des Prestations</p>
-                    <p className="text-3xl font-black text-rose-500">-{Math.round(statsCalculations.currentYearExp).toLocaleString('fr-FR')}€</p>
-                    <p className="text-[9px] text-blue-400 mt-2 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">👉 Clic pour voir</p>
+                  <div onClick={() => setStatsDetailConfig({ type: 'expenses', title: `Réservations avec Prestations (${statsCalculations.year})` })} className="bg-white p-3 md:p-6 rounded-[20px] md:rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-24 md:h-40 group hover:scale-[1.03] transition-transform cursor-pointer hover:ring-2 ring-blue-500 ring-offset-4">
+                    <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Coût des Prestations</p>
+                    <p className="text-xl md:text-3xl font-black text-rose-500">-{Math.round(statsCalculations.currentYearExp).toLocaleString('fr-FR')}€</p>
+                    <p className="text-[7px] md:text-[9px] text-blue-400 mt-1 md:mt-2 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">👉 Clic pour voir</p>
                   </div>
                   
-                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-40 group hover:scale-[1.03] transition-transform cursor-pointer hover:ring-2 ring-blue-500 ring-offset-4">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Revenu Brut / Nuit</p>
-                    <p className="text-3xl font-black text-emerald-600">{statsCalculations.revPerNight}€</p>
-                    <p className="text-[9px] text-blue-400 mt-2 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">👉 Clic pour voir</p>
+                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-white p-3 md:p-6 rounded-[20px] md:rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-24 md:h-40 group hover:scale-[1.03] transition-transform cursor-pointer hover:ring-2 ring-blue-500 ring-offset-4">
+                    <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Revenu Brut / Nuit</p>
+                    <p className="text-xl md:text-3xl font-black text-emerald-600">{statsCalculations.revPerNight}€</p>
+                    <p className="text-[7px] md:text-[9px] text-blue-400 mt-1 md:mt-2 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">👉 Clic pour voir</p>
                   </div>
 
-                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-slate-50 p-6 rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-32 hover:bg-slate-100 cursor-pointer transition-colors group">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Nuitées Louées</p>
-                    <p className="text-2xl font-black text-slate-700">{statsCalculations.currentYearNights}</p>
+                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-slate-50 p-3 md:p-6 rounded-[20px] md:rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-16 md:h-32 hover:bg-slate-100 cursor-pointer transition-colors group">
+                    <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 md:mb-1">Nuitées Louées</p>
+                    <p className="text-lg md:text-2xl font-black text-slate-700">{statsCalculations.currentYearNights}</p>
                   </div>
-                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-slate-50 p-6 rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-32 hover:bg-slate-100 cursor-pointer transition-colors group">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Durée Moyenne</p>
-                    <p className="text-2xl font-black text-slate-700">{statsCalculations.avgStay} <span className="text-sm">j</span></p>
+                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-slate-50 p-3 md:p-6 rounded-[20px] md:rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-16 md:h-32 hover:bg-slate-100 cursor-pointer transition-colors group">
+                    <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 md:mb-1">Durée Moyenne</p>
+                    <p className="text-lg md:text-2xl font-black text-slate-700">{statsCalculations.avgStay} <span className="text-xs md:text-sm">j</span></p>
                   </div>
-                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-slate-50 p-6 rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-32 hover:bg-slate-100 cursor-pointer transition-colors group">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Panier Moyen</p>
-                    <p className="text-2xl font-black text-slate-700">{statsCalculations.avgGrossPerRes}€</p>
+                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-slate-50 p-3 md:p-6 rounded-[20px] md:rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-16 md:h-32 hover:bg-slate-100 cursor-pointer transition-colors group">
+                    <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 md:mb-1">Panier Moyen</p>
+                    <p className="text-lg md:text-2xl font-black text-slate-700">{statsCalculations.avgGrossPerRes}€</p>
                   </div>
-                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-slate-50 p-6 rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-32 hover:bg-slate-100 cursor-pointer transition-colors group">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Nb. Réservations</p>
-                    <p className="text-2xl font-black text-slate-700">{baseTenants.filter(t => t.startDate && t.startDate.startsWith(statsCalculations.year.toString())).length}</p>
+                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-slate-50 p-3 md:p-6 rounded-[20px] md:rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-16 md:h-32 hover:bg-slate-100 cursor-pointer transition-colors group">
+                    <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 md:mb-1">Nb. Réservations</p>
+                    <p className="text-lg md:text-2xl font-black text-slate-700">{baseTenants.filter(t => t.startDate && t.startDate.startsWith(statsCalculations.year.toString())).length}</p>
                   </div>
                 </div>
 
@@ -1486,7 +1486,7 @@ const App = () => {
                 <ComparisonChart data={baseTenants} properties={properties} platforms={availablePlatforms} yearsAvailable={yearsAvailable} />
 
                 {/* ROSACES DE REPARTITION */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mx-2 md:mx-0">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-10 mx-2 md:mx-0">
                    <DonutChart title={"Net Reçu (Banque) par Logement (" + (filterYear === 'all' ? 'Toutes années' : filterYear) + ")"} data={(properties || []).map((p,idx)=>({label:p.name,value:(baseTenants || []).reduce((acc,t) => t.propertyId===p.id ? acc + getTenantProfitForFilters(t) : acc, 0),color:CHART_COLORS[idx%CHART_COLORS.length]}))} />
                    <DonutChart title={"Net Reçu (Banque) par Plateforme (" + (filterYear === 'all' ? 'Toutes années' : filterYear) + ")"} data={(availablePlatforms || []).map((p,idx)=>({label:p,value:(baseTenants || []).reduce((acc,t) => t.platform===p ? acc + getTenantProfitForFilters(t) : acc, 0),color:CHART_COLORS[(idx+4)%CHART_COLORS.length]}))} />
                 </div>
@@ -1497,80 +1497,70 @@ const App = () => {
             <div className="space-y-10 animate-in fade-in">
               <h2 className="text-3xl font-black uppercase mx-2 md:mx-0">Comptabilité</h2>
               
-              {/* TABLEAU BILAN GLOBAL (Avec isolation overscroll et Sticky Footer/Header) */}
-              <div className="bg-white rounded-[32px] md:rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100 mx-2 md:mx-0">
-                <div className="p-4 md:p-8 bg-slate-900 text-white font-black uppercase flex justify-between items-center"><div>Bilan Global</div></div>
+              {/* TABLEAU BILAN GLOBAL (Ultra-Compact sur mobile) */}
+              <div className="bg-white rounded-[24px] md:rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100 mx-2 md:mx-0">
+                <div className="p-3 md:p-8 bg-slate-900 text-white font-black uppercase flex justify-between items-center text-[10px] md:text-xs"><div>Bilan Global</div></div>
                 <div className="max-h-[60vh] overflow-y-auto overflow-x-auto custom-scrollbar overscroll-contain relative no-swipe touch-manipulation" style={{ touchAction: 'manipulation' }}>
-                  <table className="w-full text-left min-w-[340px] md:min-w-[700px]">
-                    <thead className="bg-slate-50 uppercase text-slate-400 border-b sticky top-0 z-10 shadow-sm text-[7px] md:text-xs">
+                  <table className="w-full text-left min-w-[280px] md:min-w-[700px]">
+                    <thead className="bg-slate-50 uppercase text-slate-400 border-b sticky top-0 z-10 shadow-sm text-[6px] md:text-xs tracking-tighter md:tracking-normal">
                       <tr>
-                        <th className="p-1.5 md:p-6">Période</th>
-                        <th className="p-1.5 md:p-6 text-right">Brut URSSAF</th>
-                        <th className="p-1.5 md:p-6 text-right text-emerald-600">Direct (hors)</th>
-                        <th className="p-1.5 md:p-6 text-right text-indigo-600">Virement Reçu</th>
-                        <th className="p-1.5 md:p-6 text-right text-slate-500">Prestations</th>
-                        <th className="p-1.5 md:p-6 text-right text-rose-500">Cotis. (7.7%)</th>
-                        <th className="p-1.5 md:p-6 text-right font-black">Profit Réel</th>
+                        <th className="p-1 md:p-6">Période</th>
+                        <th className="p-1 md:p-6 text-right">Brut URSSAF</th>
+                        <th className="p-1 md:p-6 text-right text-emerald-600">Direct (hors)</th>
+                        <th className="p-1 md:p-6 text-right text-indigo-600">Virement</th>
+                        <th className="p-1 md:p-6 text-right text-slate-500">Prest.</th>
+                        <th className="p-1 md:p-6 text-right text-rose-500">Cotis.</th>
+                        <th className="p-1 md:p-6 text-right font-black">Profit</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y font-bold">
                       {(monthlyRecapData || []).map(([m, d]) => (
                         <tr key={m} className="group hover:bg-slate-50/50 transition-colors">
-                          <td className="p-1.5 md:p-6 capitalize text-[9px] md:text-sm leading-tight">{formatMonthYear(m)}</td>
-                          <td className="p-1.5 md:p-6 text-right text-slate-500">
-                             <div className="text-[9px] md:text-sm leading-tight">{d.urssafGross.toLocaleString('fr-FR')}€</div>
-                             <div className="mt-0.5 md:mt-1 flex flex-col items-end gap-0 md:gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity">
-                               {(availablePlatforms || []).map(p => d.platforms[p] > 0 && <span key={p} className="text-[6px] md:text-[9px] text-slate-400 font-bold uppercase leading-none">{p}: {d.platforms[p].toLocaleString('fr-FR')}€</span>)}
-                             </div>
+                          <td className="p-1 md:p-6 capitalize text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{formatMonthYear(m)}</td>
+                          <td className="p-1 md:p-6 text-right text-slate-500">
+                             <div className="text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{d.urssafGross.toLocaleString('fr-FR')}€</div>
                           </td>
-                          <td className="p-1.5 md:p-6 text-right text-emerald-600 font-black text-[9px] md:text-sm leading-tight">{d.directNet > 0 ? `${d.directNet.toLocaleString('fr-FR')}€` : '-'}</td>
-                          <td className="p-1.5 md:p-6 text-right text-indigo-600 font-black text-[9px] md:text-sm leading-tight">{d.totalBank.toLocaleString('fr-FR')}€</td>
-                          <td className="p-1.5 md:p-6 text-right text-slate-500 text-[9px] md:text-sm leading-tight">-{d.charges.toLocaleString('fr-FR')}€</td>
-                          <td className="p-1.5 md:p-6 text-right text-rose-500 text-[9px] md:text-sm leading-tight">-{d.taxes.toFixed(2)}€</td>
-                          <td className={`p-1.5 md:p-6 text-right font-black text-[9px] md:text-sm leading-tight ${d.totalBank - d.taxes - d.charges >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{(d.totalBank - d.taxes - d.charges).toLocaleString('fr-FR')}€</td>
+                          <td className="p-1 md:p-6 text-right text-emerald-600 font-black text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{d.directNet > 0 ? `${d.directNet.toLocaleString('fr-FR')}€` : '-'}</td>
+                          <td className="p-1 md:p-6 text-right text-indigo-600 font-black text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{d.totalBank.toLocaleString('fr-FR')}€</td>
+                          <td className="p-1 md:p-6 text-right text-slate-500 text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">-{d.charges.toLocaleString('fr-FR')}€</td>
+                          <td className="p-1 md:p-6 text-right text-rose-500 text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">-{d.taxes.toFixed(2)}€</td>
+                          <td className={`p-1 md:p-6 text-right font-black text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal ${d.totalBank - d.taxes - d.charges >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{(d.totalBank - d.taxes - d.charges).toLocaleString('fr-FR')}€</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot className="bg-indigo-600 text-white font-black text-[10px] md:text-lg sticky bottom-0 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
                       <tr>
-                        <td className="p-2 md:p-8 uppercase text-[7px] md:text-[10px] leading-tight">TOTAL</td>
-                        <td className="p-2 md:p-8 text-right opacity-90">
-                           <div className="leading-tight">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.urssafGross, 0).toLocaleString('fr-FR')}€</div>
-                           <div className="mt-0.5 md:mt-1 flex flex-col items-end gap-0 md:gap-0.5">
-                               {(availablePlatforms || []).map(p => {
-                                 const platTotal = monthlyRecapData.reduce((acc, [m, d]) => acc + (d.platforms[p] || 0), 0);
-                                 if(platTotal > 0) return <span key={p} className="text-[6px] md:text-[9px] text-indigo-200 font-bold uppercase leading-none">{p}: {platTotal.toLocaleString('fr-FR')}€</span>;
-                                 return null;
-                               })}
-                           </div>
+                        <td className="p-1.5 md:p-8 uppercase text-[6px] md:text-[10px] leading-tight tracking-tighter md:tracking-normal">TOTAL</td>
+                        <td className="p-1.5 md:p-8 text-right opacity-90">
+                           <div className="leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.urssafGross, 0).toLocaleString('fr-FR')}€</div>
                         </td>
-                        <td className="p-2 md:p-8 text-right text-emerald-300 leading-tight">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.directNet, 0).toLocaleString('fr-FR')}€</td>
-                        <td className="p-2 md:p-8 text-right leading-tight">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0).toLocaleString('fr-FR')}€</td>
-                        <td className="p-2 md:p-8 text-right text-indigo-200 leading-tight">-{monthlyRecapData.reduce((acc, [m, d]) => acc + d.charges, 0).toLocaleString('fr-FR')}€</td>
-                        <td className="p-2 md:p-8 text-right text-rose-300 leading-tight">-{monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes, 0).toLocaleString('fr-FR')}€</td>
-                        <td className="p-2 md:p-8 text-right bg-indigo-700/50 leading-tight">{(monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0) - monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes + d.charges, 0)).toLocaleString('fr-FR')}€</td>
+                        <td className="p-1.5 md:p-8 text-right text-emerald-300 leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.directNet, 0).toLocaleString('fr-FR')}€</td>
+                        <td className="p-1.5 md:p-8 text-right leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0).toLocaleString('fr-FR')}€</td>
+                        <td className="p-1.5 md:p-8 text-right text-indigo-200 leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">-{monthlyRecapData.reduce((acc, [m, d]) => acc + d.charges, 0).toLocaleString('fr-FR')}€</td>
+                        <td className="p-1.5 md:p-8 text-right text-rose-300 leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">-{monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes, 0).toLocaleString('fr-FR')}€</td>
+                        <td className="p-1.5 md:p-8 text-right bg-indigo-700/50 leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{(monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0) - monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes + d.charges, 0)).toLocaleString('fr-FR')}€</td>
                       </tr>
                     </tfoot>
                   </table>
                 </div>
               </div>
 
-              {/* TABLEAU SUIVI PRESTATAIRES (Avec isolation overscroll et Sticky Header) */}
-              <div className="bg-white rounded-[32px] md:rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100 mx-2 md:mx-0">
-                <div className="p-4 md:p-8 bg-slate-900 text-white font-black uppercase flex justify-between">Suivi Prestataires</div>
+              {/* TABLEAU SUIVI PRESTATAIRES (Ultra-Compact sur mobile) */}
+              <div className="bg-white rounded-[24px] md:rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100 mx-2 md:mx-0">
+                <div className="p-3 md:p-8 bg-slate-900 text-white font-black uppercase flex justify-between text-[10px] md:text-xs">Suivi Prestataires</div>
                 <div className="max-h-[60vh] overflow-y-auto overflow-x-auto custom-scrollbar overscroll-contain relative no-swipe touch-manipulation" style={{ touchAction: 'manipulation' }}>
                     <table className="w-full text-left min-w-[280px] md:min-w-[700px]">
-                        <thead className="bg-slate-50 uppercase text-slate-400 border-b sticky top-0 z-10 shadow-sm text-[7px] md:text-xs">
-                            <tr><th className="p-1.5 md:p-6">Date</th><th className="p-1.5 md:p-6">Logement</th><th className="p-1.5 md:p-6">Prestataire</th><th className="p-1.5 md:p-6 text-right">Montant</th><th className="p-1.5 md:p-6 text-center">Statut</th></tr>
+                        <thead className="bg-slate-50 uppercase text-slate-400 border-b sticky top-0 z-10 shadow-sm text-[6px] md:text-xs tracking-tighter md:tracking-normal">
+                            <tr><th className="p-1 md:p-6">Date</th><th className="p-1 md:p-6">Logement</th><th className="p-1 md:p-6">Prestataire</th><th className="p-1 md:p-6 text-right">Montant</th><th className="p-1 md:p-6 text-center">Statut</th></tr>
                         </thead>
                         <tbody className="divide-y font-bold">
                             {(detailedExpenses || []).map((exp) => (
                                 <tr key={exp.id}>
-                                    <td className="p-1.5 md:p-6 text-[8px] md:text-sm">{formatDateFr(exp.dateRes)}</td>
-                                    <td className="p-1.5 md:p-6 uppercase text-[8px] md:text-xs">{exp.propertyName}</td>
-                                    <td className="p-1.5 md:p-6 text-blue-600 uppercase text-[8px] md:text-xs">{exp.person}</td>
-                                    <td className="p-1.5 md:p-6 text-right text-[8px] md:text-sm">{(exp.amount || 0).toLocaleString('fr-FR')}€</td>
-                                    <td className="p-1.5 md:p-6 text-center"><span className={`px-1.5 py-0.5 md:px-3 md:py-1 rounded-full text-[6px] md:text-[9px] font-black uppercase ${exp.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>{exp.paymentDate ? 'Payé' : 'Attente'}</span></td>
+                                    <td className="p-1 md:p-6 text-[8px] md:text-sm tracking-tighter md:tracking-normal">{formatDateFr(exp.dateRes)}</td>
+                                    <td className="p-1 md:p-6 uppercase text-[8px] md:text-xs tracking-tighter md:tracking-normal">{exp.propertyName}</td>
+                                    <td className="p-1 md:p-6 text-blue-600 uppercase text-[8px] md:text-xs tracking-tighter md:tracking-normal">{exp.person}</td>
+                                    <td className="p-1 md:p-6 text-right text-[8px] md:text-sm tracking-tighter md:tracking-normal">{(exp.amount || 0).toLocaleString('fr-FR')}€</td>
+                                    <td className="p-1 md:p-6 text-center"><span className={`px-1.5 py-0.5 md:px-3 md:py-1 rounded-full text-[6px] md:text-[9px] font-black uppercase tracking-tighter md:tracking-normal ${exp.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>{exp.paymentDate ? 'Payé' : 'Attente'}</span></td>
                                 </tr>
                             ))}
                         </tbody>
