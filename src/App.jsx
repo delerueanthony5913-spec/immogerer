@@ -69,7 +69,7 @@ const isSundayOrHoliday = (dateStr) => {
   return holidays.includes(dateStr);
 };
 
-// --- COMPOSANT ICONE VILLA SUR-MESURE ---
+// --- COMPOSANTS GRAPHIQUES ---
 const VillaIcon = ({ size = 24, className = "" }) => (
   <svg width={size} height={size} viewBox="0 0 512 512" fill="currentColor" className={className} xmlns="http://www.w3.org/2000/svg">
     <g transform="translate(6, -10)">
@@ -307,7 +307,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
         : platforms.map(p => ({ id: p, label: p }));
 
   return (
-    <div className="w-auto mx-2 md:mx-0 bg-white p-4 md:p-8 rounded-[32px] md:rounded-[48px] shadow-2xl border border-slate-50 animate-in fade-in relative mt-8" style={{ touchAction: 'pan-x pan-y pinch-zoom' }}>
+    <div className="w-auto mx-2 md:mx-0 bg-white p-4 md:p-8 rounded-[32px] md:rounded-[48px] shadow-2xl border border-slate-50 animate-in fade-in relative mt-8">
       <div className="flex bg-slate-100 p-1.5 rounded-[20px] w-max mb-6">
          <button onClick={()=>{setMode('years'); setContextProp('all'); setContextPlat('all');}} className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1 md:gap-2 ${mode === 'years' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>📅 Années</button>
          <button onClick={()=>{setMode('properties'); setContextYear(currentYear); setContextPlat('all');}} className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1 md:gap-2 ${mode === 'properties' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>🏠 Logements</button>
@@ -837,7 +837,6 @@ const App = () => {
        expensesText = '\n\nPrestations prévues :\n' + res.resExpenses.map(e => {
            const isDias = e.person && e.person.toLowerCase().includes('dias');
            
-           // On ajoute l'email uniquement si ce n'est PAS Dias (séparation des agendas)
            if (e.sendEmail !== false && providerEmails[e.person] && !isDias) {
                guestEmails.push(providerEmails[e.person]);
            }
@@ -904,7 +903,6 @@ const App = () => {
 
     let url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}`;
     
-    // On force l'email pour Dias
     if (providerEmails[exp.person]) {
         url += `&add=${encodeURIComponent(providerEmails[exp.person])}`;
     }
@@ -1299,7 +1297,7 @@ const App = () => {
         >
 
           {/* 1. ONGLETS RESERVATIONS */}
-          <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border" style={{ scrollSnapStop: 'always' }}>
+          <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border">
             <div className="max-w-7xl mx-auto pb-32">
                 <div className="flex justify-between items-center mx-2 md:mx-0 mb-6">
                    <h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2>
@@ -1311,7 +1309,7 @@ const App = () => {
                    </div>
                 </div>
                 
-                <div className="md:hidden max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain p-1 rounded-[20px] border border-slate-100 bg-slate-50/50 shadow-inner mx-2 relative">
+                <div className="md:hidden max-h-[70vh] overflow-y-auto custom-scrollbar p-1 rounded-[20px] border border-slate-100 bg-slate-50/50 shadow-inner mx-2 relative">
                   <div className="grid grid-cols-1 gap-2.5">
                     {(groupedReservationsList || []).map(item => {
                       if (item.isSeparator) return (<div key={item.id} className="flex items-center justify-center mt-2 mb-0.5"><span className="bg-slate-800 text-white px-4 py-1.5 rounded-[10px] text-[8px] font-black uppercase tracking-[0.2em] shadow-sm">{item.label}</span></div>);
@@ -1356,7 +1354,7 @@ const App = () => {
                 </div>
 
                 <div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden border border-slate-100">
-                  <div className="max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain relative">
+                  <div className="max-h-[70vh] overflow-y-auto custom-scrollbar relative">
                       <table className="w-full text-left text-xs">
                       <thead className="bg-slate-50 font-black uppercase border-b text-slate-400 sticky top-0 z-20 shadow-sm">
                           <tr><th className="p-4 w-[15%]">Logement</th><th className="p-4 w-[15%]">Client</th><th className="p-4 w-[12%] text-center">Dates</th><th className="p-4 w-[25%]">Notes</th><th className="p-4 w-[18%]">Prestations</th><th className="p-4 text-right">Net</th><th className="p-4 text-center">État</th></tr>
@@ -1405,7 +1403,7 @@ const App = () => {
           </div>
 
           {/* 2. ONGLET AGENDA */}
-          <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border" style={{ scrollSnapStop: 'always' }}>
+          <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border">
             <div className="max-w-7xl mx-auto pb-32">
               <div className="flex justify-between items-center mx-2 md:mx-0 mb-6"><div><h2 className="text-2xl md:text-3xl font-black uppercase">Agenda</h2></div><div className="flex items-center gap-4 bg-white px-4 py-2 rounded-2xl shadow-lg"><button onClick={()=>handleMonthChange('prev')}><ChevronLeft/></button><div className="text-center font-black min-w-[120px] uppercase text-xs">{['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][filterMonth==='all'?new Date().getMonth():parseInt(filterMonth)]}</div><button onClick={()=>handleMonthChange('next')}><ChevronRight/></button></div></div>
               <div className="bg-white p-4 md:p-6 rounded-[32px] md:rounded-[40px] shadow-2xl overflow-x-auto mx-2 md:mx-0"><div className="min-w-[320px] md:min-w-[700px]"><div className="grid grid-cols-7 text-center font-black text-slate-300 text-[8px] md:text-[10px] uppercase mb-2 md:mb-4">{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d=><div key={d}>{d}</div>)}</div><div className="grid grid-cols-7 gap-1 md:gap-2">{(agendaDays || []).map((item,idx)=>{ if(item.empty) return <div key={idx} className="h-16 md:h-32 bg-slate-50/30 rounded-xl md:rounded-2xl"></div>; const dayRes = (reservationsList || []).filter(r=>item.dateStr>=r.startDate && item.dateStr<=r.endDate); return (<div key={item.dateStr} className={`h-16 md:h-32 border rounded-xl md:rounded-2xl p-1 md:p-2 relative flex flex-col ${item.dateStr===todayStr?'border-blue-500 bg-blue-50/10':'border-slate-100'}`}><span className="text-[8px] md:text-[10px] font-black text-slate-300">{item.day}</span><div className="flex-1 space-y-0.5 md:space-y-1 overflow-y-auto no-scrollbar">{dayRes.map(r=>(<div key={r.id} onClick={(e)=>{e.stopPropagation();setEditingResId(r.id);setFormData(r);setIsModalOpen(true)}} className="text-[6px] md:text-[8px] font-black text-white p-0.5 md:p-1 rounded truncate cursor-pointer leading-tight" style={{backgroundColor: CHART_COLORS[(properties || []).findIndex(p=>p.id===r.propertyId)%CHART_COLORS.length]}}>{r.name?.split(' ')[0] || 'Résa'}</div>))}</div></div>);})}</div></div></div>
@@ -1413,7 +1411,7 @@ const App = () => {
           </div>
 
           {/* 3. ONGLET STATISTIQUES */}
-          <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border" style={{ scrollSnapStop: 'always' }}>
+          <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border">
              <div className="max-w-7xl mx-auto pb-32 space-y-10">
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mx-2 md:mx-0">
                    <div><h2 className="text-3xl md:text-4xl font-black uppercase text-slate-900 tracking-tighter leading-none mb-2">Statistiques</h2><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tableau de bord et croisements dynamiques</p></div>
@@ -1449,12 +1447,12 @@ const App = () => {
           </div>
 
           {/* 4. ONGLET FINANCES */}
-          <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border" style={{ scrollSnapStop: 'always' }}>
+          <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border">
              <div className="max-w-7xl mx-auto pb-32 space-y-10">
               <h2 className="text-3xl font-black uppercase mx-2 md:mx-0">Comptabilité</h2>
               <div className="bg-white rounded-[24px] md:rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100 mx-2 md:mx-0">
                 <div className="p-3 md:p-8 bg-slate-900 text-white font-black uppercase flex justify-between items-center text-[10px] md:text-xs"><div>Bilan Global</div></div>
-                <div className="max-h-[60vh] overflow-y-auto overflow-x-auto custom-scrollbar overscroll-contain relative">
+                <div className="max-h-[60vh] overflow-y-auto overflow-x-auto custom-scrollbar relative">
                   <table className="w-full text-left min-w-[280px] md:min-w-[700px]">
                     <thead className="bg-slate-50 uppercase text-slate-400 border-b sticky top-0 z-10 shadow-sm text-[6px] md:text-xs tracking-tighter md:tracking-normal">
                       <tr><th className="p-1 md:p-6">Période</th><th className="p-1 md:p-6 text-right">Brut URSSAF</th><th className="p-1 md:p-6 text-right text-emerald-600">Direct (hors)</th><th className="p-1 md:p-6 text-right text-indigo-600">Virement</th><th className="p-1 md:p-6 text-right text-slate-500">Prest.</th><th className="p-1 md:p-6 text-right text-rose-500">Cotis.</th><th className="p-1 md:p-6 text-right font-black">Profit</th></tr>
@@ -1489,7 +1487,7 @@ const App = () => {
 
               <div className="bg-white rounded-[24px] md:rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100 mx-2 md:mx-0">
                 <div className="p-3 md:p-8 bg-slate-900 text-white font-black uppercase flex justify-between text-[10px] md:text-xs">Suivi Prestataires</div>
-                <div className="max-h-[60vh] overflow-y-auto overflow-x-auto custom-scrollbar overscroll-contain relative">
+                <div className="max-h-[60vh] overflow-y-auto overflow-x-auto custom-scrollbar relative">
                     <table className="w-full text-left min-w-[280px] md:min-w-[700px]">
                         <thead className="bg-slate-50 uppercase text-slate-400 border-b sticky top-0 z-10 shadow-sm text-[6px] md:text-xs tracking-tighter md:tracking-normal">
                             <tr><th className="p-1 md:p-6">Date</th><th className="p-1 md:p-6">Logement</th><th className="p-1 md:p-6">Prestataire</th><th className="p-1 md:p-6 text-right">Montant</th><th className="p-1 md:p-6 text-center">Statut</th></tr>
@@ -1512,7 +1510,7 @@ const App = () => {
           </div>
 
           {/* 5. ONGLET SETTINGS */}
-          <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border" style={{ scrollSnapStop: 'always' }}>
+          <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border">
             <div className="max-w-7xl mx-auto pb-32 space-y-10">
               <h2 className="text-3xl font-black uppercase mx-2 md:mx-0">Paramètres</h2>
               <div className="bg-white p-8 rounded-[40px] border-2 border-dashed shadow-xl flex flex-col items-center justify-center text-center mx-2 md:mx-0">
@@ -1560,6 +1558,7 @@ const App = () => {
                   </form>
                 </div>
                 
+                {/* --- NOUVEAU BLOC : PRESTATAIRES AVEC EMAIL --- */}
                 <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full border-2 border-blue-50">
                   <h3 className="text-[10px] font-black uppercase text-blue-600 mb-4">Prestataires (Emails)</h3>
                   <div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">
