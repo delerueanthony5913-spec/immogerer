@@ -259,7 +259,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
         : platforms.map(p => ({ id: p, label: p }));
 
   return (
-    <div className="w-auto mx-2 md:mx-0 bg-white p-6 md:p-8 rounded-[48px] shadow-2xl border border-slate-50 animate-in fade-in relative mt-8 touch-manipulation" style={{ touchAction: 'manipulation' }}>
+    <div className="w-auto mx-2 md:mx-0 bg-white p-6 md:p-8 rounded-[48px] shadow-2xl border border-slate-50 animate-in fade-in relative mt-8">
       
       {/* 1. SELECTION DU MODE */}
       <div className="flex bg-slate-100 p-1.5 rounded-[20px] w-max mb-6">
@@ -311,7 +311,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
       {series.length === 0 ? (
           <div className="h-[300px] flex items-center justify-center text-slate-300 font-black uppercase text-xs">Cochez au moins une option pour voir le graphique</div>
       ) : (
-          <div className="overflow-x-auto no-scrollbar no-swipe touch-manipulation" style={{ touchAction: 'manipulation' }}>
+          <div className="overflow-x-auto no-scrollbar no-swipe">
             <div className="min-w-[600px] relative">
               <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
                 {/* Lignes de grille horizontales */}
@@ -804,7 +804,7 @@ const App = () => {
   }, [activeTab, reservationsList, hasScrolledToNext, todayStr]);
 
 
-  // LOGIQUE DU SWIPE - MODIFIÉE POUR PERMETTRE LE ZOOM (Multi-touch sécurisé)
+  // LOGIQUE DU SWIPE - MODIFIÉE POUR PERMETTRE LE ZOOM NATIVEMENT
   const onTouchStart = (e) => {
     // Si l'utilisateur pose 2 doigts (Zoom), on éteint le swipe immédiatement !
     if (e.touches && e.touches.length > 1) {
@@ -1224,8 +1224,8 @@ const App = () => {
       : (parseFloat(formData?.grossAmount || 0) - parseFloat(formData?.platformFees || 0));
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col md:flex-row font-sans text-slate-900 overflow-hidden">
-      <aside className={`fixed md:sticky top-0 left-0 z-50 w-72 h-full md:h-screen bg-white border-r transform md:translate-x-0 transition-transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+    <div className="min-h-screen bg-[#F8FAFC] flex flex-col md:flex-row font-sans text-slate-900">
+      <aside className={`fixed md:sticky top-0 left-0 z-50 w-72 h-[100dvh] bg-white border-r transform md:translate-x-0 transition-transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-10 border-b flex flex-col items-center">
           <div className="bg-gradient-to-tr from-blue-600 to-indigo-600 p-4 rounded-2xl text-white shadow-xl mb-2"><Building2 size={28} /></div>
           <h1 className="font-black uppercase tracking-tighter text-2xl">CADEL</h1><h2 className="font-black uppercase tracking-[0.3em] text-[10px] text-blue-600">MANAGER</h2>
@@ -1239,7 +1239,7 @@ const App = () => {
 
       <div className="md:hidden flex justify-between p-5 bg-white border-b sticky top-0 z-40 shadow-sm"><div className="flex items-center gap-2"><div className="bg-blue-600 p-1.5 rounded-lg text-white"><Building2 size={16}/></div><h1 className="font-black text-sm uppercase">CADEL MANAGER</h1></div><button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2">{isMobileMenuOpen ? <X /> : <Menu />}</button></div>
 
-      <main onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} className="flex-1 px-0 md:px-12 py-6 md:py-12 overflow-y-auto h-screen custom-scrollbar relative touch-manipulation" style={{ touchAction: 'manipulation' }}>
+      <main onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} className="flex-1 w-full px-0 md:px-12 py-6 md:py-12 min-h-screen relative">
         
         {/* MODALE DE PAIEMENT RAPIDE */}
         {quickPayConfig && (
@@ -1310,7 +1310,7 @@ const App = () => {
               <div className="flex justify-between items-center mx-2 md:mx-0"><h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2><button onClick={() => { setEditingResId(null); setFormData({ propertyId: properties[0]?.id || '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '', acompte1Amount: '', acompte1Date: '', acompte2Amount: '', acompte2Date: '', soldeAmount: '', soldeDate: '' }); setIsModalOpen(true); }} className="bg-blue-600 text-white px-8 py-4 rounded-[24px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button></div>
               
               {/* VUE MOBILE : Liste déroulante indépendante avec marge mx-2 */}
-              <div className="md:hidden max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain p-1 rounded-[32px] border border-slate-100 bg-slate-50/50 shadow-inner mx-2 touch-manipulation" style={{ touchAction: 'manipulation' }}>
+              <div className="md:hidden max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain p-1 rounded-[32px] border border-slate-100 bg-slate-50/50 shadow-inner mx-2">
                 <div className="grid grid-cols-1 gap-4">
                   {(groupedReservationsList || []).map(item => {
                     if (item.isSeparator) {
@@ -1363,7 +1363,7 @@ const App = () => {
 
               {/* VUE ORDINATEUR : Liste déroulante indépendante avec séparateurs de mois */}
               <div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden border border-slate-100">
-                <div className="max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain relative touch-manipulation" style={{ touchAction: 'manipulation' }}>
+                <div className="max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain relative">
                     <table className="w-full text-left text-xs">
                     <thead className="bg-slate-50 font-black uppercase border-b text-slate-400 sticky top-0 z-20 shadow-sm">
                         <tr><th className="p-6">Logement</th><th className="p-6">Client</th><th className="p-6 text-center">Dates</th><th className="p-6">Prestations</th><th className="p-6 text-right">Net</th><th className="p-6 text-center">État</th></tr>
@@ -1432,7 +1432,7 @@ const App = () => {
           {activeTab === 'agenda' && (
             <div className="space-y-8 animate-in fade-in">
               <div className="flex justify-between items-center mx-2 md:mx-0"><div><h2 className="text-2xl font-black uppercase">Agenda</h2></div><div className="flex items-center gap-4 bg-white px-4 py-2 rounded-2xl shadow-lg"><button onClick={()=>handleMonthChange('prev')}><ChevronLeft/></button><div className="text-center font-black min-w-[120px] uppercase text-xs">{['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][filterMonth==='all'?new Date().getMonth():parseInt(filterMonth)]}</div><button onClick={()=>handleMonthChange('next')}><ChevronRight/></button></div></div>
-              <div className="bg-white p-6 rounded-[40px] shadow-2xl overflow-x-auto no-swipe mx-2 md:mx-0 touch-manipulation" style={{ touchAction: 'manipulation' }}><div className="min-w-[700px]"><div className="grid grid-cols-7 text-center font-black text-slate-300 text-[10px] uppercase mb-4">{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d=><div key={d}>{d}</div>)}</div><div className="grid grid-cols-7 gap-2">{(agendaDays || []).map((item,idx)=>{ if(item.empty) return <div key={idx} className="h-24 bg-slate-50/30 rounded-2xl"></div>; const dayRes = (reservationsList || []).filter(r=>item.dateStr>=r.startDate && item.dateStr<=r.endDate); return (<div key={item.dateStr} className={`h-24 md:h-32 border rounded-2xl p-2 relative flex flex-col ${item.dateStr===todayStr?'border-blue-500 bg-blue-50/10':'border-slate-100'}`}><span className="text-[10px] font-black text-slate-300">{item.day}</span><div className="flex-1 space-y-1 overflow-y-auto no-scrollbar">{dayRes.map(r=>(<div key={r.id} onClick={(e)=>{e.stopPropagation();setEditingResId(r.id);setFormData(r);setIsModalOpen(true)}} className="text-[8px] font-black text-white p-1 rounded truncate cursor-pointer" style={{backgroundColor: CHART_COLORS[(properties || []).findIndex(p=>p.id===r.propertyId)%CHART_COLORS.length]}}>{r.name?.split(' ')[0] || 'Résa'}</div>))}</div></div>);})}</div></div></div>
+              <div className="bg-white p-6 rounded-[40px] shadow-2xl overflow-x-auto no-swipe mx-2 md:mx-0"><div className="min-w-[700px]"><div className="grid grid-cols-7 text-center font-black text-slate-300 text-[10px] uppercase mb-4">{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d=><div key={d}>{d}</div>)}</div><div className="grid grid-cols-7 gap-2">{(agendaDays || []).map((item,idx)=>{ if(item.empty) return <div key={idx} className="h-24 bg-slate-50/30 rounded-2xl"></div>; const dayRes = (reservationsList || []).filter(r=>item.dateStr>=r.startDate && item.dateStr<=r.endDate); return (<div key={item.dateStr} className={`h-24 md:h-32 border rounded-2xl p-2 relative flex flex-col ${item.dateStr===todayStr?'border-blue-500 bg-blue-50/10':'border-slate-100'}`}><span className="text-[10px] font-black text-slate-300">{item.day}</span><div className="flex-1 space-y-1 overflow-y-auto no-scrollbar">{dayRes.map(r=>(<div key={r.id} onClick={(e)=>{e.stopPropagation();setEditingResId(r.id);setFormData(r);setIsModalOpen(true)}} className="text-[8px] font-black text-white p-1 rounded truncate cursor-pointer" style={{backgroundColor: CHART_COLORS[(properties || []).findIndex(p=>p.id===r.propertyId)%CHART_COLORS.length]}}>{r.name?.split(' ')[0] || 'Résa'}</div>))}</div></div>);})}</div></div></div>
             </div>
           )}
           
@@ -1510,7 +1510,7 @@ const App = () => {
               {/* TABLEAU BILAN GLOBAL (Avec isolation overscroll et Sticky Footer/Header) */}
               <div className="bg-white rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100 mx-2 md:mx-0">
                 <div className="p-8 bg-slate-900 text-white font-black uppercase flex justify-between items-center"><div>Bilan Global</div></div>
-                <div className="max-h-[60vh] overflow-y-auto overflow-x-auto custom-scrollbar overscroll-contain relative no-swipe touch-manipulation" style={{ touchAction: 'manipulation' }}>
+                <div className="max-h-[60vh] overflow-y-auto overflow-x-auto custom-scrollbar overscroll-contain relative no-swipe">
                   <table className="w-full text-left min-w-[700px]">
                     <thead className="bg-slate-50 uppercase text-slate-400 border-b sticky top-0 z-10 shadow-sm">
                       <tr>
@@ -1568,7 +1568,7 @@ const App = () => {
               {/* TABLEAU SUIVI PRESTATAIRES (Avec isolation overscroll et Sticky Header) */}
               <div className="bg-white rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100 mx-2 md:mx-0">
                 <div className="p-8 bg-slate-900 text-white font-black uppercase flex justify-between">Suivi Prestataires</div>
-                <div className="max-h-[60vh] overflow-y-auto overflow-x-auto custom-scrollbar overscroll-contain relative no-swipe touch-manipulation" style={{ touchAction: 'manipulation' }}>
+                <div className="max-h-[60vh] overflow-y-auto overflow-x-auto custom-scrollbar overscroll-contain relative no-swipe">
                     <table className="w-full text-left min-w-[700px]">
                         <thead className="bg-slate-50 uppercase text-slate-400 border-b sticky top-0 z-10 shadow-sm">
                             <tr><th className="p-6">Date</th><th className="p-6">Logement</th><th className="p-6">Prestataire</th><th className="p-6 text-right">Montant</th><th className="p-6 text-center">Statut</th></tr>
@@ -1666,7 +1666,7 @@ const App = () => {
                  <button type="button" onClick={() => setIsModalOpen(false)} className="p-3 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900 transition-all duration-300"><X size={20} /></button>
                </div>
             </div>
-            <form onSubmit={saveRes} className="p-6 md:p-10 space-y-8 overflow-y-auto flex-1 custom-scrollbar text-xs touch-manipulation" style={{ touchAction: 'manipulation' }}>
+            <form onSubmit={saveRes} className="p-6 md:p-10 space-y-8 overflow-y-auto flex-1 custom-scrollbar text-xs">
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                  <div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Logement<select value={formData.propertyId || ''} onChange={e => setFormData({ ...formData, propertyId: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900"><option value="">-- Choisir un logement --</option>{(properties || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
