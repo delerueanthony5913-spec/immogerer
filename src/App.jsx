@@ -445,6 +445,7 @@ const App = () => {
   const [availableProviders, setAvailableProviders] = useState(['Justine', 'Marc']);
   const [availableServiceTypes, setAvailableServiceTypes] = useState(['Ménage', 'Entrée/Sortie']);
 
+  // Par défaut sur "all" pour voir toutes les années et pouvoir trouver la prochaine réservation
   const [filterYear, setFilterYear] = useState('all');
   const [filterMonth, setFilterMonth] = useState('all');
   const [filterProp, setFilterProp] = useState('all');
@@ -475,6 +476,9 @@ const App = () => {
   const [statsDetailConfig, setStatsDetailConfig] = useState(null);
 
   const [hasScrolledToNext, setHasScrolledToNext] = useState(false);
+  
+  // CORRECTION: DÉFINITION GLOBALE AU COMPOSANT POUR L'AGENDA
+  const todayStr = new Date().toISOString().split('T')[0];
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
@@ -729,7 +733,6 @@ const App = () => {
     
     if (hasScrolledToNext || reservationsList.length === 0) return;
 
-    const todayStr = new Date().toISOString().split('T')[0];
     let targetRes = reservationsList.find(t => t.startDate >= todayStr || (t.endDate && t.endDate >= todayStr));
     
     if (!targetRes) {
@@ -761,7 +764,7 @@ const App = () => {
 
         return () => clearTimeout(timer);
     }
-  }, [activeTab, reservationsList, hasScrolledToNext]);
+  }, [activeTab, reservationsList, hasScrolledToNext, todayStr]);
 
 
   const checkDateFilter = (dateStr) => {
@@ -1213,6 +1216,7 @@ const App = () => {
             <div className="space-y-8 animate-in fade-in">
               <div className="flex justify-between items-center"><h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2><button onClick={() => { setEditingResId(null); setFormData({ propertyId: properties[0]?.id || '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '', acompte1Amount: '', acompte1Date: '', acompte2Amount: '', acompte2Date: '', soldeAmount: '', soldeDate: '' }); setIsModalOpen(true); }} className="bg-blue-600 text-white px-8 py-4 rounded-[24px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button></div>
               
+              {/* VUE MOBILE : Liste déroulante indépendante (overscroll-contain) */}
               <div className="md:hidden max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain p-1 rounded-[32px] border border-slate-100 bg-slate-50/50 shadow-inner">
                 <div className="grid grid-cols-1 gap-4">
                   {(reservationsList || []).map(t => (
@@ -1251,6 +1255,7 @@ const App = () => {
                 </div>
               </div>
 
+              {/* VUE ORDINATEUR : Liste déroulante indépendante (overscroll-contain) */}
               <div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden border border-slate-100">
                 <div className="max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain relative">
                     <table className="w-full text-left text-xs">
