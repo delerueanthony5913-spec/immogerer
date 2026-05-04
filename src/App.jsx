@@ -30,6 +30,21 @@ const appId = 'immogerer-prod-final';
 
 const CHART_COLORS = ['#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#6366F1', '#F43F5E', '#06B6D4'];
 
+// --- COMPOSANT ICONE VILLA SUR-MESURE ---
+const VillaIcon = ({ size = 24, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 512 512" fill="currentColor" className={className} xmlns="http://www.w3.org/2000/svg">
+    <g transform="translate(6, -10)">
+      <rect x="120" y="160" width="140" height="120" rx="8" fill="currentColor" opacity="0.6" />
+      <rect x="220" y="100" width="160" height="180" rx="8" fill="currentColor" />
+      <rect x="100" y="150" width="180" height="16" rx="8" fill="currentColor" opacity="0.9" />
+      <rect x="200" y="90" width="200" height="16" rx="8" fill="currentColor" opacity="0.9" />
+      <rect x="140" y="200" width="60" height="80" rx="6" fill="#fff" opacity="0.3" />
+      <rect x="260" y="140" width="80" height="140" rx="6" fill="#fff" opacity="0.3" />
+      <rect x="100" y="280" width="300" height="12" rx="6" fill="currentColor" opacity="0.4" />
+    </g>
+  </svg>
+);
+
 // --- COMPOSANTS GRAPHIQUES ---
 const DonutChart = ({ data, title }) => {
   const visibleData = (data || []).filter(d => d && d.value > 0);
@@ -1410,7 +1425,7 @@ const App = () => {
                       
                       {/* LIGNE DES COMMENTAIRES / NOTES (S'IL Y EN A) */}
                       {t.comment && (
-                        <div className="text-[9px] italic text-slate-600 mb-1.5 px-1 leading-tight line-clamp-2">
+                        <div className="text-[9px] italic text-slate-600 mb-1.5 px-1 leading-tight whitespace-pre-wrap">
                           📝 {t.comment}
                         </div>
                       )}
@@ -1482,7 +1497,7 @@ const App = () => {
                             </td>
                             <td className="p-4 text-[11px] text-slate-600 font-medium">
                                 {t.comment ? (
-                                    <div className="bg-slate-50/50 p-2 rounded-xl border border-slate-100/50 italic line-clamp-2" title={t.comment}>
+                                    <div className="bg-slate-50/50 p-2 rounded-xl border border-slate-100/50 italic whitespace-pre-wrap" title={t.comment}>
                                         📝 {t.comment}
                                     </div>
                                 ) : ''}
