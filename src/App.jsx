@@ -82,7 +82,7 @@ const DonutChart = ({ data, title }) => {
 };
 
 // GRAPHIQUE MULTI-COURBES DYNAMIQUE (Moteur "Classic" compatible)
-const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
+const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) => {
   const currentYear = new Date().getFullYear().toString();
   const currentMonth = new Date().getMonth();
   
@@ -96,12 +96,13 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
   const [contextPlat, setContextPlat] = useState('all');
 
   const safeData = Array.isArray(data) ? data : [];
+  const safeYears = yearsAvailable.length > 0 ? yearsAvailable : [currentYear];
 
   useEffect(() => {
-    if (mode === 'years') setSelectedKeys(yearsAvailable.slice(0, 3)); 
+    if (mode === 'years') setSelectedKeys(safeYears.slice(0, 3)); 
     if (mode === 'properties') setSelectedKeys(properties.map(p => p.id).slice(0, 4)); 
     if (mode === 'platforms') setSelectedKeys(platforms.slice(0, 4)); 
-  }, [mode, yearsAvailable, properties, platforms]);
+  }, [mode, properties, platforms]);
 
   const toggleKey = (key) => {
     setSelectedKeys(prev => 
@@ -206,7 +207,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
   const [hoveredMonth, setHoveredMonth] = useState(null);
   const months = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
 
-  // Remplacement du .flat() pour la compatibilité
+  // Remplacement du .flat() pour la compatibilité absolue
   const allDataValues = series.reduce((acc, currentSeries) => {
       return acc.concat(currentSeries.data);
   }, []);
@@ -238,7 +239,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
   const yTicks = [0, maxVal * 0.33, maxVal * 0.66, maxVal];
 
   const availableOptions = mode === 'years' 
-     ? yearsAvailable.map(y => ({ id: y, label: y }))
+     ? safeYears.map(y => ({ id: y, label: y }))
      : mode === 'properties'
         ? properties.map(p => ({ id: p.id, label: p.name }))
         : platforms.map(p => ({ id: p, label: p }));
@@ -285,7 +286,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable }) => {
                 <span className="text-[10px] font-black uppercase text-slate-400">Filtres :</span>
              </div>
              <div className="flex flex-col gap-2 pl-5">
-                {mode !== 'years' && <select value={contextYear} onChange={e=>setContextYear(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none cursor-pointer text-slate-700">{yearsAvailable.map(y=><option key={y} value={y}>Année {y}</option>)}</select>}
+                {mode !== 'years' && <select value={contextYear} onChange={e=>setContextYear(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none cursor-pointer text-slate-700">{safeYears.map(y=><option key={y} value={y}>Année {y}</option>)}</select>}
                 {mode !== 'properties' && <select value={contextProp} onChange={e=>setContextProp(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none cursor-pointer text-slate-700 truncate"><option value="all">Tous Logements</option>{properties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>}
                 {mode !== 'platforms' && <select value={contextPlat} onChange={e=>setContextPlat(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none cursor-pointer text-slate-700 truncate"><option value="all">Toutes Plateformes</option>{platforms.map(p=><option key={p} value={p}>{p}</option>)}</select>}
              </div>
@@ -397,13 +398,11 @@ const App = () => {
     if (!res.startDate || !res.endDate) return '#';
     const text = encodeURIComponent(`Réservation : ${res.name} - ${prop?.name || ''}`);
     
-    // Ajout des prestations au calendrier
     let expensesText = '';
     if (res.resExpenses && res.resExpenses.length > 0) {
        expensesText = '\n\nPrestations prévues :\n' + res.resExpenses.map(e => `- ${e.type} (${e.person}) : ${e.amount}€`).join('\n');
     }
     
-    // Ajout du numéro de contact
     const phoneText = res.phone ? `\nContact : ${res.phone}` : '';
     
     const details = encodeURIComponent(`Client : ${res.name}${phoneText}\nLogement : ${prop?.name || ''}\nPlateforme : ${res.platform}\nNotes : ${res.comment || ''}${expensesText}`);
@@ -460,7 +459,6 @@ const App = () => {
   const [statsDetailConfig, setStatsDetailConfig] = useState(null);
 
   const [hasScrolledToNext, setHasScrolledToNext] = useState(false);
-  const todayStr = new Date().toISOString().split('T')[0];
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
@@ -504,7 +502,7 @@ const App = () => {
     return () => { unsubAuth(); unsubProps(); unsubTenants(); unsubSettings(); };
   }, []);
 
-  // LOGIQUE D'INJECTION AUTOMATIQUE DE VOS 10 RESERVATIONS VILLA CADELIA 2025
+  // Injection 2025 auto
   useEffect(() => {
     if (!user || loading) return;
     
@@ -713,6 +711,8 @@ const App = () => {
     }
   }, [activeTab]);
 
+  const todayStr = new Date().toISOString().split('T')[0];
+
   useEffect(() => {
     if (activeTab === 'reservations' && !hasScrolledToNext && reservationsList.length > 0) {
         const nextRes = reservationsList.find(t => t.startDate >= todayStr || (t.endDate && t.endDate >= todayStr));
@@ -730,226 +730,10 @@ const App = () => {
             }, 300);
             setHasScrolledToNext(true);
         } else {
-            setHasScrolledToNext(true); // Aucune réservation future
+            setHasScrolledToNext(true); 
         }
     }
   }, [activeTab, reservationsList, hasScrolledToNext, todayStr]);
-
-  const checkDateFilter = (dateStr) => {
-     if (!dateStr) return false;
-     const [y, mo] = dateStr.split('-');
-     if (filterYear !== 'all' && y !== filterYear) return false;
-     if (filterMonth !== 'all' && parseInt(mo)-1 !== parseInt(filterMonth)) return false;
-     return true;
-  };
-
-  const monthlyRecapData = useMemo(() => {
-    const stats = {};
-    
-    const initStats = (m) => {
-        if(!stats[m]) stats[m] = { totalBank: 0, urssafGross: 0, directNet: 0, charges: 0, taxes: 0, platforms: {} };
-    };
-
-    baseTenants.forEach(t => {
-      if (t.platform === 'En direct') {
-           const a1 = parseFloat(t.acompte1Amount) || 0;
-           const a2 = parseFloat(t.acompte2Amount) || 0;
-           const s = parseFloat(t.soldeAmount) || 0;
-
-           if (t.acompte1Date && checkDateFilter(t.acompte1Date)) {
-               const m = t.acompte1Date.substring(0,7);
-               initStats(m);
-               stats[m].totalBank += a1;
-               if (t.isUrssaf === false) stats[m].directNet += a1;
-           }
-           if (t.acompte2Date && checkDateFilter(t.acompte2Date)) {
-               const m = t.acompte2Date.substring(0,7);
-               initStats(m);
-               stats[m].totalBank += a2;
-               if (t.isUrssaf === false) stats[m].directNet += a2;
-           }
-           if (t.soldeDate && checkDateFilter(t.soldeDate)) {
-               const m = t.soldeDate.substring(0,7);
-               initStats(m);
-               stats[m].totalBank += s;
-               if (t.isUrssaf === false) stats[m].directNet += s;
-               
-               if (t.isUrssaf !== false) {
-                   stats[m].urssafGross += (parseFloat(t.grossAmount) || 0);
-                   stats[m].taxes += (parseFloat(t.grossAmount) || 0) * 0.077;
-                   stats[m].platforms[t.platform] = (stats[m].platforms[t.platform] || 0) + (parseFloat(t.grossAmount) || 0);
-               }
-           }
-      } else {
-          if (t.paymentDate && checkDateFilter(t.paymentDate)) {
-              const m = t.paymentDate.substring(0, 7);
-              initStats(m);
-              stats[m].totalBank += (parseFloat(t.netAmount) || 0);
-              if (t.isUrssaf !== false) { 
-                stats[m].urssafGross += (parseFloat(t.grossAmount) || 0); 
-                stats[m].taxes += (parseFloat(t.grossAmount) || 0) * 0.077; 
-                stats[m].platforms[t.platform] = (stats[m].platforms[t.platform] || 0) + (parseFloat(t.grossAmount) || 0);
-              }
-              else {
-                stats[m].directNet += (parseFloat(t.netAmount) || 0);
-              }
-          }
-      }
-      
-      (t.resExpenses || []).forEach(exp => {
-          if (exp.paymentDate && checkDateFilter(exp.paymentDate)) {
-             if (filterProv !== 'all' && exp.person !== filterProv) return; 
-             const m = exp.paymentDate.substring(0, 7);
-             initStats(m);
-             stats[m].charges += (parseFloat(exp.amount) || 0);
-          }
-      });
-    });
-    return Object.entries(stats).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [baseTenants, filterYear, filterMonth, filterProv]);
-
-  const detailedExpenses = useMemo(() => {
-    const list = [];
-    baseTenants.forEach(t => {
-      (t.resExpenses || []).forEach(exp => {
-        if (filterProv === 'all' || exp.person === filterProv) {
-          const refDate = exp.paymentDate || t.startDate;
-          if (checkDateFilter(refDate)) {
-            list.push({ id: `${t.id}-${exp.id}`, propertyName: properties.find(p => p.id === t.propertyId)?.name || '--', dateRes: t.startDate, person: exp.person, type: exp.type, amount: parseFloat(exp.amount) || 0, paymentDate: exp.paymentDate || '' });
-          }
-        }
-      });
-    });
-    return list.sort((a, b) => b.dateRes.localeCompare(a.dateRes));
-  }, [baseTenants, properties, filterProv, filterYear, filterMonth]);
-
-  // --- MOTEUR DE STATISTIQUES AVANCEES ---
-  const statsCalculations = useMemo(() => {
-    const year = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
-    const prevYear = year - 1;
-
-    let currentYearNights = 0;
-    let currentYearGross = 0, prevYearGross = 0;
-    let currentYearExp = 0;
-    let upcomingGross = 0;
-
-    const currentMonthGross = Array(12).fill(0);
-    const prevMonthGross = Array(12).fill(0);
-    
-    baseTenants.forEach(t => {
-       if (!t.startDate) return;
-       const resYear = parseInt(t.startDate.split('-')[0], 10);
-       const resMonth = parseInt(t.startDate.split('-')[1], 10) - 1;
-
-       const nights = t.endDate ? Math.max(1, Math.round((new Date(t.endDate) - new Date(t.startDate)) / 86400000)) : 1;
-       const gross = parseFloat(t.grossAmount) || 0;
-       const exp = (t.resExpenses || []).reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
-
-       let isFullyPaid = false;
-       if (t.platform === 'En direct') {
-          isFullyPaid = !!t.soldeDate;
-       } else {
-          isFullyPaid = !!t.paymentDate;
-       }
-       if (!isFullyPaid) upcomingGross += gross;
-
-       if (resYear === year) {
-           currentYearNights += nights;
-           currentYearGross += gross;
-           currentYearExp += exp;
-           if (resMonth >= 0 && resMonth <= 11) currentMonthGross[resMonth] += gross;
-       } else if (resYear === prevYear) {
-           prevYearGross += gross;
-           if (resMonth >= 0 && resMonth <= 11) prevMonthGross[resMonth] += gross;
-       }
-    });
-
-    const currentBase = baseTenants.filter(t => t.startDate && t.startDate.startsWith(year.toString()));
-    const avgStay = currentBase.length > 0 ? (currentYearNights / currentBase.length).toFixed(1) : 0;
-    const avgGrossPerRes = currentBase.length > 0 ? (currentYearGross / currentBase.length).toFixed(2) : 0;
-    const revPerNight = currentYearNights > 0 ? (currentYearGross / currentYearNights).toFixed(2) : 0;
-    
-    const calcGrowth = (curr, prev) => prev > 0 ? Math.round(((curr - prev) / prev) * 100) : (curr > 0 ? 100 : 0);
-    const grossGrowth = calcGrowth(currentYearGross, prevYearGross);
-
-    return { 
-        year, prevYear,
-        currentYearNights, currentYearGross, currentYearExp, upcomingGross,
-        prevYearGross, 
-        avgStay, avgGrossPerRes, revPerNight, grossGrowth,
-        currentMonthGross, prevMonthGross
-    };
-  }, [baseTenants, filterYear]);
-
-  const statsDetailList = useMemo(() => {
-    if (!statsDetailConfig) return [];
-    const { type, monthIndex } = statsDetailConfig;
-    const yearNum = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
-    
-    return baseTenants.filter(t => {
-        if (type === 'upcoming') {
-             let isFullyPaid = false;
-             if (t.platform === 'En direct') isFullyPaid = !!t.soldeDate;
-             else isFullyPaid = !!t.paymentDate;
-             return !isFullyPaid;
-        }
-        
-        const sDate = t.startDate || '';
-        const [y, m] = sDate.split('-');
-        
-        if (type === 'month_current') {
-             return parseInt(y) === yearNum && parseInt(m)-1 === monthIndex;
-        }
-        if (type === 'month_prev') {
-             return parseInt(y) === yearNum - 1 && parseInt(m)-1 === monthIndex;
-        }
-        if (type === 'year_current') {
-             return parseInt(y) === yearNum;
-        }
-        if (type === 'expenses') {
-             return parseInt(y) === yearNum && (t.resExpenses||[]).length > 0;
-        }
-        return false;
-    }).sort((a,b) => (a.startDate||"").localeCompare(b.startDate||""));
-  }, [statsDetailConfig, baseTenants, filterYear]);
-
-  const getTenantProfitForFilters = (t) => {
-    let profit = 0;
-    if (t.platform === 'En direct') {
-        const a1 = parseFloat(t.acompte1Amount) || 0;
-        const a2 = parseFloat(t.acompte2Amount) || 0;
-        const s = parseFloat(t.soldeAmount) || 0;
-        
-        if (t.acompte1Date && checkDateFilter(t.acompte1Date)) profit += a1;
-        if (t.acompte2Date && checkDateFilter(t.acompte2Date)) profit += a2;
-        
-        if (t.soldeDate && checkDateFilter(t.soldeDate)) {
-            profit += s;
-            if (t.isUrssaf !== false) profit -= (parseFloat(t.grossAmount) || 0) * 0.077;
-        }
-    } else {
-        if (t.paymentDate && checkDateFilter(t.paymentDate)) {
-            profit += (parseFloat(t.netAmount) || 0);
-            if (t.isUrssaf !== false) profit -= (parseFloat(t.grossAmount) || 0) * 0.077;
-        }
-    }
-
-    (t.resExpenses || []).forEach(exp => {
-        if (exp.paymentDate && checkDateFilter(exp.paymentDate)) {
-            profit -= (parseFloat(exp.amount) || 0);
-        }
-    });
-
-    return profit;
-  };
-
-  const handleMonthChange = (direction) => {
-    let m = filterMonth === 'all' ? new Date().getMonth() : parseInt(filterMonth);
-    let y = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
-    if (direction === 'next') { if (m === 11) { m = 0; y += 1; } else m += 1; }
-    else { if (m === 0) { m = 11; y -= 1; } else m -= 1; }
-    setFilterMonth(m.toString()); setFilterYear(y.toString());
-  };
 
   const agendaDays = useMemo(() => {
     const y = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
@@ -960,6 +744,12 @@ const App = () => {
     for (let i = 1; i <= lastDay.getDate(); i++) days.push({ day: i, dateStr: `${y}-${(m+1).toString().padStart(2, '0')}-${i.toString().padStart(2, '0')}` });
     return days;
   }, [filterYear, filterMonth]);
+
+  // ICI : LA LIGNE RESTAUREE QUI AVAIT DISPARU (yearsAvailable)
+  const yearsAvailable = useMemo(() => {
+    const years = tenants.map(t => t.startDate ? new Date(t.startDate).getFullYear() : null).filter(Boolean);
+    return [...new Set([...years, new Date().getFullYear()])].sort((a,b) => b-a);
+  }, [tenants]);
 
   const parseCSVLine = (text) => {
     const result = []; let current = '', inQuotes = false;
@@ -1055,6 +845,151 @@ const App = () => {
       setReviewList([]); setImportText(''); setImportStatus(`${toImport.length} réservation(s) importée(s) !`);
       setTimeout(() => setImportStatus(''), 5000);
   };
+
+  const checkDateFilter = (dateStr) => {
+     if (!dateStr) return false;
+     const [y, mo] = dateStr.split('-');
+     if (filterYear !== 'all' && y !== filterYear) return false;
+     if (filterMonth !== 'all' && parseInt(mo)-1 !== parseInt(filterMonth)) return false;
+     return true;
+  };
+
+  const monthlyRecapData = useMemo(() => {
+    const stats = {};
+    
+    const initStats = (m) => {
+        if(!stats[m]) stats[m] = { totalBank: 0, urssafGross: 0, directNet: 0, charges: 0, taxes: 0, platforms: {} };
+    };
+
+    baseTenants.forEach(t => {
+      if (t.platform === 'En direct') {
+           const a1 = parseFloat(t.acompte1Amount) || 0;
+           const a2 = parseFloat(t.acompte2Amount) || 0;
+           const s = parseFloat(t.soldeAmount) || 0;
+
+           if (t.acompte1Date && checkDateFilter(t.acompte1Date)) {
+               const m = t.acompte1Date.substring(0,7);
+               initStats(m);
+               stats[m].totalBank += a1;
+               if (t.isUrssaf === false) stats[m].directNet += a1;
+           }
+           if (t.acompte2Date && checkDateFilter(t.acompte2Date)) {
+               const m = t.acompte2Date.substring(0,7);
+               initStats(m);
+               stats[m].totalBank += a2;
+               if (t.isUrssaf === false) stats[m].directNet += a2;
+           }
+           if (t.soldeDate && checkDateFilter(t.soldeDate)) {
+               const m = t.soldeDate.substring(0,7);
+               initStats(m);
+               stats[m].totalBank += s;
+               if (t.isUrssaf === false) stats[m].directNet += s;
+               
+               if (t.isUrssaf !== false) {
+                   stats[m].urssafGross += (parseFloat(t.grossAmount) || 0);
+                   stats[m].taxes += (parseFloat(t.grossAmount) || 0) * 0.077;
+                   stats[m].platforms[t.platform] = (stats[m].platforms[t.platform] || 0) + (parseFloat(t.grossAmount) || 0);
+               }
+           }
+      } else {
+          if (t.paymentDate && checkDateFilter(t.paymentDate)) {
+              const m = t.paymentDate.substring(0, 7);
+              initStats(m);
+              stats[m].totalBank += (parseFloat(t.netAmount) || 0);
+              if (t.isUrssaf !== false) { 
+                stats[m].urssafGross += (parseFloat(t.grossAmount) || 0); 
+                stats[m].taxes += (parseFloat(t.grossAmount) || 0) * 0.077; 
+                stats[m].platforms[t.platform] = (stats[m].platforms[t.platform] || 0) + (parseFloat(t.grossAmount) || 0);
+              }
+              else {
+                stats[m].directNet += (parseFloat(t.netAmount) || 0);
+              }
+          }
+      }
+      
+      (t.resExpenses || []).forEach(exp => {
+          if (exp.paymentDate && checkDateFilter(exp.paymentDate)) {
+             if (filterProv !== 'all' && exp.person !== filterProv) return; 
+             const m = exp.paymentDate.substring(0, 7);
+             initStats(m);
+             stats[m].charges += (parseFloat(exp.amount) || 0);
+          }
+      });
+    });
+    return Object.entries(stats).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [baseTenants, filterYear, filterMonth, filterProv]);
+
+  const detailedExpenses = useMemo(() => {
+    const list = [];
+    baseTenants.forEach(t => {
+      (t.resExpenses || []).forEach(exp => {
+        if (filterProv === 'all' || exp.person === filterProv) {
+          const refDate = exp.paymentDate || t.startDate;
+          if (checkDateFilter(refDate)) {
+            list.push({ id: `${t.id}-${exp.id}`, propertyName: properties.find(p => p.id === t.propertyId)?.name || '--', dateRes: t.startDate, person: exp.person, type: exp.type, amount: parseFloat(exp.amount) || 0, paymentDate: exp.paymentDate || '' });
+          }
+        }
+      });
+    });
+    return list.sort((a, b) => b.dateRes.localeCompare(a.dateRes));
+  }, [baseTenants, properties, filterProv, filterYear, filterMonth]);
+
+  const statsCalculations = useMemo(() => {
+    const year = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
+    const prevYear = year - 1;
+
+    let currentYearNights = 0;
+    let currentYearGross = 0, prevYearGross = 0;
+    let currentYearExp = 0;
+    let upcomingGross = 0;
+
+    const currentMonthGross = Array(12).fill(0);
+    const prevMonthGross = Array(12).fill(0);
+    
+    baseTenants.forEach(t => {
+       if (!t.startDate) return;
+       const resYear = parseInt(t.startDate.split('-')[0], 10);
+       const resMonth = parseInt(t.startDate.split('-')[1], 10) - 1;
+
+       const nights = t.endDate ? Math.max(1, Math.round((new Date(t.endDate) - new Date(t.startDate)) / 86400000)) : 1;
+       const gross = parseFloat(t.grossAmount) || 0;
+       const exp = (t.resExpenses || []).reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+
+       let isFullyPaid = false;
+       if (t.platform === 'En direct') {
+          isFullyPaid = !!t.soldeDate;
+       } else {
+          isFullyPaid = !!t.paymentDate;
+       }
+       if (!isFullyPaid) upcomingGross += gross;
+
+       if (resYear === year) {
+           currentYearNights += nights;
+           currentYearGross += gross;
+           currentYearExp += exp;
+           if (resMonth >= 0 && resMonth <= 11) currentMonthGross[resMonth] += gross;
+       } else if (resYear === prevYear) {
+           prevYearGross += gross;
+           if (resMonth >= 0 && resMonth <= 11) prevMonthGross[resMonth] += gross;
+       }
+    });
+
+    const currentBase = baseTenants.filter(t => t.startDate && t.startDate.startsWith(year.toString()));
+    const avgStay = currentBase.length > 0 ? (currentYearNights / currentBase.length).toFixed(1) : 0;
+    const avgGrossPerRes = currentBase.length > 0 ? (currentYearGross / currentBase.length).toFixed(2) : 0;
+    const revPerNight = currentYearNights > 0 ? (currentYearGross / currentYearNights).toFixed(2) : 0;
+    
+    const calcGrowth = (curr, prev) => prev > 0 ? Math.round(((curr - prev) / prev) * 100) : (curr > 0 ? 100 : 0);
+    const grossGrowth = calcGrowth(currentYearGross, prevYearGross);
+
+    return { 
+        year, prevYear,
+        currentYearNights, currentYearGross, currentYearExp, upcomingGross,
+        prevYearGross, 
+        avgStay, avgGrossPerRes, revPerNight, grossGrowth,
+        currentMonthGross, prevMonthGross
+    };
+  }, [baseTenants, filterYear]);
 
   const RenderFilters = () => (
     <div className="flex flex-wrap items-center gap-2 bg-white/70 backdrop-blur-md p-3 rounded-[28px] border border-white shadow-xl mb-6 md:mb-8">
