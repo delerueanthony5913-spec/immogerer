@@ -1,1 +1,16 @@
-
+{
+  "short_name": "CADEL",
+  "name": "CADEL Manager",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#FFFFFF",
+  "background_color": "#F8FAFC"
+}
