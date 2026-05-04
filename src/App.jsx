@@ -30,21 +30,6 @@ const appId = 'immogerer-prod-final';
 
 const CHART_COLORS = ['#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#6366F1', '#F43F5E', '#06B6D4'];
 
-// --- COMPOSANT ICONE VILLA SUR-MESURE ---
-const VillaIcon = ({ size = 24, className = "" }) => (
-  <svg width={size} height={size} viewBox="0 0 512 512" fill="currentColor" className={className} xmlns="http://www.w3.org/2000/svg">
-    <g transform="translate(6, -10)">
-      <rect x="120" y="160" width="140" height="120" rx="8" fill="currentColor" opacity="0.6" />
-      <rect x="220" y="100" width="160" height="180" rx="8" fill="currentColor" />
-      <rect x="100" y="150" width="180" height="16" rx="8" fill="currentColor" opacity="0.9" />
-      <rect x="200" y="90" width="200" height="16" rx="8" fill="currentColor" opacity="0.9" />
-      <rect x="140" y="200" width="60" height="80" rx="6" fill="#fff" opacity="0.3" />
-      <rect x="260" y="140" width="80" height="140" rx="6" fill="#fff" opacity="0.3" />
-      <rect x="100" y="280" width="300" height="12" rx="6" fill="currentColor" opacity="0.4" />
-    </g>
-  </svg>
-);
-
 // --- COMPOSANTS GRAPHIQUES ---
 const DonutChart = ({ data, title }) => {
   const visibleData = (data || []).filter(d => d && d.value > 0);
@@ -1287,10 +1272,7 @@ const App = () => {
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col md:flex-row font-sans text-slate-900">
       <aside className={`fixed md:sticky top-0 left-0 z-50 w-72 h-[100dvh] bg-white border-r transform md:translate-x-0 transition-transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-10 border-b flex flex-col items-center">
-          <div className="bg-gradient-to-tr from-blue-600 to-indigo-600 p-4 rounded-2xl text-white shadow-xl mb-2">
-            <VillaIcon size={32} />
-          </div>
-          <h1 className="font-black uppercase tracking-tighter text-2xl">CADEL</h1><h2 className="font-black uppercase tracking-[0.3em] text-[10px] text-blue-600">MANAGER</h2>
+          <img src="/icon.svg" alt="Cadel Manager Logo" className="w-24 h-24 rounded-3xl shadow-xl mb-2 object-contain" />
         </div>
         <nav className="flex-1 p-6 space-y-2 overflow-y-auto">
           {[{ id: 'reservations', label: 'Réservations', icon: <List size={18}/> }, { id: 'agenda', label: 'Agenda', icon: <CalendarRange size={18}/> }, { id: 'statistiques', label: 'Statistiques', icon: <BarChart2 size={18}/> }, { id: 'finances', label: 'Finances', icon: <Calculator size={18}/> }, { id: 'settings', label: 'Paramètres', icon: <Settings size={18}/> }].map(item => (
@@ -1300,10 +1282,8 @@ const App = () => {
       </aside>
 
       <div className="md:hidden flex justify-between p-5 bg-white border-b sticky top-0 z-40 shadow-sm">
-        <div className="flex items-center gap-2">
-            <div className="bg-blue-600 p-1.5 rounded-lg text-white">
-                <VillaIcon size={18}/>
-            </div>
+        <div className="flex items-center gap-3">
+            <img src="/icon.svg" alt="Logo" className="w-10 h-10 rounded-[12px] shadow-sm object-contain" />
             <h1 className="font-black text-sm uppercase">CADEL MANAGER</h1>
         </div>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2">{isMobileMenuOpen ? <X /> : <Menu />}</button>
