@@ -81,7 +81,7 @@ const DonutChart = ({ data, title }) => {
   );
 };
 
-// GRAPHIQUE MULTI-COURBES INTELLIGENT (Gère le Réel vs Prévisionnel)
+// GRAPHIQUE MULTI-COURBES INTELLIGENT
 const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) => {
   const currentYear = new Date().getFullYear().toString();
   
@@ -435,6 +435,8 @@ const App = () => {
     return t.paymentDate ? { label: 'Payé', color: 'bg-emerald-100 text-emerald-700' } : { label: 'Attente', color: 'bg-orange-100 text-orange-700' };
   };
 
+  const TABS_ORDER = ['reservations', 'agenda', 'statistiques', 'finances', 'settings'];
+
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('reservations');
@@ -475,6 +477,10 @@ const App = () => {
   const [statsDetailConfig, setStatsDetailConfig] = useState(null);
 
   const [hasScrolledToNext, setHasScrolledToNext] = useState(false);
+  
+  // States pour le Swipe
+  const [touchStart, setTouchStart] = useState(null);
+  const [touchEnd, setTouchEnd] = useState(null);
   
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -747,7 +753,6 @@ const App = () => {
               const [year, month] = start.split('-');
               const dateObj = new Date(parseInt(year), parseInt(month) - 1);
               const monthYearString = dateObj.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-              // Mettre la première lettre en majuscule : "Juillet 2026"
               const formattedLabel = monthYearString.charAt(0).toUpperCase() + monthYearString.slice(1);
               
               if (formattedLabel !== currentMonthYear) {
@@ -761,7 +766,7 @@ const App = () => {
   }, [reservationsList]);
 
 
-  // LOGIQUE D'AUTO-SCROLL SANS LE FLASH JAUNE
+  // LOGIQUE D'AUTO-SCROLL RESTREINTE A LA ZONE DEROULANTE SANS FLASH
   useEffect(() => {
     if (activeTab !== 'reservations') {
        setHasScrolledToNext(false);
@@ -783,7 +788,6 @@ const App = () => {
             
             for (let el of els) {
                 if (el.offsetParent !== null) {
-                    // On fait défiler jusqu'à l'élément, sans changer sa couleur
                     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     scrolled = true;
                     break;
@@ -799,6 +803,38 @@ const App = () => {
     }
   }, [activeTab, reservationsList, hasScrolledToNext, todayStr]);
 
+
+  // LOGIQUE DU SWIPE (Glissement Tactile)
+  const onTouchStart = (e) => {
+    setTouchEnd(null);
+    setTouchStart({ x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY });
+  };
+
+  const onTouchMove = (e) => {
+    setTouchEnd({ x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY });
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    
+    const distanceX = touchStart.x - touchEnd.x;
+    const distanceY = touchStart.y - touchEnd.y;
+    
+    // Si on a scrollé verticalement, on annule (pour ne pas changer d'onglet en lisant)
+    if (Math.abs(distanceY) > 50) return;
+    
+    const isLeftSwipe = distanceX > 60;
+    const isRightSwipe = distanceX < -60;
+    
+    const currentIndex = TABS_ORDER.indexOf(activeTab);
+    
+    if (isLeftSwipe && currentIndex < TABS_ORDER.length - 1) {
+      setActiveTab(TABS_ORDER[currentIndex + 1]);
+    }
+    if (isRightSwipe && currentIndex > 0) {
+      setActiveTab(TABS_ORDER[currentIndex - 1]);
+    }
+  };
 
   const checkDateFilter = (dateStr) => {
      if (!dateStr) return false;
@@ -1179,7 +1215,7 @@ const App = () => {
 
       <div className="md:hidden flex justify-between p-5 bg-white border-b sticky top-0 z-40 shadow-sm"><div className="flex items-center gap-2"><div className="bg-blue-600 p-1.5 rounded-lg text-white"><Building2 size={16}/></div><h1 className="font-black text-sm uppercase">CADEL MANAGER</h1></div><button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2">{isMobileMenuOpen ? <X /> : <Menu />}</button></div>
 
-      <main className="flex-1 p-4 md:p-12 overflow-y-auto h-screen custom-scrollbar relative">
+      <main onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} className="flex-1 p-4 md:p-12 overflow-y-auto h-screen custom-scrollbar relative">
         
         {/* MODALE DE PAIEMENT RAPIDE */}
         {quickPayConfig && (
