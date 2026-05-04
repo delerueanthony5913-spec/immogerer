@@ -829,11 +829,13 @@ const App = () => {
 
     if (res.resExpenses && res.resExpenses.length > 0) {
        expensesText = '\n\nPrestations prévues :\n' + res.resExpenses.map(e => {
-           if (e.sendEmail !== false && providerEmails[e.person]) {
+           const isDias = e.person && e.person.toLowerCase().includes('dias');
+           
+           // On ajoute l'email uniquement si ce n'est PAS Dias (séparation des agendas)
+           if (e.sendEmail !== false && providerEmails[e.person] && !isDias) {
                guestEmails.push(providerEmails[e.person]);
            }
 
-           const isDias = e.person && e.person.toLowerCase().includes('dias');
            if (isDias) {
                let diasDetails = `- ${e.type} (${e.person}) : ${e.amount}€`;
                if (e.hoursEntry > 0) diasDetails += `\n   ↳ Entrée le ${formatDateFr(e.dateEntry || res.startDate)} : ${e.hoursEntry}h (à ${e.rateEntry}€/h)`;
@@ -897,7 +899,8 @@ const App = () => {
 
     let url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dates}&details=${details}`;
     
-    if (exp.sendEmail !== false && providerEmails[exp.person]) {
+    // On force l'email pour Dias
+    if (providerEmails[exp.person]) {
         url += `&add=${encodeURIComponent(providerEmails[exp.person])}`;
     }
     return url;
@@ -1335,7 +1338,7 @@ const App = () => {
                         <div className="space-y-1 border-t border-slate-100 pt-1.5 mb-1.5">
                           {(t.resExpenses || []).map((exp, idx) => (
                             <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[8px] bg-white/60 p-1.5 rounded-xl cursor-pointer hover:bg-white transition-colors leading-tight">
-                              <span className="uppercase font-black text-slate-500 min-w-0 truncate pr-2">{exp.type} ({exp.person}) {exp.sendEmail !== false && providerEmails[exp.person] && <Mail size={8} className="inline text-blue-500 flex-shrink-0"/>}</span>
+                              <span className="uppercase font-black text-slate-500 min-w-0 truncate pr-2">{exp.type} ({exp.person}) {exp.sendEmail !== false && providerEmails[exp.person] && !exp.person.toLowerCase().includes('dias') && <Mail size={8} className="inline text-blue-500 flex-shrink-0"/>}</span>
                               <div className="text-right flex-shrink-0">
                                 <span className={`font-black flex items-center justify-end gap-1 ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€ {exp.paymentDate ? <CheckCircle size={8}/> : <Clock size={8}/>}</span>
                                 {exp.paymentDate && <div className="text-[7px] text-slate-400 mt-0.5">{formatDateFr(exp.paymentDate)}</div>}
@@ -1373,7 +1376,7 @@ const App = () => {
                             <div className="space-y-1.5">
                                 {(t.resExpenses || []).map((exp, idx) => (
                                     <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-white/50 p-1.5 rounded-lg border border-slate-100/50 cursor-pointer hover:border-blue-300 hover:bg-white hover:shadow-sm transition-all">
-                                    <span className="uppercase font-black text-slate-500 leading-none">{exp.type} ({exp.person}) {exp.sendEmail !== false && providerEmails[exp.person] && <Mail size={10} className="inline text-blue-500 ml-1"/>}</span>
+                                    <span className="uppercase font-black text-slate-500 leading-none">{exp.type} ({exp.person}) {exp.sendEmail !== false && providerEmails[exp.person] && !exp.person.toLowerCase().includes('dias') && <Mail size={10} className="inline text-blue-500 ml-1"/>}</span>
                                     <div className="text-right">
                                         <div className="flex items-center justify-end gap-1.5"><span className={`font-black ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€</span>{exp.paymentDate ? <CheckCircle size={10} className="text-emerald-500" /> : <Clock size={10} className="text-orange-400" />}</div>
                                         {exp.paymentDate && <div className="text-[8px] text-slate-400 mt-0.5 leading-none">{formatDateFr(exp.paymentDate)}</div>}
@@ -1551,7 +1554,6 @@ const App = () => {
                   </form>
                 </div>
                 
-                {/* --- NOUVEAU BLOC : PRESTATAIRES AVEC EMAIL --- */}
                 <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full border-2 border-blue-50">
                   <h3 className="text-[10px] font-black uppercase text-blue-600 mb-4">Prestataires (Emails)</h3>
                   <div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">
@@ -1722,6 +1724,7 @@ const App = () => {
                       if (isDias) {
                           return (
                               <div key={exp.id} className="flex flex-col gap-3 bg-blue-50/50 p-4 rounded-[28px] border border-blue-100 shadow-sm relative overflow-hidden">
+                                  {/* Haut : Sélecteurs de base */}
                                   <div className="flex gap-1.5 md:gap-2 items-center relative z-10">
                                       <select value={exp.person || ''} onChange={e => {
                                           const val = e.target.value;
@@ -1745,21 +1748,15 @@ const App = () => {
                                       
                                       <button type="button" onClick={() => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).filter(x => x.id !== exp.id) })} className="flex-shrink-0 text-rose-500 font-black px-1 md:px-2 hover:scale-110 transition-transform"><Trash2 size={18}/></button>
                                   </div>
-                                  
-                                  {providerEmails[exp.person] && (
-                                      <label className="flex items-center gap-2 cursor-pointer relative z-10 px-1 mt-1 md:mt-0">
-                                          <input type="checkbox" checked={exp.sendEmail !== false} onChange={e => updateDiasField(exp.id, 'sendEmail', e.target.checked)} className="w-3.5 h-3.5 flex-shrink-0 accent-blue-600" />
-                                          <span className="text-[8px] md:text-[9px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1 min-w-0 break-words"><Mail size={12} className="flex-shrink-0"/> Inviter à l'agenda ({providerEmails[exp.person]})</span>
-                                      </label>
-                                  )}
 
+                                  {/* Milieu : Dates et Heures (Spécial DIAS) */}
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 relative z-10 mt-1">
                                       {/* Bloc Entrée */}
                                       <div className="bg-white p-3 rounded-[20px] border border-blue-100 shadow-sm space-y-2">
                                           <div className="flex justify-between items-center"><span className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Entrée</span>{isSundayOrHoliday(exp.dateEntry) && <span className="text-[8px] font-black text-white bg-rose-500 px-2 py-0.5 rounded-full shadow-sm">Férié / Dim</span>}</div>
                                           <input type="date" value={exp.dateEntry || ''} onChange={e => updateDiasField(exp.id, 'dateEntry', e.target.value)} className="w-full p-2 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-600 outline-none cursor-pointer" />
                                           <div className="flex gap-2">
-                                              <div className="w-1/3 min-w-0"><label className="text-[7px] uppercase text-slate-400 font-bold block mb-1">Heure</label><input type="time" value={exp.timeEntry || ''} onChange={e => updateDiasField(exp.id, 'timeEntry', e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg font-black text-center text-[10px] outline-none focus:border-blue-400" /></div>
+                                              <div className="w-1/3 min-w-0"><label className="text-[7px] uppercase text-slate-400 font-bold block mb-1">Heure</label><input type="time" step="1800" value={exp.timeEntry || ''} onChange={e => updateDiasField(exp.id, 'timeEntry', e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg font-black text-center text-[10px] outline-none focus:border-blue-400" /></div>
                                               <div className="w-1/3 min-w-0"><label className="text-[7px] uppercase text-slate-400 font-bold block mb-1">Durée (h)</label><input type="number" step="0.5" value={exp.hoursEntry || ''} onChange={e => updateDiasField(exp.id, 'hoursEntry', e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg font-black text-center text-[10px] outline-none focus:border-blue-400" placeholder="0" /></div>
                                               <div className="w-1/3 min-w-0"><label className="text-[7px] uppercase text-slate-400 font-bold block mb-1">Tarif (€)</label><input type="number" step="0.5" value={exp.rateEntry || ''} onChange={e => updateDiasField(exp.id, 'rateEntry', e.target.value)} className={`w-full p-2 border rounded-lg font-black text-center text-[10px] outline-none focus:border-blue-400 transition-colors ${isSundayOrHoliday(exp.dateEntry) ? 'bg-rose-50 border-rose-200 text-rose-700' : 'border-slate-200 text-slate-900'}`} placeholder="0" /></div>
                                           </div>
@@ -1769,7 +1766,7 @@ const App = () => {
                                           <div className="flex justify-between items-center"><span className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Sortie</span>{isSundayOrHoliday(exp.dateExit) && <span className="text-[8px] font-black text-white bg-rose-500 px-2 py-0.5 rounded-full shadow-sm">Férié / Dim</span>}</div>
                                           <input type="date" value={exp.dateExit || ''} onChange={e => updateDiasField(exp.id, 'dateExit', e.target.value)} className="w-full p-2 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-600 outline-none cursor-pointer" />
                                           <div className="flex gap-2">
-                                              <div className="w-1/3 min-w-0"><label className="text-[7px] uppercase text-slate-400 font-bold block mb-1">Heure</label><input type="time" value={exp.timeExit || ''} onChange={e => updateDiasField(exp.id, 'timeExit', e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg font-black text-center text-[10px] outline-none focus:border-blue-400" /></div>
+                                              <div className="w-1/3 min-w-0"><label className="text-[7px] uppercase text-slate-400 font-bold block mb-1">Heure</label><input type="time" step="1800" value={exp.timeExit || ''} onChange={e => updateDiasField(exp.id, 'timeExit', e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg font-black text-center text-[10px] outline-none focus:border-blue-400" /></div>
                                               <div className="w-1/3 min-w-0"><label className="text-[7px] uppercase text-slate-400 font-bold block mb-1">Durée (h)</label><input type="number" step="0.5" value={exp.hoursExit || ''} onChange={e => updateDiasField(exp.id, 'hoursExit', e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg font-black text-center text-[10px] outline-none focus:border-blue-400" placeholder="0" /></div>
                                               <div className="w-1/3 min-w-0"><label className="text-[7px] uppercase text-slate-400 font-bold block mb-1">Tarif (€)</label><input type="number" step="0.5" value={exp.rateExit || ''} onChange={e => updateDiasField(exp.id, 'rateExit', e.target.value)} className={`w-full p-2 border rounded-lg font-black text-center text-[10px] outline-none focus:border-blue-400 transition-colors ${isSundayOrHoliday(exp.dateExit) ? 'bg-rose-50 border-rose-200 text-rose-700' : 'border-slate-200 text-slate-900'}`} placeholder="0" /></div>
                                           </div>
@@ -1818,6 +1815,7 @@ const App = () => {
                                   <input type="number" value={exp.amount || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, amount: e.target.value } : x) })} className="w-14 md:w-20 min-w-0 p-2 md:p-3 border rounded-xl font-black text-right outline-none text-[9px] md:text-[10px]" />
                                   <button type="button" onClick={() => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).filter(x => x.id !== exp.id) })} className="flex-shrink-0 text-rose-500 font-black px-1 md:px-2"><Trash2 size={18}/></button>
                               </div>
+                              {/* --- OPTION EMAIL AGENDA POUR LES AUTRES --- */}
                               {providerEmails[exp.person] && (
                                   <label className="flex items-center gap-2 cursor-pointer pl-1 mt-1">
                                       <input type="checkbox" checked={exp.sendEmail !== false} onChange={e => {
