@@ -81,10 +81,9 @@ const DonutChart = ({ data, title }) => {
   );
 };
 
-// GRAPHIQUE MULTI-COURBES DYNAMIQUE (Moteur "Classic" compatible)
+// GRAPHIQUE MULTI-COURBES INTELLIGENT (Gère le Réel vs Prévisionnel)
 const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) => {
   const currentYear = new Date().getFullYear().toString();
-  const currentMonth = new Date().getMonth();
   
   const [mode, setMode] = useState('years'); 
   const [metric, setMetric] = useState('net'); 
@@ -114,103 +113,123 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
 
   const buildSeriesFor = (targetYear, targetProp, targetPlat) => {
       const res = Array(12).fill(0);
+      const prov = Array(12).fill(false); // Tableau pour traquer les mois avec du prévisionnel
+
+      const processItem = (dateStr, amount, isProv) => {
+          if (!dateStr || !dateStr.startsWith(targetYear)) return;
+          const m = parseInt(dateStr.split('-')[1], 10) - 1;
+          if (m >= 0 && m <= 11) {
+              res[m] += amount;
+              if (isProv) prov[m] = true;
+          }
+      };
+
       safeData.forEach(t => {
           if (targetProp !== 'all' && t.propertyId !== targetProp) return;
           if (targetPlat !== 'all' && t.platform !== targetPlat) return;
 
-          let isUrssafTriggered = false;
+          const isDirect = t.platform === 'En direct';
+          const expectedDate = t.endDate || t.startDate || `${targetYear}-12-31`;
 
-          const addIncome = (dateStr, amt, isUrssafCheck) => {
-              if (dateStr && dateStr.startsWith(targetYear)) {
-                  const m = parseInt(dateStr.split('-')[1], 10) - 1;
-                  if (m >= 0 && m <= 11) {
-                      if (metric === 'gross') res[m] += amt;
-                      if (metric === 'net') {
-                          res[m] += amt;
-                          if (isUrssafCheck) isUrssafTriggered = true;
+          const g = parseFloat(t.grossAmount) || 0;
+          const n = parseFloat(t.netAmount) || 0;
+          const tax = t.isUrssaf !== false ? g * 0.077 : 0;
+
+          let totalPaidGross = 0;
+
+          // 1. GESTION DES REVENUS & URSSAF
+          if (metric === 'net' || metric === 'gross') {
+              if (isDirect) {
+                  const a1 = parseFloat(t.acompte1Amount) || 0;
+                  const a2 = parseFloat(t.acompte2Amount) || 0;
+                  const s = parseFloat(t.soldeAmount) || 0;
+
+                  // Acomptes réels
+                  if (t.acompte1Date) { processItem(t.acompte1Date, a1, false); totalPaidGross += a1; }
+                  if (t.acompte2Date) { processItem(t.acompte2Date, a2, false); totalPaidGross += a2; }
+                  
+                  // Solde réel
+                  if (t.soldeDate) {
+                      processItem(t.soldeDate, s, false);
+                      if (metric === 'net' && tax > 0) processItem(t.soldeDate, -tax, false);
+                      totalPaidGross += s;
+                  }
+
+                  // Solde prévisionnel (S'il n'y a pas de date de solde)
+                  if (!t.soldeDate) {
+                      const remaining = g - totalPaidGross;
+                      if (remaining > 0) {
+                          processItem(expectedDate, remaining, true); // True = Prévisionnel
                       }
+                      if (metric === 'net' && tax > 0) processItem(expectedDate, -tax, true);
+                  }
+
+              } else {
+                  // Plateformes classiques
+                  if (t.paymentDate) {
+                      processItem(t.paymentDate, metric === 'gross' ? g : n, false);
+                      if (metric === 'net' && tax > 0) processItem(t.paymentDate, -tax, false);
+                  } else {
+                      processItem(expectedDate, metric === 'gross' ? g : n, true); // True = Prévisionnel
+                      if (metric === 'net' && tax > 0) processItem(expectedDate, -tax, true);
                   }
               }
-          };
-
-          if (t.platform === 'En direct') {
-              addIncome(t.acompte1Date, parseFloat(t.acompte1Amount)||0, false);
-              addIncome(t.acompte2Date, parseFloat(t.acompte2Amount)||0, false);
-              addIncome(t.soldeDate, parseFloat(t.soldeAmount)||0, true);
-          } else {
-              addIncome(t.paymentDate, parseFloat(t.netAmount)||0, true);
-              if (metric === 'gross') addIncome(t.paymentDate, parseFloat(t.platformFees)||0, false); 
           }
 
-          const addExpense = (dateStr, amount) => {
-              if (dateStr && dateStr.startsWith(targetYear)) {
-                  const m = parseInt(dateStr.split('-')[1], 10) - 1;
-                  if (m >= 0 && m <= 11) {
-                      if (metric === 'expenses') res[m] += amount;
-                      if (metric === 'net') res[m] -= amount;
+          // 2. GESTION DES PRESTATIONS (DÉPENSES)
+          if (metric === 'net' || metric === 'expenses') {
+              (t.resExpenses || []).forEach(exp => {
+                  const amt = parseFloat(exp.amount) || 0;
+                  if (exp.paymentDate) {
+                      processItem(exp.paymentDate, metric === 'expenses' ? amt : -amt, false);
+                  } else {
+                      processItem(expectedDate, metric === 'expenses' ? amt : -amt, true); // True = Prévisionnel
                   }
-              }
-          };
-
-          (t.resExpenses || []).forEach(e => addExpense(e.paymentDate, parseFloat(e.amount)||0));
-
-          if (isUrssafTriggered && t.isUrssaf !== false && metric === 'net') {
-               const taxDate = t.platform === 'En direct' ? t.soldeDate : t.paymentDate;
-               if (taxDate && taxDate.startsWith(targetYear)) {
-                   const m = parseInt(taxDate.split('-')[1], 10) - 1;
-                   if (m >= 0 && m <= 11) {
-                       res[m] -= (parseFloat(t.grossAmount)||0) * 0.077;
-                   }
-               }
+              });
           }
       });
-      return res.map(val => isNaN(val) ? 0 : val);
+
+      // Calcul de la coupure (splitIndex) : Le premier mois qui contient du prévisionnel
+      let splitIndex = 11; // Par défaut, ligne 100% pleine
+      for (let i = 0; i < 12; i++) {
+          if (prov[i]) {
+              splitIndex = i - 1; // La ligne pleine s'arrête au mois précédent
+              break;
+          }
+      }
+
+      return { data: res.map(val => isNaN(val) ? 0 : val), splitIndex };
   };
 
   const series = selectedKeys.map((key, index) => {
-      let dataArr = [];
+      let result;
       let label = '';
-      let isPastCurrentYear = false;
 
       if (mode === 'years') {
-          dataArr = buildSeriesFor(key, contextProp, contextPlat);
+          result = buildSeriesFor(key, contextProp, contextPlat);
           label = key;
-          isPastCurrentYear = parseInt(key) < parseInt(currentYear);
       } else if (mode === 'properties') {
-          dataArr = buildSeriesFor(contextYear, key, contextPlat);
+          result = buildSeriesFor(contextYear, key, contextPlat);
           label = properties.find(p=>p.id===key)?.name || 'Inconnu';
-          isPastCurrentYear = parseInt(contextYear) < parseInt(currentYear);
       } else if (mode === 'platforms') {
-          dataArr = buildSeriesFor(contextYear, contextProp, key);
+          result = buildSeriesFor(contextYear, contextProp, key);
           label = key;
-          isPastCurrentYear = parseInt(contextYear) < parseInt(currentYear);
-      }
-
-      let splitIndex = 11;
-      if (!isPastCurrentYear) {
-         if (mode === 'years' && parseInt(key) > parseInt(currentYear)) splitIndex = -1; 
-         else if (mode === 'years' && parseInt(key) === parseInt(currentYear)) splitIndex = currentMonth; 
-         else if (parseInt(contextYear) > parseInt(currentYear)) splitIndex = -1;
-         else if (parseInt(contextYear) === parseInt(currentYear)) splitIndex = currentMonth;
       }
 
       return {
           id: key,
           label,
-          data: dataArr,
+          data: result.data,
           color: CHART_COLORS[index % CHART_COLORS.length],
-          total: dataArr.reduce((acc, val) => acc + val, 0),
-          splitIndex
+          total: result.data.reduce((acc, val) => acc + val, 0),
+          splitIndex: result.splitIndex
       };
   });
 
   const [hoveredMonth, setHoveredMonth] = useState(null);
   const months = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
 
-  // Remplacement du .flat() pour la compatibilité absolue
-  const allDataValues = series.reduce((acc, currentSeries) => {
-      return acc.concat(currentSeries.data);
-  }, []);
+  const allDataValues = series.reduce((acc, currentSeries) => acc.concat(currentSeries.data), []);
 
   const maxValRaw = Math.max(...allDataValues, 100);
   const maxVal = (!isFinite(maxValRaw) || maxValRaw <= 0) ? 100 : maxValRaw * 1.15;
@@ -313,15 +332,17 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
                     <line x1={getX(hoveredMonth)} y1={padY} x2={getX(hoveredMonth)} y2={h - padY} stroke="#CBD5E1" strokeWidth="2" strokeDasharray="4 4" />
                 )}
                 
-                {/* Lignes de mois (verticales invisibles pour le hover) */}
+                {/* Lignes de mois */}
                 {months.map((m, i) => (
                   <text key={m} x={getX(i)} y={h - 5} fill={hoveredMonth === i ? "#0F172A" : "#94A3B8"} fontSize="12" fontFamily="sans-serif" fontWeight="900" textAnchor="middle" className="transition-colors cursor-pointer" onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)}>{m}</text>
                 ))}
                 
-                {/* Tracer chaque courbe */}
+                {/* Tracer chaque courbe avec pointillé intelligent */}
                 {series.map((s, idx) => (
                    <g key={`series-${s.id}`}>
+                      {/* Ligne Pleine (Réel) */}
                       <path d={buildPath(s.data, 0, Math.max(0, s.splitIndex))} stroke={s.color} strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />
+                      {/* Ligne Pointillée (Prévisionnel) */}
                       <path d={buildPath(s.data, Math.max(0, s.splitIndex), 11)} stroke={s.color} strokeWidth="4" fill="none" strokeDasharray="6 8" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />
                    </g>
                 ))}
@@ -337,7 +358,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
                 ))}
               </svg>
 
-              {/* TOOLTIP INTERACTIF AU SURVOL (Directement sur le graphique) */}
+              {/* TOOLTIP INTERACTIF AU SURVOL */}
               {hoveredMonth !== null && series.length > 0 && (
                 <div 
                   className="absolute z-20 bg-slate-900/95 backdrop-blur-sm text-white p-4 rounded-2xl shadow-2xl pointer-events-none transition-all duration-200 min-w-[160px] border border-slate-700"
@@ -1193,7 +1214,6 @@ const App = () => {
             <div className="space-y-8 animate-in fade-in">
               <div className="flex justify-between items-center"><h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2><button onClick={() => { setEditingResId(null); setFormData({ propertyId: properties[0]?.id || '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '', acompte1Amount: '', acompte1Date: '', acompte2Amount: '', acompte2Date: '', soldeAmount: '', soldeDate: '' }); setIsModalOpen(true); }} className="bg-blue-600 text-white px-8 py-4 rounded-[24px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button></div>
               
-              {/* VUE MOBILE : Liste naturelle */}
               <div className="grid grid-cols-1 gap-4 md:hidden">
                 {(reservationsList || []).map(t => (
                   <div key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="bg-white p-6 rounded-[32px] shadow-lg border border-slate-50 cursor-pointer">
@@ -1230,7 +1250,6 @@ const App = () => {
                 ))}
               </div>
 
-              {/* VUE ORDINATEUR : Liste naturelle sans restriction de hauteur */}
               <div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 font-black uppercase border-b text-slate-400">
