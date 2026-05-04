@@ -81,72 +81,47 @@ const DonutChart = ({ data, title }) => {
   );
 };
 
-// GRAPHIQUE COMPARAISON (Réparé avec les Filtres Globaux)
+// GRAPHIQUE MULTI-COURBES DYNAMIQUE
 const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) => {
   const currentYear = new Date().getFullYear().toString();
   const currentMonth = new Date().getMonth();
   
-  const [metric, setMetric] = useState('net'); // 'net', 'gross', 'expenses'
-  const [compareBy, setCompareBy] = useState('years'); // 'years', 'properties', 'platforms'
+  const [mode, setMode] = useState('years'); 
+  const [metric, setMetric] = useState('net'); 
   
-  // Les deux éléments à comparer (ex: 2024 vs 2025)
-  const [val1, setVal1] = useState(currentYear);
-  const [val2, setVal2] = useState((parseInt(currentYear) - 1).toString());
+  const [selectedKeys, setSelectedKeys] = useState([]);
 
-  // Les filtres "Globaux" d'isolation
-  const [contextYear, setContextYear] = useState('all');
+  const [contextYear, setContextYear] = useState(currentYear);
   const [contextProp, setContextProp] = useState('all');
   const [contextPlat, setContextPlat] = useState('all');
 
   const safeData = Array.isArray(data) ? data : [];
   const safeYears = yearsAvailable.length > 0 ? yearsAvailable : [currentYear];
 
-  // Réinitialiser les sélecteurs quand on change de mode
   useEffect(() => {
-    if (compareBy === 'years') {
-       setVal1(safeYears[0] || currentYear);
-       setVal2(safeYears[1] || safeYears[0] || currentYear);
-       setContextYear('all'); // Désactive le filtre année si on compare des années
-    }
-    if (compareBy === 'properties') {
-       setVal1(properties[0]?.id || 'all');
-       setVal2(properties[1]?.id || properties[0]?.id || 'all');
-       setContextProp('all'); // Désactive le filtre log si on compare des logs
-       setContextYear(currentYear); // Met l'année en cours par défaut
-    }
-    if (compareBy === 'platforms') {
-       setVal1(platforms[0] || 'all');
-       setVal2(platforms[1] || platforms[0] || 'all');
-       setContextPlat('all'); // Désactive le filtre plat si on compare des plats
-       setContextYear(currentYear);
-    }
-  }, [compareBy, properties, platforms]);
+    if (mode === 'years') setSelectedKeys(safeYears.slice(0, 3)); 
+    if (mode === 'properties') setSelectedKeys(properties.map(p => p.id).slice(0, 4)); 
+    if (mode === 'platforms') setSelectedKeys(platforms.slice(0, 4)); 
+  }, [mode, properties, platforms]);
 
-  const buildSeries = (targetValue) => {
+  const toggleKey = (key) => {
+    setSelectedKeys(prev => 
+       prev.includes(key) 
+         ? prev.filter(k => k !== key) 
+         : [...prev, key]
+    );
+  };
+
+  const buildSeriesFor = (targetYear, targetProp, targetPlat) => {
       const res = Array(12).fill(0);
       safeData.forEach(t => {
-          // 1. Appliquer les filtres globaux du composant
-          if (compareBy !== 'years' && contextYear !== 'all') {
-              if (!t.startDate || !t.startDate.startsWith(contextYear)) return;
-          }
-          if (compareBy !== 'properties' && contextProp !== 'all') {
-              if (t.propertyId !== contextProp) return;
-          }
-          if (compareBy !== 'platforms' && contextPlat !== 'all') {
-              if (t.platform !== contextPlat) return;
-          }
-
-          // 2. Appliquer le filtre de la Courbe cible
-          if (compareBy === 'properties' && t.propertyId !== targetValue) return;
-          if (compareBy === 'platforms' && t.platform !== targetValue) return;
-          
-          const activeYear = compareBy === 'years' ? targetValue : (contextYear !== 'all' ? contextYear : t.startDate?.substring(0,4));
-          if(!activeYear) return;
+          if (targetProp !== 'all' && t.propertyId !== targetProp) return;
+          if (targetPlat !== 'all' && t.platform !== targetPlat) return;
 
           let isUrssafTriggered = false;
 
           const addIncome = (dateStr, amt, isUrssafCheck) => {
-              if (dateStr && dateStr.startsWith(activeYear)) {
+              if (dateStr && dateStr.startsWith(targetYear)) {
                   const m = parseInt(dateStr.split('-')[1], 10) - 1;
                   if (m >= 0 && m <= 11) {
                       if (metric === 'gross') res[m] += amt;
@@ -168,7 +143,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
           }
 
           const addExpense = (dateStr, amount) => {
-              if (dateStr && dateStr.startsWith(activeYear)) {
+              if (dateStr && dateStr.startsWith(targetYear)) {
                   const m = parseInt(dateStr.split('-')[1], 10) - 1;
                   if (m >= 0 && m <= 11) {
                       if (metric === 'expenses') res[m] += amount;
@@ -181,7 +156,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
 
           if (isUrssafTriggered && t.isUrssaf !== false && metric === 'net') {
                const taxDate = t.platform === 'En direct' ? t.soldeDate : t.paymentDate;
-               if (taxDate && taxDate.startsWith(activeYear)) {
+               if (taxDate && taxDate.startsWith(targetYear)) {
                    const m = parseInt(taxDate.split('-')[1], 10) - 1;
                    if (m >= 0 && m <= 11) {
                        res[m] -= (parseFloat(t.grossAmount)||0) * 0.077;
@@ -192,22 +167,51 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
       return res.map(val => isNaN(val) ? 0 : val);
   };
 
-  const d1 = buildSeries(val1);
-  const d2 = buildSeries(val2);
-  
-  const getLabel = (val) => {
-      if(val === 'all') return 'Global';
-      if(compareBy === 'properties') return properties.find(p=>p.id===val)?.name || 'Inconnu';
-      return val;
-  };
+  const series = selectedKeys.map((key, index) => {
+      let dataArr = [];
+      let label = '';
+      let isPastCurrentYear = false;
 
-  const label1 = getLabel(val1);
-  const label2 = getLabel(val2);
+      if (mode === 'years') {
+          dataArr = buildSeriesFor(key, contextProp, contextPlat);
+          label = key;
+          isPastCurrentYear = parseInt(key) < parseInt(currentYear);
+      } else if (mode === 'properties') {
+          dataArr = buildSeriesFor(contextYear, key, contextPlat);
+          label = properties.find(p=>p.id===key)?.name || 'Inconnu';
+          isPastCurrentYear = parseInt(contextYear) < parseInt(currentYear);
+      } else if (mode === 'platforms') {
+          dataArr = buildSeriesFor(contextYear, contextProp, key);
+          label = key;
+          isPastCurrentYear = parseInt(contextYear) < parseInt(currentYear);
+      }
+
+      let splitIndex = 11;
+      if (!isPastCurrentYear) {
+         if (mode === 'years' && parseInt(key) > parseInt(currentYear)) splitIndex = -1; 
+         else if (mode === 'years' && parseInt(key) === parseInt(currentYear)) splitIndex = currentMonth; 
+         else if (parseInt(contextYear) > parseInt(currentYear)) splitIndex = -1;
+         else if (parseInt(contextYear) === parseInt(currentYear)) splitIndex = currentMonth;
+      }
+
+      return {
+          id: key,
+          label,
+          data: dataArr,
+          color: CHART_COLORS[index % CHART_COLORS.length],
+          total: dataArr.reduce((acc, val) => acc + val, 0),
+          splitIndex
+      };
+  });
 
   const [hoveredMonth, setHoveredMonth] = useState(null);
   const months = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
 
-  const allDataValues = d1.concat(d2);
+  // Remplacement du .flat() pour la compatibilité absolue
+  const allDataValues = series.reduce((acc, currentSeries) => {
+      return acc.concat(currentSeries.data);
+  }, []);
+
   const maxValRaw = Math.max(...allDataValues, 100);
   const maxVal = (!isFinite(maxValRaw) || maxValRaw <= 0) ? 100 : maxValRaw * 1.15;
 
@@ -232,181 +236,139 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
     return `M ${points[0]} ` + points.slice(1).map(p => `L ${p}`).join(' ');
   };
 
-  const getSplit = (val) => {
-      let yRef = currentYear;
-      if(compareBy === 'years') yRef = val;
-      else if (contextYear !== 'all') yRef = contextYear;
-
-      if (parseInt(yRef) < parseInt(currentYear)) return 11;
-      if (parseInt(yRef) > parseInt(currentYear)) return -1;
-      return currentMonth;
-  };
-
-  const split1 = getSplit(val1);
-  const split2 = getSplit(val2);
-
   const yTicks = [0, maxVal * 0.33, maxVal * 0.66, maxVal];
 
-  const total1 = d1.reduce((acc, v) => acc + v, 0);
-  const total2 = d2.reduce((acc, v) => acc + v, 0);
+  const availableOptions = mode === 'years' 
+     ? safeYears.map(y => ({ id: y, label: y }))
+     : mode === 'properties'
+        ? properties.map(p => ({ id: p.id, label: p.name }))
+        : platforms.map(p => ({ id: p, label: p }));
 
   return (
     <div className="w-full bg-white p-6 md:p-8 rounded-[48px] shadow-2xl border border-slate-50 animate-in fade-in relative mt-8">
       
-      {/* 1. SELECTION DU MODE DE COMPARAISON */}
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
-        <div className="flex bg-slate-100 p-1.5 rounded-[20px] w-full md:w-max">
-          <button onClick={()=>setCompareBy('years')} className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex justify-center items-center gap-2 ${compareBy === 'years' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>📅 Années</button>
-          <button onClick={()=>setCompareBy('properties')} className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex justify-center items-center gap-2 ${compareBy === 'properties' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>🏠 Logements</button>
-          <button onClick={()=>setCompareBy('platforms')} className={`flex-1 md:flex-none px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex justify-center items-center gap-2 ${compareBy === 'platforms' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>💻 Plateformes</button>
-        </div>
+      {/* 1. SELECTION DU MODE */}
+      <div className="flex bg-slate-100 p-1.5 rounded-[20px] w-max mb-6">
+         <button onClick={()=>{setMode('years'); setContextProp('all'); setContextPlat('all');}} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${mode === 'years' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>📅 Années</button>
+         <button onClick={()=>{setMode('properties'); setContextYear(currentYear); setContextPlat('all');}} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${mode === 'properties' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>🏠 Logements</button>
+         <button onClick={()=>{setMode('platforms'); setContextYear(currentYear); setContextProp('all');}} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${mode === 'platforms' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>💻 Plateformes</button>
       </div>
 
-      {/* 2. PANNEAU DE CONTROLE (COURBES + FILTRES GLOBAUX) */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 bg-slate-50 p-4 md:p-6 rounded-3xl border border-slate-100">
-         
-         <div className="flex flex-wrap items-center gap-4">
-            <select value={metric} onChange={e=>setMetric(e.target.value)} className="bg-slate-900 text-white border-none rounded-xl px-4 py-2 text-[10px] font-black uppercase outline-none shadow-md cursor-pointer hover:bg-blue-600 transition-colors">
-               <option value="net">Profit Net Réel</option>
-               <option value="gross">CA Brut</option>
-               <option value="expenses">Coût Prestations</option>
-            </select>
-            
-            <div className="h-6 w-px bg-slate-200 hidden md:block"></div>
-            
-            {/* SÉLECTEUR COURBE 1 */}
-            <div className="flex items-center gap-2">
-               <div className="w-3 h-3 bg-rose-500 rounded-full shadow-sm"></div>
-               <select value={val1} onChange={e=>setVal1(e.target.value)} className="bg-white border border-rose-100 rounded-xl px-3 py-1.5 text-[10px] font-black uppercase text-rose-600 outline-none shadow-sm cursor-pointer max-w-[130px] truncate">
-                  {compareBy === 'years' && safeYears.map(y=><option key={y} value={y}>{y}</option>)}
-                  {compareBy === 'properties' && properties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-                  {compareBy === 'platforms' && platforms.map(p=><option key={p} value={p}>{p}</option>)}
-               </select>
-            </div>
-            
-            <span className="text-[10px] font-black text-slate-300">VS</span>
-            
-            {/* SÉLECTEUR COURBE 2 */}
-            <div className="flex items-center gap-2">
-               <div className="w-3 h-3 bg-purple-600 rounded-full shadow-sm"></div>
-               <select value={val2} onChange={e=>setVal2(e.target.value)} className="bg-white border border-purple-100 rounded-xl px-3 py-1.5 text-[10px] font-black uppercase text-purple-600 outline-none shadow-sm cursor-pointer max-w-[130px] truncate">
-                  {compareBy === 'years' && safeYears.map(y=><option key={y} value={y}>{y}</option>)}
-                  {compareBy === 'properties' && properties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-                  {compareBy === 'platforms' && platforms.map(p=><option key={p} value={p}>{p}</option>)}
-               </select>
+      {/* 2. BOUTONS DE SELECTION MULTIPLE + FILTRES */}
+      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6 mb-8 bg-slate-50 p-4 md:p-6 rounded-3xl border border-slate-100">
+         <div className="flex-1">
+            <span className="text-[10px] font-black uppercase text-slate-400 mb-3 block">Que voulez-vous afficher ? (Cochez)</span>
+            <div className="flex flex-wrap gap-2">
+               {availableOptions.map((opt, i) => {
+                  const isSelected = selectedKeys.includes(opt.id);
+                  const color = isSelected ? CHART_COLORS[selectedKeys.indexOf(opt.id) % CHART_COLORS.length] : '#CBD5E1';
+                  return (
+                     <button key={opt.id} onClick={() => toggleKey(opt.id)} className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase transition-all flex items-center gap-2 border ${isSelected ? 'bg-white shadow-sm border-transparent' : 'bg-transparent border-slate-200 text-slate-400 hover:border-slate-400'}`} style={{ color: isSelected ? color : undefined }}>
+                        <div className="w-2.5 h-2.5 rounded-full shadow-inner" style={{ backgroundColor: color }}></div>
+                        {opt.label}
+                     </button>
+                  );
+               })}
             </div>
          </div>
-
          <div className="w-full lg:w-px h-px lg:h-auto bg-slate-200"></div>
-
-         {/* FILTRES GLOBAUX DU GRAPHIQUE */}
-         <div className="flex flex-col gap-2 bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
-             <div className="flex items-center gap-2 mb-1">
-                <Filter size={12} className="text-slate-400" />
-                <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Appliquer sur :</span>
+         <div className="flex flex-col gap-3 min-w-[200px]">
+             <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase text-slate-400 w-16">Analyser :</span>
+                <select value={metric} onChange={e=>setMetric(e.target.value)} className="flex-1 bg-slate-900 text-white border-none rounded-xl px-3 py-2 text-[10px] font-black uppercase outline-none shadow-md cursor-pointer hover:bg-blue-600 transition-colors">
+                   <option value="net">Profit Net Réel</option>
+                   <option value="gross">CA Brut</option>
+                   <option value="expenses">Coût Prestations</option>
+                </select>
              </div>
-             <div className="flex flex-wrap items-center gap-2">
-                {compareBy !== 'years' && (
-                  <select value={contextYear} onChange={e=>setContextYear(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-[9px] font-black uppercase text-slate-600 outline-none cursor-pointer">
-                    <option value="all">Toutes Années</option>
-                    {safeYears.map(y=><option key={y} value={y}>Année {y}</option>)}
-                  </select>
-                )}
-                {compareBy !== 'properties' && (
-                  <select value={contextProp} onChange={e=>setContextProp(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-[9px] font-black uppercase text-slate-600 outline-none cursor-pointer max-w-[100px] truncate">
-                    <option value="all">Tous Logements</option>
-                    {properties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                )}
-                {compareBy !== 'platforms' && (
-                  <select value={contextPlat} onChange={e=>setContextPlat(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-[9px] font-black uppercase text-slate-600 outline-none cursor-pointer max-w-[100px] truncate">
-                    <option value="all">Toutes Platesformes</option>
-                    {platforms.map(p=><option key={p} value={p}>{p}</option>)}
-                  </select>
-                )}
+             <div className="flex items-center gap-2">
+                <Filter size={12} className="text-slate-400" />
+                <span className="text-[10px] font-black uppercase text-slate-400">Filtres :</span>
+             </div>
+             <div className="flex flex-col gap-2 pl-5">
+                {mode !== 'years' && <select value={contextYear} onChange={e=>setContextYear(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none cursor-pointer text-slate-700">{safeYears.map(y=><option key={y} value={y}>Année {y}</option>)}</select>}
+                {mode !== 'properties' && <select value={contextProp} onChange={e=>setContextProp(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none cursor-pointer text-slate-700 truncate"><option value="all">Tous Logements</option>{properties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>}
+                {mode !== 'platforms' && <select value={contextPlat} onChange={e=>setContextPlat(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none cursor-pointer text-slate-700 truncate"><option value="all">Toutes Plateformes</option>{platforms.map(p=><option key={p} value={p}>{p}</option>)}</select>}
              </div>
          </div>
       </div>
 
       {/* 3. LE GRAPHIQUE */}
-      <div className="overflow-x-auto no-scrollbar">
-        <div className="min-w-[600px] relative">
-          <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
-            {/* Lignes de grille horizontales */}
-            {yTicks.map((tick, i) => (
-              <g key={`grid-${i}`}>
-                <line x1={padX} y1={getY(tick)} x2={w - padX} y2={getY(tick)} stroke="#F1F5F9" strokeWidth="2" />
-                <text x={w - padX + 8} y={getY(tick) + 4} fill="#475569" fontSize="11" fontFamily="sans-serif" fontWeight="900">{tick >= 1000 ? (tick / 1000).toFixed(1) + 'k€' : Math.round(tick) + '€'}</text>
-              </g>
-            ))}
+      {series.length === 0 ? (
+          <div className="h-[300px] flex items-center justify-center text-slate-300 font-black uppercase text-xs">Cochez au moins une option pour voir le graphique</div>
+      ) : (
+          <div className="overflow-x-auto no-scrollbar">
+            <div className="min-w-[600px] relative">
+              <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
+                {yTicks.map((tick, i) => (
+                  <g key={`grid-${i}`}>
+                    <line x1={padX} y1={getY(tick)} x2={w - padX} y2={getY(tick)} stroke="#F1F5F9" strokeWidth="2" />
+                    <text x={w - padX + 8} y={getY(tick) + 4} fill="#475569" fontSize="11" fontFamily="sans-serif" fontWeight="900">{tick >= 1000 ? (tick / 1000).toFixed(1) + 'k€' : Math.round(tick) + '€'}</text>
+                  </g>
+                ))}
 
-            {/* Highlight vertical line pour le survol */}
-            {hoveredMonth !== null && (
-                <line x1={getX(hoveredMonth)} y1={padY} x2={getX(hoveredMonth)} y2={h - padY} stroke="#CBD5E1" strokeWidth="2" strokeDasharray="4 4" />
-            )}
-            
-            {/* Lignes de mois */}
-            {months.map((m, i) => (
-              <text key={m} x={getX(i)} y={h - 5} fill={hoveredMonth === i ? "#0F172A" : "#94A3B8"} fontSize="12" fontFamily="sans-serif" fontWeight="900" textAnchor="middle" className="transition-colors cursor-pointer" onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)}>{m}</text>
-            ))}
-            
-            {/* Tracer COURBE 2 (Purple) */}
-            <path d={buildPath(d2, 0, Math.max(0, split2))} stroke="#9333EA" strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />
-            <path d={buildPath(d2, Math.max(0, split2), 11)} stroke="#9333EA" strokeWidth="4" fill="none" strokeDasharray="6 8" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />
-            
-            {/* Tracer COURBE 1 (Rose) par dessus */}
-            <path d={buildPath(d1, 0, Math.max(0, split1))} stroke="#F43F5E" strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />
-            <path d={buildPath(d1, Math.max(0, split1), 11)} stroke="#F43F5E" strokeWidth="4" fill="none" strokeDasharray="6 8" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />
+                {hoveredMonth !== null && (
+                    <line x1={getX(hoveredMonth)} y1={padY} x2={getX(hoveredMonth)} y2={h - padY} stroke="#CBD5E1" strokeWidth="2" strokeDasharray="4 4" />
+                )}
+                
+                {months.map((m, i) => (
+                  <text key={m} x={getX(i)} y={h - 5} fill={hoveredMonth === i ? "#0F172A" : "#94A3B8"} fontSize="12" fontFamily="sans-serif" fontWeight="900" textAnchor="middle" className="transition-colors cursor-pointer" onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)}>{m}</text>
+                ))}
+                
+                {series.map((s, idx) => (
+                   <g key={`series-${s.id}`}>
+                      <path d={buildPath(s.data, 0, Math.max(0, s.splitIndex))} stroke={s.color} strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />
+                      <path d={buildPath(s.data, Math.max(0, s.splitIndex), 11)} stroke={s.color} strokeWidth="4" fill="none" strokeDasharray="6 8" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />
+                   </g>
+                ))}
 
-            {/* Tracer les points pour le hover */}
-            {months.map((_, i) => (
-              <g key={`points-${i}`} onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)} className="cursor-pointer">
-                <rect x={getX(i) - 20} y={0} width="40" height={h} fill="transparent" />
-                <circle cx={getX(i)} cy={getY(d2[i])} r={hoveredMonth === i ? 7 : 4} fill={hoveredMonth === i ? "#9333EA" : "white"} stroke="#9333EA" strokeWidth="3" className="transition-all duration-200" />
-                <circle cx={getX(i)} cy={getY(d1[i])} r={hoveredMonth === i ? 7 : 4} fill={hoveredMonth === i ? "#F43F5E" : "white"} stroke="#F43F5E" strokeWidth="3" className="transition-all duration-200" />
-              </g>
-            ))}
-          </svg>
+                {months.map((_, i) => (
+                  <g key={`points-${i}`} onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)} className="cursor-pointer">
+                    <rect x={getX(i) - 20} y={0} width="40" height={h} fill="transparent" />
+                    {series.map(s => (
+                       <circle key={`dot-${s.id}-${i}`} cx={getX(i)} cy={getY(s.data[i])} r={hoveredMonth === i ? 7 : 4} fill={hoveredMonth === i ? s.color : "white"} stroke={s.color} strokeWidth="3" className="transition-all duration-200" />
+                    ))}
+                  </g>
+                ))}
+              </svg>
 
-          {/* TOOLTIP INTERACTIF AU SURVOL */}
-          {hoveredMonth !== null && (
-            <div 
-              className="absolute z-20 bg-slate-900/95 backdrop-blur-sm text-white p-4 rounded-2xl shadow-2xl pointer-events-none transition-all duration-200 min-w-[160px] border border-slate-700"
-              style={{ 
-                left: `${(getX(hoveredMonth) / w) * 100}%`, 
-                top: '15%', 
-                transform: hoveredMonth > 7 ? 'translateX(calc(-100% - 15px))' : hoveredMonth < 4 ? 'translateX(15px)' : 'translateX(-50%)' 
-              }}
-            >
-               <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-3 border-b border-slate-700 pb-2">{months[hoveredMonth]}</div>
-               <div className="flex flex-col gap-3">
-                  <div className="flex justify-between items-center gap-6">
-                    <div className="text-[10px] font-black uppercase flex items-center gap-2 truncate max-w-[120px]"><div className="w-2.5 h-2.5 rounded-full shadow-sm bg-rose-500"></div>{label1}</div>
-                    <div className="font-black text-sm">{d1[hoveredMonth].toFixed(2)}€</div>
-                  </div>
-                  <div className="flex justify-between items-center gap-6">
-                    <div className="text-[10px] font-black uppercase flex items-center gap-2 truncate max-w-[120px]"><div className="w-2.5 h-2.5 rounded-full shadow-sm bg-purple-600"></div>{label2}</div>
-                    <div className="font-black text-sm">{d2[hoveredMonth].toFixed(2)}€</div>
-                  </div>
-               </div>
+              {/* TOOLTIP INTERACTIF AU SURVOL */}
+              {hoveredMonth !== null && series.length > 0 && (
+                <div 
+                  className="absolute z-20 bg-slate-900/95 backdrop-blur-sm text-white p-4 rounded-2xl shadow-2xl pointer-events-none transition-all duration-200 min-w-[160px] border border-slate-700"
+                  style={{ 
+                    left: `${(getX(hoveredMonth) / w) * 100}%`, 
+                    top: '15%', 
+                    transform: hoveredMonth > 7 ? 'translateX(calc(-100% - 15px))' : hoveredMonth < 4 ? 'translateX(15px)' : 'translateX(-50%)' 
+                  }}
+                >
+                   <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-3 border-b border-slate-700 pb-2">{months[hoveredMonth]}</div>
+                   <div className="flex flex-col gap-2.5">
+                      {series.map(s => (
+                         <div key={`tt-${s.id}`} className="flex justify-between items-center gap-6">
+                            <div className="text-[10px] font-black uppercase flex items-center gap-2 truncate max-w-[120px]"><div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{backgroundColor: s.color}}></div>{s.label}</div>
+                            <div className="font-black text-sm">{s.data[hoveredMonth].toFixed(2)}€</div>
+                         </div>
+                      ))}
+                   </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
+      )}
       
       {/* 4. TOTAUX GLOBAUX */}
-      <div className="grid grid-cols-2 gap-4 md:gap-6 mt-8">
-        <div className="bg-rose-50/50 border border-rose-100 p-6 rounded-3xl text-center shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1 bg-rose-500"></div>
-          <p className="text-[10px] font-black uppercase text-rose-400 tracking-widest mb-1 truncate">Total {label1}</p>
-          <p className="text-2xl md:text-3xl font-black text-rose-600 tracking-tighter">{total1.toLocaleString('fr-FR')}€</p>
-        </div>
-        <div className="bg-purple-50/50 border border-purple-100 p-6 rounded-3xl text-center shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1 bg-purple-600"></div>
-          <p className="text-[10px] font-black uppercase text-purple-400 tracking-widest mb-1 truncate">Total {label2}</p>
-          <p className="text-2xl md:text-3xl font-black text-purple-600 tracking-tighter">{total2.toLocaleString('fr-FR')}€</p>
-        </div>
-      </div>
+      {series.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+            {series.map(s => (
+                <div key={`total-${s.id}`} className="bg-white border border-slate-100 p-5 rounded-[24px] shadow-sm flex flex-col justify-center relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-1" style={{backgroundColor: s.color}}></div>
+                  <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1 truncate" title={s.label}>Total {s.label}</p>
+                  <p className="text-xl font-black text-slate-800 tracking-tighter">{s.total.toLocaleString('fr-FR')}€</p>
+                </div>
+            ))}
+          </div>
+      )}
     </div>
   );
 };
@@ -738,33 +700,58 @@ const App = () => {
     }).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
   }, [filteredData, filterStatus]);
 
-  // LOGIQUE D'AUTO-SCROLL AU PROCHAIN VOYAGEUR DANS LA LISTE DEROULANTE
+  // LOGIQUE D'AUTO-SCROLL INTELLIGENTE ET ROBUSTE
   useEffect(() => {
     if (activeTab !== 'reservations') {
        setHasScrolledToNext(false);
+       return;
     }
-  }, [activeTab]);
+    
+    // Attendre que Firebase ait chargé au moins quelques données
+    if (hasScrolledToNext || reservationsList.length === 0) return;
 
-  const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = new Date().toISOString().split('T')[0];
 
-  useEffect(() => {
-    if (activeTab === 'reservations' && !hasScrolledToNext && reservationsList.length > 0) {
-        const nextRes = reservationsList.find(t => t.startDate >= todayStr || (t.endDate && t.endDate >= todayStr));
-        if (nextRes) {
-            setTimeout(() => {
-                const el = document.querySelector(`[data-res-id="${nextRes.id}"]`);
-                if (el) {
+    // Cherche la prochaine résa (qui commence ou finit dans le futur/aujourd'hui)
+    let targetRes = reservationsList.find(t => t.startDate >= todayStr || (t.endDate && t.endDate >= todayStr));
+    
+    // Si tout est dans le passé, on cible la toute dernière (la plus récente)
+    if (!targetRes) {
+        targetRes = reservationsList[reservationsList.length - 1];
+    }
+
+    if (targetRes) {
+        // Un délai pour s'assurer que React a bien "dessiné" toutes les lignes du tableau
+        const timer = setTimeout(() => {
+            const els = document.querySelectorAll(`[data-res-id="${targetRes.id}"]`);
+            let scrolled = false;
+            
+            for (let el of els) {
+                // offsetParent !== null veut dire que l'élément est bien visible à l'écran
+                if (el.offsetParent !== null) {
                     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    el.classList.add('ring-4', 'ring-blue-500', 'ring-offset-4', 'transition-all', 'duration-1000');
-                    setTimeout(() => el.classList.remove('ring-4', 'ring-blue-500', 'ring-offset-4'), 3000);
+                    
+                    // Petit flash bleu pour bien montrer la ligne
+                    el.style.backgroundColor = '#EFF6FF';
+                    el.style.transition = 'background-color 1s ease';
+                    setTimeout(() => { el.style.backgroundColor = ''; }, 3000);
+                    
+                    scrolled = true;
+                    break;
                 }
-            }, 500); // Petit délai pour laisser React afficher la liste
-            setHasScrolledToNext(true);
-        } else {
-            setHasScrolledToNext(true); 
-        }
+            }
+            
+            // Si on a réussi à scroller, on bloque la fonction pour ne plus la refaire
+            // Sinon (DOM pas encore prêt), elle se relancera au prochain rendu
+            if (scrolled) {
+                setHasScrolledToNext(true);
+            }
+        }, 150);
+
+        return () => clearTimeout(timer);
     }
-  }, [activeTab, reservationsList, hasScrolledToNext, todayStr]);
+  }, [activeTab, reservationsList, hasScrolledToNext]);
+
 
   const checkDateFilter = (dateStr) => {
      if (!dateStr) return false;
