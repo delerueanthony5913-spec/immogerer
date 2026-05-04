@@ -9,7 +9,7 @@ import {
   UserCheck, PlusCircle, TrendingUp, Info, Filter, Loader2,
   Building2, CalendarRange, MessageSquare, CreditCard, Activity, ArrowRight,
   User, Sparkles, Key, UploadCloud, AlertTriangle, Check, TrendingDown, Search, BarChart2,
-  LocateFixed, Lock
+  LocateFixed, Lock, Mail
 } from 'lucide-react';
 
 // --- CONFIGURATION FIREBASE ---
@@ -35,24 +35,14 @@ const isSundayOrHoliday = (dateStr) => {
   if (!dateStr) return false;
   const [y, m, d] = dateStr.split('-');
   const date = new Date(y, m - 1, d);
-  
-  // 1. Est-ce un Dimanche ? (0 = Dimanche en Javascript)
   if (date.getDay() === 0) return true;
   
-  // 2. Est-ce un jour férié français ?
   const year = parseInt(y, 10);
   const holidays = [
-      `${year}-01-01`, // Jour de l'an
-      `${year}-05-01`, // Fête du travail
-      `${year}-05-08`, // Victoire 1945
-      `${year}-07-14`, // Fête nationale
-      `${year}-08-15`, // Assomption
-      `${year}-11-01`, // Toussaint
-      `${year}-11-11`, // Armistice
-      `${year}-12-25`  // Noël
+      `${year}-01-01`, `${year}-05-01`, `${year}-05-08`, `${year}-07-14`, 
+      `${year}-08-15`, `${year}-11-01`, `${year}-11-11`, `${year}-12-25`
   ];
   
-  // Algorithme astronomique pour trouver Pâques (et déduire Ascension/Pentecôte)
   const a = year % 19, b = Math.floor(year / 100), c = year % 100,
         d1 = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25),
         g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d1 - g + 15) % 30,
@@ -68,10 +58,8 @@ const isSundayOrHoliday = (dateStr) => {
   const lundiPentecote = new Date(paques); lundiPentecote.setDate(paques.getDate() + 50);
   
   holidays.push(formatLocal(lundiPaques), formatLocal(ascension), formatLocal(lundiPentecote));
-  
   return holidays.includes(dateStr);
 };
-
 
 // --- COMPOSANT ICONE VILLA SUR-MESURE ---
 const VillaIcon = ({ size = 24, className = "" }) => (
@@ -88,7 +76,6 @@ const VillaIcon = ({ size = 24, className = "" }) => (
   </svg>
 );
 
-// --- COMPOSANTS GRAPHIQUES ---
 const DonutChart = ({ data, title }) => {
   const visibleData = (data || []).filter(d => d && d.value > 0);
   const displayTotal = visibleData.reduce((acc, curr) => acc + curr.value, 0);
@@ -212,7 +199,6 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
                       }
                       if (metric === 'net' && tax > 0) processItem(expectedDate, -tax, true);
                   }
-
               } else {
                   if (t.paymentDate) {
                       processItem(t.paymentDate, metric === 'gross' ? g : n, false);
@@ -436,73 +422,10 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
 
 // --- COMPOSANT PRINCIPAL ---
 const App = () => {
-  // --- GESTION DU CODE PIN ---
-  const [isUnlocked, setIsUnlocked] = useState(() => {
-    return localStorage.getItem('cadel_unlocked') === 'true';
-  });
+  // 1. ETATS GLOBAUX & HOOKS
+  const [isUnlocked, setIsUnlocked] = useState(() => localStorage.getItem('cadel_unlocked') === 'true');
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
-
-  const formatMonthYear = (m) => {
-    if (!m) return "";
-    const [year, month] = m.split('-');
-    const date = new Date(parseInt(year), parseInt(month) - 1);
-    return date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase());
-  };
-
-  const formatDateFr = (dateString) => {
-    if (!dateString) return '';
-    const parts = dateString.split('-');
-    if (parts.length !== 3) return dateString;
-    return `${parts[2]}/${parts[1]}/${parts[0]}`;
-  };
-
-  const getGoogleCalendarUrl = (res, prop) => {
-    if (!res.startDate || !res.endDate) return '#';
-    const text = encodeURIComponent(`Réservation : ${res.name} - ${prop?.name || ''}`);
-    
-    let expensesText = '';
-    if (res.resExpenses && res.resExpenses.length > 0) {
-       expensesText = '\n\nPrestations prévues :\n' + res.resExpenses.map(e => {
-           const isDias = e.person && e.person.toLowerCase().includes('dias');
-           if (isDias) {
-               let diasDetails = `- ${e.type} (${e.person}) : ${e.amount}€`;
-               if (e.hoursEntry > 0) {
-                   diasDetails += `\n   ↳ Entrée le ${formatDateFr(e.dateEntry || res.startDate)} : ${e.hoursEntry}h (à ${e.rateEntry}€/h)`;
-               }
-               if (e.hoursExit > 0) {
-                   diasDetails += `\n   ↳ Sortie le ${formatDateFr(e.dateExit || res.endDate)} : ${e.hoursExit}h (à ${e.rateExit}€/h)`;
-               }
-               return diasDetails;
-           }
-           return `- ${e.type} (${e.person}) : ${e.amount}€`;
-       }).join('\n');
-    }
-    
-    const phoneText = res.phone ? `\nContact : ${res.phone}` : '';
-    const details = encodeURIComponent(`Client : ${res.name}${phoneText}\nLogement : ${prop?.name || ''}\nPlateforme : ${res.platform}\nNotes : ${res.comment || ''}${expensesText}`);
-    
-    const endDateObj = new Date(res.endDate);
-    endDateObj.setDate(endDateObj.getDate() + 1);
-    const endYear = endDateObj.getFullYear();
-    const endMonth = String(endDateObj.getMonth() + 1).padStart(2, '0');
-    const endDay = String(endDateObj.getDate()).padStart(2, '0');
-    const formattedEnd = `${endYear}${endMonth}${endDay}`;
-    
-    const dates = `${res.startDate.replace(/-/g, '')}/${formattedEnd}`;
-    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${details}`;
-  };
-
-  const getStatusProps = (t) => {
-    if (t.platform === 'En direct') {
-        if (t.soldeDate) return { label: 'Payé', color: 'bg-emerald-100 text-emerald-700' };
-        if (t.acompte1Date || t.acompte2Date) return { label: 'Incomplet', color: 'bg-blue-100 text-blue-700' };
-        return { label: 'Attente', color: 'bg-orange-100 text-orange-700' };
-    }
-    return t.paymentDate ? { label: 'Payé', color: 'bg-emerald-100 text-emerald-700' } : { label: 'Attente', color: 'bg-orange-100 text-orange-700' };
-  };
-
-  const TABS_ORDER = ['reservations', 'agenda', 'statistiques', 'finances', 'settings'];
 
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -510,8 +433,10 @@ const App = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [properties, setProperties] = useState([]);
   const [tenants, setTenants] = useState([]);
+  
   const [availablePlatforms, setAvailablePlatforms] = useState(['Airbnb', 'Booking', 'Abritel', 'En direct']);
   const [availableProviders, setAvailableProviders] = useState(['Justine', 'Marc']);
+  const [providerEmails, setProviderEmails] = useState({}); // <-- NOUVEAU : Dictionnaire des emails
   const [availableServiceTypes, setAvailableServiceTypes] = useState(['Ménage', 'Entrée/Sortie']);
 
   const [filterYear, setFilterYear] = useState('all');
@@ -532,6 +457,7 @@ const App = () => {
 
   const [inputPlat, setInputPlat] = useState('');
   const [inputProv, setInputProv] = useState('');
+  const [inputProvEmail, setInputProvEmail] = useState(''); // <-- NOUVEAU : Champ email paramètres
   const [inputSvc, setInputSvc] = useState('');
   const [inputProp, setInputProp] = useState({ name: '', address: '' });
   
@@ -542,14 +468,13 @@ const App = () => {
 
   const [quickPayConfig, setQuickPayConfig] = useState(null); 
   const [statsDetailConfig, setStatsDetailConfig] = useState(null);
-
   const [hasScrolledToNext, setHasScrolledToNext] = useState(false);
   
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
-  
   const todayStr = new Date().toISOString().split('T')[0];
 
+  // 2. EFFETS FIREBASE
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
       if (u) { setUser(u); setLoading(false); }
@@ -557,19 +482,13 @@ const App = () => {
     });
 
     const unsubProps = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'properties'), (snap) => {
-      setProperties(snap.docs.map(d => {
-        const data = d.data();
-        delete data.id; 
-        return { ...data, id: d.id };
-      }));
+      setProperties(snap.docs.map(d => ({ ...d.data(), id: d.id })));
     });
 
     const unsubTenants = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), (snap) => {
       setTenants(snap.docs.map(d => {
         const data = d.data();
-        delete data.id; 
         const year = data.startDate ? parseInt(data.startDate.split('-')[0], 10) : 0;
-        
         if (year >= 2022 && year <= 2025) {
           if (!data.paymentDate && data.platform !== 'En direct') data.paymentDate = data.endDate || `${year}-12-31`;
           if (data.resExpenses) {
@@ -586,6 +505,7 @@ const App = () => {
         if (d.platforms) setAvailablePlatforms(d.platforms);
         if (d.providers) setAvailableProviders(d.providers);
         if (d.services) setAvailableServiceTypes(d.services);
+        if (d.providerEmails) setProviderEmails(d.providerEmails); // <-- Lecture des emails
       }
     });
 
@@ -594,15 +514,12 @@ const App = () => {
 
   useEffect(() => {
     if (!user || loading) return;
-    
     const isAlreadyInjected = sessionStorage.getItem('cadel_injected_2025_auto');
     if (isAlreadyInjected === 'true') return;
-
     if (properties.length === 0 && tenants.length === 0) return;
 
     const runInjection = async () => {
         sessionStorage.setItem('cadel_injected_2025_auto', 'true');
-        
         let targetProp = properties.find(p => p.name.toUpperCase().includes('CADELIA'));
         if (!targetProp) {
             try {
@@ -615,47 +532,266 @@ const App = () => {
         if (!hasLola) {
             const dataToImport = [
                 { name: "LOLA DROIN", startDate: "2025-03-21", endDate: "2025-03-23", amount: 1450 },
-                { name: "NELLY JEAN-MARIE", startDate: "2025-04-30", endDate: "2025-05-04", amount: 3800 },
-                { name: "WINDED", startDate: "2025-06-06", endDate: "2025-06-09", amount: 3000 },
-                { name: "ANTOINE ET ELODIE", startDate: "2025-07-04", endDate: "2025-07-06", amount: 2700 },
-                { name: "Severine BRISSON", startDate: "2025-07-12", endDate: "2025-08-02", amount: 14000 },
-                { name: "Anais FLORE", startDate: "2025-08-02", endDate: "2025-08-09", amount: 4500 },
-                { name: "MATTHIEU MECHAT", startDate: "2025-08-09", endDate: "2025-08-23", amount: 7500 },
-                { name: "BLANDINE DUHAMEL", startDate: "2025-09-19", endDate: "2025-09-21", amount: 1900 },
-                { name: "PHILIPPE VINCENT", startDate: "2025-12-27", endDate: "2025-12-29", amount: 1800 },
-                { name: "MACIE CLAUDE", startDate: "2025-12-30", endDate: "2026-01-02", amount: 2900 }
+                { name: "NELLY JEAN-MARIE", startDate: "2025-04-30", endDate: "2025-05-04", amount: 3800 }
             ];
             
             dataToImport.forEach(item => {
                  addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), {
                       propertyId: targetProp.id,
-                      name: item.name,
-                      phone: '',
-                      startDate: item.startDate,
-                      endDate: item.endDate,
-                      platform: 'En direct',
-                      isUrssaf: true,
-                      grossAmount: item.amount,
-                      netAmount: item.amount,
-                      platformFees: 0,
-                      bankFees: 0,
-                      cityTax: 0,
-                      displayedAmount: 0,
-                      acompte1Amount: 0,
-                      acompte1Date: '',
-                      acompte2Amount: 0,
-                      acompte2Date: '',
-                      soldeAmount: item.amount,
-                      soldeDate: item.endDate, 
-                      resExpenses: [],
-                      comment: 'Import automatique VILLA CADELIA'
+                      name: item.name, phone: '', startDate: item.startDate, endDate: item.endDate,
+                      platform: 'En direct', isUrssaf: true, grossAmount: item.amount, netAmount: item.amount,
+                      platformFees: 0, bankFees: 0, cityTax: 0, displayedAmount: 0, acompte1Amount: 0, acompte1Date: '',
+                      acompte2Amount: 0, acompte2Date: '', soldeAmount: item.amount, soldeDate: item.endDate, 
+                      resExpenses: [], comment: 'Import automatique VILLA CADELIA'
                  });
             });
         }
     };
-    
     runInjection();
   }, [user, loading, properties, tenants, db]);
+
+  // 3. MEMOIZATION (CALCULS) -> TOUT EST MAINTENANT ICI EN HAUT !
+  const baseTenants = useMemo(() => {
+    return (tenants || []).filter(t => 
+       (filterProp === 'all' || t.propertyId === filterProp) &&
+       (filterPlat === 'all' || t.platform === filterPlat)
+    );
+  }, [tenants, filterProp, filterPlat]);
+
+  const filteredData = useMemo(() => {
+    return baseTenants.filter(t => {
+      const dateRef = t.startDate ? new Date(t.startDate) : new Date();
+      return (filterYear === 'all' || dateRef.getFullYear() === parseInt(filterYear)) &&
+             (filterMonth === 'all' || dateRef.getMonth() === parseInt(filterMonth)) &&
+             (filterProv === 'all' || (t.resExpenses && t.resExpenses.some(e => e.person === filterProv)));
+    });
+  }, [baseTenants, filterYear, filterMonth, filterProv]);
+
+  const reservationsList = useMemo(() => {
+    return filteredData.filter(t => {
+      if (filterStatus === 'paid') return (t.platform === 'En direct' ? !!t.soldeDate : !!t.paymentDate);
+      if (filterStatus === 'pending') return (t.platform === 'En direct' ? !t.soldeDate : !t.paymentDate);
+      return true;
+    }).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
+  }, [filteredData, filterStatus]);
+
+  const groupedReservationsList = useMemo(() => {
+      const groups = [];
+      let currentMonthYear = '';
+      
+      reservationsList.forEach(t => {
+          const start = t.startDate || '';
+          if (start) {
+              const [year, month] = start.split('-');
+              const dateObj = new Date(parseInt(year), parseInt(month) - 1);
+              const monthYearString = dateObj.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+              const formattedLabel = monthYearString.charAt(0).toUpperCase() + monthYearString.slice(1);
+              
+              if (formattedLabel !== currentMonthYear) {
+                  groups.push({ isSeparator: true, label: formattedLabel, id: `sep-${year}-${month}` });
+                  currentMonthYear = formattedLabel;
+              }
+          }
+          groups.push(t);
+      });
+      return groups;
+  }, [reservationsList]);
+
+  const checkDateFilter = (dateStr) => {
+     if (!dateStr) return false;
+     const [y, mo] = dateStr.split('-');
+     if (filterYear !== 'all' && y !== filterYear) return false;
+     if (filterMonth !== 'all' && parseInt(mo)-1 !== parseInt(filterMonth)) return false;
+     return true;
+  };
+
+  const monthlyRecapData = useMemo(() => {
+    const stats = {};
+    const initStats = (m) => { if(!stats[m]) stats[m] = { totalBank: 0, urssafGross: 0, directNet: 0, charges: 0, taxes: 0, platforms: {} }; };
+
+    baseTenants.forEach(t => {
+      if (t.platform === 'En direct') {
+           const a1 = parseFloat(t.acompte1Amount) || 0;
+           const a2 = parseFloat(t.acompte2Amount) || 0;
+           const s = parseFloat(t.soldeAmount) || 0;
+
+           if (t.acompte1Date && checkDateFilter(t.acompte1Date)) { const m = t.acompte1Date.substring(0,7); initStats(m); stats[m].totalBank += a1; if (t.isUrssaf === false) stats[m].directNet += a1; }
+           if (t.acompte2Date && checkDateFilter(t.acompte2Date)) { const m = t.acompte2Date.substring(0,7); initStats(m); stats[m].totalBank += a2; if (t.isUrssaf === false) stats[m].directNet += a2; }
+           if (t.soldeDate && checkDateFilter(t.soldeDate)) {
+               const m = t.soldeDate.substring(0,7); initStats(m); stats[m].totalBank += s; if (t.isUrssaf === false) stats[m].directNet += s;
+               if (t.isUrssaf !== false) { stats[m].urssafGross += (parseFloat(t.grossAmount) || 0); stats[m].taxes += (parseFloat(t.grossAmount) || 0) * 0.077; stats[m].platforms[t.platform] = (stats[m].platforms[t.platform] || 0) + (parseFloat(t.grossAmount) || 0); }
+           }
+      } else {
+          if (t.paymentDate && checkDateFilter(t.paymentDate)) {
+              const m = t.paymentDate.substring(0, 7); initStats(m); stats[m].totalBank += (parseFloat(t.netAmount) || 0);
+              if (t.isUrssaf !== false) { stats[m].urssafGross += (parseFloat(t.grossAmount) || 0); stats[m].taxes += (parseFloat(t.grossAmount) || 0) * 0.077; stats[m].platforms[t.platform] = (stats[m].platforms[t.platform] || 0) + (parseFloat(t.grossAmount) || 0); }
+              else { stats[m].directNet += (parseFloat(t.netAmount) || 0); }
+          }
+      }
+      (t.resExpenses || []).forEach(exp => {
+          if (exp.paymentDate && checkDateFilter(exp.paymentDate)) {
+             if (filterProv !== 'all' && exp.person !== filterProv) return; 
+             const m = exp.paymentDate.substring(0, 7); initStats(m); stats[m].charges += (parseFloat(exp.amount) || 0);
+          }
+      });
+    });
+    return Object.entries(stats).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [baseTenants, filterYear, filterMonth, filterProv]);
+
+  const detailedExpenses = useMemo(() => {
+    const list = [];
+    baseTenants.forEach(t => {
+      (t.resExpenses || []).forEach(exp => {
+        if (filterProv === 'all' || exp.person === filterProv) {
+          const refDate = exp.paymentDate || t.startDate;
+          if (checkDateFilter(refDate)) {
+            list.push({ id: `${t.id}-${exp.id}`, propertyName: properties.find(p => p.id === t.propertyId)?.name || '--', dateRes: t.startDate, person: exp.person, type: exp.type, amount: parseFloat(exp.amount) || 0, paymentDate: exp.paymentDate || '' });
+          }
+        }
+      });
+    });
+    return list.sort((a, b) => b.dateRes.localeCompare(a.dateRes));
+  }, [baseTenants, properties, filterProv, filterYear, filterMonth]);
+
+  const statsCalculations = useMemo(() => {
+    const year = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
+    const prevYear = year - 1;
+    let currentYearNights = 0, currentYearGross = 0, prevYearGross = 0, currentYearExp = 0, upcomingGross = 0;
+    const currentMonthGross = Array(12).fill(0), prevMonthGross = Array(12).fill(0);
+    
+    baseTenants.forEach(t => {
+       if (!t.startDate) return;
+       const resYear = parseInt(t.startDate.split('-')[0], 10), resMonth = parseInt(t.startDate.split('-')[1], 10) - 1;
+       const nights = t.endDate ? Math.max(1, Math.round((new Date(t.endDate) - new Date(t.startDate)) / 86400000)) : 1;
+       const gross = parseFloat(t.grossAmount) || 0, exp = (t.resExpenses || []).reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+
+       let isFullyPaid = false;
+       if (t.platform === 'En direct') isFullyPaid = !!t.soldeDate; else isFullyPaid = !!t.paymentDate;
+       if (!isFullyPaid) upcomingGross += gross;
+
+       if (resYear === year) { currentYearNights += nights; currentYearGross += gross; currentYearExp += exp; if (resMonth >= 0 && resMonth <= 11) currentMonthGross[resMonth] += gross; } 
+       else if (resYear === prevYear) { prevYearGross += gross; if (resMonth >= 0 && resMonth <= 11) prevMonthGross[resMonth] += gross; }
+    });
+
+    const currentBase = baseTenants.filter(t => t.startDate && t.startDate.startsWith(year.toString()));
+    const avgStay = currentBase.length > 0 ? (currentYearNights / currentBase.length).toFixed(1) : 0;
+    const avgGrossPerRes = currentBase.length > 0 ? (currentYearGross / currentBase.length).toFixed(2) : 0;
+    const revPerNight = currentYearNights > 0 ? (currentYearGross / currentYearNights).toFixed(2) : 0;
+    const calcGrowth = (curr, prev) => prev > 0 ? Math.round(((curr - prev) / prev) * 100) : (curr > 0 ? 100 : 0);
+    
+    return { 
+        year, prevYear, currentYearNights, currentYearGross, currentYearExp, upcomingGross, prevYearGross, 
+        avgStay, avgGrossPerRes, revPerNight, grossGrowth: calcGrowth(currentYearGross, prevYearGross), currentMonthGross, prevMonthGross
+    };
+  }, [baseTenants, filterYear]);
+
+  const statsDetailList = useMemo(() => {
+    if (!statsDetailConfig) return [];
+    const { type, monthIndex } = statsDetailConfig;
+    const yearNum = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
+    
+    return baseTenants.filter(t => {
+        if (type === 'upcoming') { let isFullyPaid = false; if (t.platform === 'En direct') isFullyPaid = !!t.soldeDate; else isFullyPaid = !!t.paymentDate; return !isFullyPaid; }
+        const sDate = t.startDate || '';
+        const [y, m] = sDate.split('-');
+        if (type === 'month_current') return parseInt(y) === yearNum && parseInt(m)-1 === monthIndex;
+        if (type === 'month_prev') return parseInt(y) === yearNum - 1 && parseInt(m)-1 === monthIndex;
+        if (type === 'year_current') return parseInt(y) === yearNum;
+        if (type === 'expenses') return parseInt(y) === yearNum && (t.resExpenses||[]).length > 0;
+        return false;
+    }).sort((a,b) => (a.startDate||"").localeCompare(b.startDate||""));
+  }, [statsDetailConfig, baseTenants, filterYear]);
+
+  const agendaDays = useMemo(() => {
+    const y = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
+    const m = filterMonth === 'all' ? new Date().getMonth() : parseInt(filterMonth);
+    const firstDay = new Date(y, m, 1), lastDay = new Date(y, m + 1, 0), days = [];
+    let offset = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
+    for (let i = 0; i < offset; i++) days.push({ empty: true });
+    for (let i = 1; i <= lastDay.getDate(); i++) days.push({ day: i, dateStr: `${y}-${(m+1).toString().padStart(2, '0')}-${i.toString().padStart(2, '0')}` });
+    return days;
+  }, [filterYear, filterMonth]);
+
+  // LE FAMEUX CALCUL DES ANNÉES, DÉFINI BIEN AU DESSUS DU RETURN !
+  const yearsAvailable = useMemo(() => {
+    const years = new Set([new Date().getFullYear()]);
+    tenants.forEach(t => {
+      if (t.startDate) years.add(parseInt(t.startDate.split('-')[0], 10));
+      if (t.endDate) years.add(parseInt(t.endDate.split('-')[0], 10));
+      if (t.soldeDate) years.add(parseInt(t.soldeDate.split('-')[0], 10));
+      if (t.paymentDate) years.add(parseInt(t.paymentDate.split('-')[0], 10));
+    });
+    return Array.from(years).filter(y => !isNaN(y)).sort((a, b) => b - a).map(String);
+  }, [tenants]);
+
+  useEffect(() => {
+    if (activeTab !== 'reservations') { setHasScrolledToNext(false); return; }
+    if (hasScrolledToNext || reservationsList.length === 0) return;
+    const timer = setTimeout(() => { scrollToCurrentRes(false); setHasScrolledToNext(true); }, 500); 
+    return () => clearTimeout(timer);
+  }, [activeTab, reservationsList, hasScrolledToNext, todayStr]);
+
+
+  // 4. FONCTIONS DE GESTION
+  const formatMonthYear = (m) => {
+    if (!m) return "";
+    const [year, month] = m.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1);
+    return date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase());
+  };
+
+  const formatDateFr = (dateString) => {
+    if (!dateString) return '';
+    const parts = dateString.split('-');
+    if (parts.length !== 3) return dateString;
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  };
+
+  // --- GOOGLE AGENDA AVEC EMAILS AUTO ---
+  const getGoogleCalendarUrl = (res, prop) => {
+    if (!res.startDate || !res.endDate) return '#';
+    const text = encodeURIComponent(`Réservation : ${res.name} - ${prop?.name || ''}`);
+    
+    let expensesText = '';
+    let guestEmails = [];
+
+    if (res.resExpenses && res.resExpenses.length > 0) {
+       expensesText = '\n\nPrestations prévues :\n' + res.resExpenses.map(e => {
+           // Ajout de l'email si case cochée
+           if (e.sendEmail !== false && providerEmails[e.person]) {
+               guestEmails.push(providerEmails[e.person]);
+           }
+
+           const isDias = e.person && e.person.toLowerCase().includes('dias');
+           if (isDias) {
+               let diasDetails = `- ${e.type} (${e.person}) : ${e.amount}€`;
+               if (e.hoursEntry > 0) diasDetails += `\n   ↳ Entrée le ${formatDateFr(e.dateEntry || res.startDate)} : ${e.hoursEntry}h (à ${e.rateEntry}€/h)`;
+               if (e.hoursExit > 0) diasDetails += `\n   ↳ Sortie le ${formatDateFr(e.dateExit || res.endDate)} : ${e.hoursExit}h (à ${e.rateExit}€/h)`;
+               return diasDetails;
+           }
+           return `- ${e.type} (${e.person}) : ${e.amount}€`;
+       }).join('\n');
+    }
+    
+    const phoneText = res.phone ? `\nContact : ${res.phone}` : '';
+    const details = encodeURIComponent(`Client : ${res.name}${phoneText}\nLogement : ${prop?.name || ''}\nPlateforme : ${res.platform}\nNotes : ${res.comment || ''}${expensesText}`);
+    
+    const endDateObj = new Date(res.endDate);
+    endDateObj.setDate(endDateObj.getDate() + 1);
+    const formattedEnd = `${endDateObj.getFullYear()}${String(endDateObj.getMonth() + 1).padStart(2, '0')}${String(endDateObj.getDate()).padStart(2, '0')}`;
+    const dates = `${res.startDate.replace(/-/g, '')}/${formattedEnd}`;
+    
+    let url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${details}`;
+    
+    // Ajout magique des emails
+    if (guestEmails.length > 0) {
+        const uniqueEmails = [...new Set(guestEmails)];
+        const emailsParam = uniqueEmails.map(email => `add=${encodeURIComponent(email)}`).join('&');
+        url += `&${emailsParam}`;
+    }
+    
+    return url;
+  };
 
   const updateSettings = async (n) => {
     if(!user || user.uid === 'local-test-user') return;
@@ -710,92 +846,65 @@ const App = () => {
     delete d.id;
 
     try {
-      if (editingResId) {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', editingResId), d);
-      } else {
-        await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), d);
-      }
+      if (editingResId) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', editingResId), d); } 
+      else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), d); }
       setIsModalOpen(false);
-    } catch (error) {
-      alert("Erreur technique lors de la sauvegarde : " + error.message);
-    }
+    } catch (error) { alert("Erreur technique : " + error.message); }
   };
 
   const deleteRes = async (id) => {
-    if(window.confirm("Supprimer définitivement cette réservation ?")) {
+    if(window.confirm("Supprimer définitivement ?")) {
       await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', id));
       setIsModalOpen(false);
     }
   };
 
   const handleQuickPayToggle = async (e, tenant, type, expId = null) => {
-    e.stopPropagation();
-    e.preventDefault();
+    e.stopPropagation(); e.preventDefault();
     if (!user || user.uid === 'local-test-user') return;
 
     if (type === 'global' && tenant.platform === 'En direct') {
-        setEditingResId(tenant.id);
-        setFormData(tenant);
-        setIsModalOpen(true);
-        return;
+        setEditingResId(tenant.id); setFormData(tenant); setIsModalOpen(true); return;
     }
 
     let isPaid = false;
     if (type === 'global') isPaid = !!tenant.paymentDate;
-    if (type === 'expense') {
-      const exp = (tenant.resExpenses || []).find(x => x.id === expId);
-      isPaid = !!(exp && exp.paymentDate);
-    }
+    if (type === 'expense') { const exp = (tenant.resExpenses || []).find(x => x.id === expId); isPaid = !!(exp && exp.paymentDate); }
 
     if (isPaid) {
-      if (window.confirm("Annuler ce paiement et le repasser en attente ?")) {
+      if (window.confirm("Annuler ce paiement ?")) {
         try {
-          if (type === 'global') {
-            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', tenant.id), { paymentDate: '' }, { merge: true });
-          } else {
+          if (type === 'global') { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', tenant.id), { paymentDate: '' }, { merge: true }); } 
+          else {
             const newExpenses = tenant.resExpenses.map(exp => exp.id === expId ? { ...exp, paymentDate: '' } : exp);
             await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', tenant.id), { resExpenses: newExpenses }, { merge: true });
           }
-        } catch (err) { alert("Erreur: " + err.message); }
+        } catch (err) {}
       }
-    } else {
-      setQuickPayConfig({ tenant, type, expId, date: new Date().toISOString().split('T')[0] });
-    }
+    } else { setQuickPayConfig({ tenant, type, expId, date: new Date().toISOString().split('T')[0] }); }
   };
 
   const submitQuickPay = async () => {
     if (!quickPayConfig || !quickPayConfig.date) return;
     try {
-      if (quickPayConfig.type === 'global') {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', quickPayConfig.tenant.id), { paymentDate: quickPayConfig.date }, { merge: true });
-      } else {
+      if (quickPayConfig.type === 'global') { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', quickPayConfig.tenant.id), { paymentDate: quickPayConfig.date }, { merge: true }); } 
+      else {
         const newExpenses = quickPayConfig.tenant.resExpenses.map(exp => exp.id === quickPayConfig.expId ? { ...exp, paymentDate: quickPayConfig.date } : exp);
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', quickPayConfig.tenant.id), { resExpenses: newExpenses }, { merge: true });
       }
       setQuickPayConfig(null);
-    } catch (err) { alert("Erreur d'encaissement: " + err.message); }
+    } catch (err) {}
   };
 
-  // FONCTION DE CALCUL DYNAMIQUE POUR "DIAS NETTOYAGE" AVEC LES TARIFS AUTO
   const updateDiasField = (expId, field, value) => {
     setFormData(prev => {
         const newExpenses = (prev.resExpenses || []).map(x => {
             if (x.id === expId) {
                 const updated = { ...x, [field]: value };
-                
-                // Si l'on vient de changer une des deux dates, on recalcule le tarif !
-                if (field === 'dateEntry') {
-                    updated.rateEntry = isSundayOrHoliday(value) ? 25 : 15;
-                }
-                if (field === 'dateExit') {
-                    updated.rateExit = isSundayOrHoliday(value) ? 25 : 15;
-                }
-
-                // Recalcul du montant total
-                const he = parseFloat(updated.hoursEntry) || 0;
-                const re = parseFloat(updated.rateEntry) || 0;
-                const hs = parseFloat(updated.hoursExit) || 0;
-                const rs = parseFloat(updated.rateExit) || 0;
+                if (field === 'dateEntry') updated.rateEntry = isSundayOrHoliday(value) ? 25 : 15;
+                if (field === 'dateExit') updated.rateExit = isSundayOrHoliday(value) ? 25 : 15;
+                const he = parseFloat(updated.hoursEntry) || 0, re = parseFloat(updated.rateEntry) || 0;
+                const hs = parseFloat(updated.hoursExit) || 0, rs = parseFloat(updated.rateExit) || 0;
                 updated.amount = (he * re) + (hs * rs);
                 return updated;
             }
@@ -808,332 +917,133 @@ const App = () => {
   const getRowColors = (propertyId) => {
     const prop = (properties || []).find(p => p.id === propertyId);
     if (!prop || !prop.name) return { bg: 'bg-white', hover: 'hover:bg-slate-50' };
-    
     const name = prop.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    
     if (name.includes('cocon') || name.includes('kadelia')) return { bg: 'bg-emerald-50', hover: 'hover:bg-emerald-100' };
     if (name.includes('signes') || name.includes('cadelio')) return { bg: 'bg-blue-50', hover: 'hover:bg-blue-100' };
     if (name.includes('villa') || name.includes('cadelia')) return { bg: 'bg-red-50', hover: 'hover:bg-red-100' };
-    
     return { bg: 'bg-white', hover: 'hover:bg-slate-50' };
   };
 
-  const baseTenants = useMemo(() => {
-    return (tenants || []).filter(t => 
-       (filterProp === 'all' || t.propertyId === filterProp) &&
-       (filterPlat === 'all' || t.platform === filterPlat)
-    );
-  }, [tenants, filterProp, filterPlat]);
+  const getStatusProps = (t) => {
+    if (t.platform === 'En direct') {
+        if (t.soldeDate) return { label: 'Payé', color: 'bg-emerald-100 text-emerald-700' };
+        if (t.acompte1Date || t.acompte2Date) return { label: 'Incomplet', color: 'bg-blue-100 text-blue-700' };
+        return { label: 'Attente', color: 'bg-orange-100 text-orange-700' };
+    }
+    return t.paymentDate ? { label: 'Payé', color: 'bg-emerald-100 text-emerald-700' } : { label: 'Attente', color: 'bg-orange-100 text-orange-700' };
+  };
 
-  const filteredData = useMemo(() => {
-    return baseTenants.filter(t => {
-      const dateRef = t.startDate ? new Date(t.startDate) : new Date();
-      return (filterYear === 'all' || dateRef.getFullYear() === parseInt(filterYear)) &&
-             (filterMonth === 'all' || dateRef.getMonth() === parseInt(filterMonth)) &&
-             (filterProv === 'all' || (t.resExpenses && t.resExpenses.some(e => e.person === filterProv)));
-    });
-  }, [baseTenants, filterYear, filterMonth, filterProv]);
+  const handleMonthChange = (direction) => {
+    let m = filterMonth === 'all' ? new Date().getMonth() : parseInt(filterMonth);
+    let y = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
+    if (direction === 'next') { if (m === 11) { m = 0; y += 1; } else m += 1; }
+    else { if (m === 0) { m = 11; y -= 1; } else m -= 1; }
+    setFilterMonth(m.toString()); setFilterYear(y.toString());
+  };
 
-  const reservationsList = useMemo(() => {
-    return filteredData.filter(t => {
-      if (filterStatus === 'paid') return (t.platform === 'En direct' ? !!t.soldeDate : !!t.paymentDate);
-      if (filterStatus === 'pending') return (t.platform === 'En direct' ? !t.soldeDate : !t.paymentDate);
-      return true;
-    }).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
-  }, [filteredData, filterStatus]);
+  const parseCSVLine = (text) => {
+    const result = []; let current = '', inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        if (char === '"') inQuotes = !inQuotes;
+        else if (char === ',' && !inQuotes) { result.push(current); current = ''; }
+        else current += char;
+    }
+    result.push(current); return result;
+  };
 
-  const groupedReservationsList = useMemo(() => {
-      const groups = [];
-      let currentMonthYear = '';
-      
-      reservationsList.forEach(t => {
-          const start = t.startDate || '';
-          if (start) {
-              const [year, month] = start.split('-');
-              const dateObj = new Date(parseInt(year), parseInt(month) - 1);
-              const monthYearString = dateObj.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-              const formattedLabel = monthYearString.charAt(0).toUpperCase() + monthYearString.slice(1);
-              
-              if (formattedLabel !== currentMonthYear) {
-                  groups.push({ isSeparator: true, label: formattedLabel, id: `sep-${year}-${month}` });
-                  currentMonthYear = formattedLabel;
-              }
-          }
-          groups.push(t);
-      });
-      return groups;
-  }, [reservationsList]);
+  const startReview = () => {
+    if (!importText.trim()) return;
+    const lines = importText.split('\n').filter(l => l.trim() !== ''); 
+    if (lines.length < 2) return;
 
-  // NOUVELLE FONCTION DE SCROLL RAPIDE
-  const scrollToCurrentRes = (withFlash = false) => {
-    if (reservationsList.length === 0) return;
+    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
+    const voyageurIdx = headers.findIndex(h => h.includes('voyageur') || h.includes('client') || h.includes('nom'));
+    const newList = [];
     
-    let targetRes = reservationsList.find(t => t.startDate >= todayStr || (t.endDate && t.endDate >= todayStr));
-    if (!targetRes) targetRes = reservationsList[reservationsList.length - 1];
+    lines.forEach((line, index) => {
+        if (index === 0) return; 
+        const parts = parseCSVLine(line);
+        if (parts.length < 5) return;
 
-    if (targetRes) {
-        const els = document.querySelectorAll(`[data-res-id="${targetRes.id}"]`);
-        for (let el of els) {
-            if (el.offsetParent !== null) {
-                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                
-                if (withFlash) {
-                    const originalBg = el.style.backgroundColor;
-                    el.style.backgroundColor = '#FEF9C3';
-                    el.style.transition = 'background-color 0.8s ease';
-                    setTimeout(() => { el.style.backgroundColor = originalBg; }, 2500);
-                }
-                break;
-            }
+        let guestName, startDate, endDate, listingName;
+        let gross = 0, fees = 0, cityTax = 0, bankFees = 0, dispAmount = 0, net = 0;
+
+        if (importSource === 'Airbnb') {
+            const typeIndex = parts.findIndex(p => p.toLowerCase().includes('réservation') || p.toLowerCase().includes('reservation'));
+            if (typeIndex === -1) return;
+            let rawStart, rawEnd, grossStr, serviceFeeStr;
+            if (typeIndex === 2) {
+                rawStart = parts[5]?.trim(); rawEnd = parts[6]?.trim(); guestName = parts[8]?.trim(); listingName = parts[9]?.trim();
+                grossStr = parts[18]?.trim() || parts[13]?.trim(); serviceFeeStr = parts[15]?.trim();
+            } else if (typeIndex === 1) {
+                rawStart = parts[4]?.trim(); rawEnd = parts[5]?.trim(); guestName = parts[7]?.trim(); listingName = parts[8]?.trim();
+                grossStr = parts[15]?.trim() || parts[12]?.trim(); serviceFeeStr = parts[13]?.trim();
+            } else return;
+
+            const formatDateStr = (raw) => { if(!raw) return ''; const [m, d, y] = raw.split('/'); return (m && d && y) ? `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}` : ''; };
+            startDate = formatDateStr(rawStart); endDate = formatDateStr(rawEnd);
+            if (!startDate || !endDate) return;
+
+            gross = parseFloat(grossStr?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
+            fees = Math.abs(parseFloat(serviceFeeStr?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
+            dispAmount = gross; net = gross - fees;
+        } 
+        else if (importSource === 'Booking') {
+            const typeCol = parts[0]?.toLowerCase() || '';
+            if (!typeCol.includes('rã©servation') && !typeCol.includes('réservation') && !typeCol.includes('reservation')) return;
+
+            guestName = voyageurIdx !== -1 && parts[voyageurIdx] ? parts[voyageurIdx].trim() : `Réf: ${parts[2]?.trim()}`; 
+            startDate = parts[3]?.trim(); endDate = parts[4]?.trim(); listingName = parts[10]?.trim();
+            if (!startDate || !endDate) return;
+
+            dispAmount = parseFloat(parts[15]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
+            cityTax = Math.abs(parseFloat(parts[16]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
+            fees = Math.abs(parseFloat(parts[17]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
+            bankFees = Math.abs(parseFloat(parts[19]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
+
+            gross = dispAmount - cityTax; net = gross - fees - bankFees;
         }
-    }
+
+        const matchedProp = properties.find(p => listingName && p.name && (listingName.toLowerCase().includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(listingName.toLowerCase())));
+        const isDuplicate = tenants.some(t => t.startDate === startDate && t.propertyId === (matchedProp?.id || 'none'));
+        const hasProperty = !!matchedProp;
+
+        newList.push({ 
+            id: index, propertyId: matchedProp?.id || '', propertyName: matchedProp?.name || listingName || 'Inconnu', 
+            name: guestName || 'Client Inconnu', startDate, endDate, grossAmount: gross, platformFees: fees, 
+            displayedAmount: dispAmount, cityTax: cityTax, bankFees: bankFees,
+            netAmount: net, isDuplicate, hasProperty, selected: !isDuplicate && hasProperty 
+        });
+    });
+    setReviewList(newList);
   };
 
-  useEffect(() => {
-    if (activeTab !== 'reservations') {
-       setHasScrolledToNext(false);
-       return;
-    }
-    if (hasScrolledToNext || reservationsList.length === 0) return;
-
-    const timer = setTimeout(() => {
-        scrollToCurrentRes(false);
-        setHasScrolledToNext(true);
-    }, 500); 
-
-    return () => clearTimeout(timer);
-  }, [activeTab, reservationsList, hasScrolledToNext, todayStr]);
-
-  const onTouchStart = (e) => {
-    if (e.touches && e.touches.length > 1) {
-       touchStartX.current = null;
-       touchStartY.current = null;
-       return;
-    }
-
-    if (e.target.closest('.no-swipe')) {
-      touchStartX.current = null;
-      touchStartY.current = null;
-      return;
-    }
-    
-    touchStartX.current = e.targetTouches[0].clientX;
-    touchStartY.current = e.targetTouches[0].clientY;
-  };
-
-  const onTouchMove = (e) => {
-    if (e.touches && e.touches.length > 1) {
-       touchStartX.current = null;
-       touchStartY.current = null;
-       return;
-    }
-  };
-
-  const onTouchEnd = (e) => {
-    if (touchStartX.current === null || touchStartY.current === null) return;
-    
-    const endX = e.changedTouches[0].clientX;
-    const endY = e.changedTouches[0].clientY;
-    
-    const distanceX = touchStartX.current - endX;
-    const distanceY = touchStartY.current - endY;
-    
-    if (Math.abs(distanceY) > 50) return;
-    
-    const isLeftSwipe = distanceX > 60;
-    const isRightSwipe = distanceX < -60;
-    
-    const currentIndex = TABS_ORDER.indexOf(activeTab);
-    
-    if (isLeftSwipe && currentIndex < TABS_ORDER.length - 1) {
-      setActiveTab(TABS_ORDER[currentIndex + 1]);
-    }
-    if (isRightSwipe && currentIndex > 0) {
-      setActiveTab(TABS_ORDER[currentIndex - 1]);
-    }
-    
-    touchStartX.current = null;
-    touchStartY.current = null;
-  };
-
-  const checkDateFilter = (dateStr) => {
-     if (!dateStr) return false;
-     const [y, mo] = dateStr.split('-');
-     if (filterYear !== 'all' && y !== filterYear) return false;
-     if (filterMonth !== 'all' && parseInt(mo)-1 !== parseInt(filterMonth)) return false;
-     return true;
-  };
-
-  const monthlyRecapData = useMemo(() => {
-    const stats = {};
-    
-    const initStats = (m) => {
-        if(!stats[m]) stats[m] = { totalBank: 0, urssafGross: 0, directNet: 0, charges: 0, taxes: 0, platforms: {} };
-    };
-
-    baseTenants.forEach(t => {
-      if (t.platform === 'En direct') {
-           const a1 = parseFloat(t.acompte1Amount) || 0;
-           const a2 = parseFloat(t.acompte2Amount) || 0;
-           const s = parseFloat(t.soldeAmount) || 0;
-
-           if (t.acompte1Date && checkDateFilter(t.acompte1Date)) {
-               const m = t.acompte1Date.substring(0,7);
-               initStats(m);
-               stats[m].totalBank += a1;
-               if (t.isUrssaf === false) stats[m].directNet += a1;
-           }
-           if (t.acompte2Date && checkDateFilter(t.acompte2Date)) {
-               const m = t.acompte2Date.substring(0,7);
-               initStats(m);
-               stats[m].totalBank += a2;
-               if (t.isUrssaf === false) stats[m].directNet += a2;
-           }
-           if (t.soldeDate && checkDateFilter(t.soldeDate)) {
-               const m = t.soldeDate.substring(0,7);
-               initStats(m);
-               stats[m].totalBank += s;
-               if (t.isUrssaf === false) stats[m].directNet += s;
-               
-               if (t.isUrssaf !== false) {
-                   stats[m].urssafGross += (parseFloat(t.grossAmount) || 0);
-                   stats[m].taxes += (parseFloat(t.grossAmount) || 0) * 0.077;
-                   stats[m].platforms[t.platform] = (stats[m].platforms[t.platform] || 0) + (parseFloat(t.grossAmount) || 0);
-               }
-           }
-      } else {
-          if (t.paymentDate && checkDateFilter(t.paymentDate)) {
-              const m = t.paymentDate.substring(0, 7);
-              initStats(m);
-              stats[m].totalBank += (parseFloat(t.netAmount) || 0);
-              if (t.isUrssaf !== false) { 
-                stats[m].urssafGross += (parseFloat(t.grossAmount) || 0); 
-                stats[m].taxes += (parseFloat(t.grossAmount) || 0) * 0.077; 
-                stats[m].platforms[t.platform] = (stats[m].platforms[t.platform] || 0) + (parseFloat(t.grossAmount) || 0);
-              }
-              else {
-                stats[m].directNet += (parseFloat(t.netAmount) || 0);
-              }
-          }
+  const confirmImport = async () => {
+      const toImport = reviewList.filter(i => i.selected && i.hasProperty);
+      for (let item of toImport) {
+          const { id, selected, isDuplicate, hasProperty, propertyName, ...cleanItem } = item;
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), { ...cleanItem, platform: importSource, isUrssaf: true, comment: `Importé via CSV ${importSource}`, resExpenses: [], paymentDate: '' });
       }
-      
-      (t.resExpenses || []).forEach(exp => {
-          if (exp.paymentDate && checkDateFilter(exp.paymentDate)) {
-             if (filterProv !== 'all' && exp.person !== filterProv) return; 
-             const m = exp.paymentDate.substring(0, 7);
-             initStats(m);
-             stats[m].charges += (parseFloat(exp.amount) || 0);
-          }
-      });
-    });
-    return Object.entries(stats).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [baseTenants, filterYear, filterMonth, filterProv]);
+      setReviewList([]); setImportText(''); setImportStatus(`${toImport.length} réservation(s) importée(s) !`);
+      setTimeout(() => setImportStatus(''), 5000);
+  };
 
-  const detailedExpenses = useMemo(() => {
-    const list = [];
-    baseTenants.forEach(t => {
-      (t.resExpenses || []).forEach(exp => {
-        if (filterProv === 'all' || exp.person === filterProv) {
-          const refDate = exp.paymentDate || t.startDate;
-          if (checkDateFilter(refDate)) {
-            list.push({ id: `${t.id}-${exp.id}`, propertyName: properties.find(p => p.id === t.propertyId)?.name || '--', dateRes: t.startDate, person: exp.person, type: exp.type, amount: parseFloat(exp.amount) || 0, paymentDate: exp.paymentDate || '' });
-          }
-        }
-      });
-    });
-    return list.sort((a, b) => b.dateRes.localeCompare(a.dateRes));
-  }, [baseTenants, properties, filterProv, filterYear, filterMonth]);
+  const getTenantProfitForFilters = (t) => {
+    let profit = 0;
+    if (t.platform === 'En direct') {
+        const a1 = parseFloat(t.acompte1Amount) || 0, a2 = parseFloat(t.acompte2Amount) || 0, s = parseFloat(t.soldeAmount) || 0;
+        if (t.acompte1Date && checkDateFilter(t.acompte1Date)) profit += a1;
+        if (t.acompte2Date && checkDateFilter(t.acompte2Date)) profit += a2;
+        if (t.soldeDate && checkDateFilter(t.soldeDate)) { profit += s; if (t.isUrssaf !== false) profit -= (parseFloat(t.grossAmount) || 0) * 0.077; }
+    } else {
+        if (t.paymentDate && checkDateFilter(t.paymentDate)) { profit += (parseFloat(t.netAmount) || 0); if (t.isUrssaf !== false) profit -= (parseFloat(t.grossAmount) || 0) * 0.077; }
+    }
+    (t.resExpenses || []).forEach(exp => { if (exp.paymentDate && checkDateFilter(exp.paymentDate)) { profit -= (parseFloat(exp.amount) || 0); } });
+    return profit;
+  };
 
-  const statsCalculations = useMemo(() => {
-    const year = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
-    const prevYear = year - 1;
-
-    let currentYearNights = 0;
-    let currentYearGross = 0, prevYearGross = 0;
-    let currentYearExp = 0;
-    let upcomingGross = 0;
-
-    const currentMonthGross = Array(12).fill(0);
-    const prevMonthGross = Array(12).fill(0);
-    
-    baseTenants.forEach(t => {
-       if (!t.startDate) return;
-       const resYear = parseInt(t.startDate.split('-')[0], 10);
-       const resMonth = parseInt(t.startDate.split('-')[1], 10) - 1;
-
-       const nights = t.endDate ? Math.max(1, Math.round((new Date(t.endDate) - new Date(t.startDate)) / 86400000)) : 1;
-       const gross = parseFloat(t.grossAmount) || 0;
-       const exp = (t.resExpenses || []).reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
-
-       let isFullyPaid = false;
-       if (t.platform === 'En direct') {
-          isFullyPaid = !!t.soldeDate;
-       } else {
-          isFullyPaid = !!t.paymentDate;
-       }
-       if (!isFullyPaid) upcomingGross += gross;
-
-       if (resYear === year) {
-           currentYearNights += nights;
-           currentYearGross += gross;
-           currentYearExp += exp;
-           if (resMonth >= 0 && resMonth <= 11) currentMonthGross[resMonth] += gross;
-       } else if (resYear === prevYear) {
-           prevYearGross += gross;
-           if (resMonth >= 0 && resMonth <= 11) prevMonthGross[resMonth] += gross;
-       }
-    });
-
-    const currentBase = baseTenants.filter(t => t.startDate && t.startDate.startsWith(year.toString()));
-    const avgStay = currentBase.length > 0 ? (currentYearNights / currentBase.length).toFixed(1) : 0;
-    const avgGrossPerRes = currentBase.length > 0 ? (currentYearGross / currentBase.length).toFixed(2) : 0;
-    const revPerNight = currentYearNights > 0 ? (currentYearGross / currentYearNights).toFixed(2) : 0;
-    
-    const calcGrowth = (curr, prev) => prev > 0 ? Math.round(((curr - prev) / prev) * 100) : (curr > 0 ? 100 : 0);
-    const grossGrowth = calcGrowth(currentYearGross, prevYearGross);
-
-    return { 
-        year, prevYear,
-        currentYearNights, currentYearGross, currentYearExp, upcomingGross,
-        prevYearGross, 
-        avgStay, avgGrossPerRes, revPerNight, grossGrowth,
-        currentMonthGross, prevMonthGross
-    };
-  }, [baseTenants, filterYear]);
-
-  const statsDetailList = useMemo(() => {
-    if (!statsDetailConfig) return [];
-    const { type, monthIndex } = statsDetailConfig;
-    const yearNum = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
-    
-    return baseTenants.filter(t => {
-        if (type === 'upcoming') {
-             let isFullyPaid = false;
-             if (t.platform === 'En direct') isFullyPaid = !!t.soldeDate;
-             else isFullyPaid = !!t.paymentDate;
-             return !isFullyPaid;
-        }
-        
-        const sDate = t.startDate || '';
-        const [y, m] = sDate.split('-');
-        
-        if (type === 'month_current') {
-             return parseInt(y) === yearNum && parseInt(m)-1 === monthIndex;
-        }
-        if (type === 'month_prev') {
-             return parseInt(y) === yearNum - 1 && parseInt(m)-1 === monthIndex;
-        }
-        if (type === 'year_current') {
-             return parseInt(y) === yearNum;
-        }
-        if (type === 'expenses') {
-             return parseInt(y) === yearNum && (t.resExpenses||[]).length > 0;
-        }
-        return false;
-    }).sort((a,b) => (a.startDate||"").localeCompare(b.startDate||""));
-  }, [statsDetailConfig, baseTenants, filterYear]);
-
-  // --- ECRAN DE VERROUILLAGE (OPTION 1) ---
+  // --- ECRAN DE VERROUILLAGE ---
   const handlePinSubmit = (e) => {
     e.preventDefault();
     if (pinInput === 'Cadel2026') { 
@@ -1145,85 +1055,41 @@ const App = () => {
     }
   };
 
-  // NOUVEAU COMPOSANT : Filtres en mode "Sticky" (fixé en haut)
-  const RenderFilters = () => (
-    <div className="sticky top-0 z-30 bg-[#F8FAFC]/95 backdrop-blur-md pt-2 pb-4 mb-2 md:-mx-4 md:px-4">
-      <div className="flex flex-wrap items-center gap-2 bg-white/80 p-3 rounded-[28px] border border-white shadow-lg mx-2 md:mx-0">
-        <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-          <Filter size={12} className="text-slate-400" />
-          <select value={filterYear} onChange={e => {setFilterYear(e.target.value); setHasScrolledToNext(false);}} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer">
-            <option value="all">Toutes Années</option>{(yearsAvailable || []).map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </div>
-        <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-          <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Mois (Tous)</option>{['Janv','Févr','Mars','Avril','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'].map((m,i)=><option key={i} value={i}>{m}</option>)}</select>
-        </div>
-        <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-          <select value={filterProp} onChange={e => setFilterProp(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none max-w-[100px] md:max-w-[130px] cursor-pointer"><option value="all">Logements</option>{(properties || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
-        </div>
-        <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-          <select value={filterPlat} onChange={e => setFilterPlat(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Plateformes</option>{(availablePlatforms || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
-        </div>
-      </div>
-    </div>
-  );
-
   if (!isUnlocked) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-4 font-sans relative overflow-hidden">
-        {/* Cercles décoratifs en fond */}
         <div className="absolute top-[-10%] left-[-10%] w-64 h-64 bg-blue-100 rounded-full blur-3xl opacity-50"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-indigo-100 rounded-full blur-3xl opacity-50"></div>
-        
         <div className="bg-white p-8 md:p-12 rounded-[40px] shadow-2xl max-w-sm w-full border border-slate-100 flex flex-col items-center text-center animate-in zoom-in-95 relative z-10">
-          <div className="bg-slate-50 p-4 rounded-3xl mb-6 shadow-inner border border-slate-100">
-             <Key size={48} className="text-blue-600" />
-          </div>
+          <div className="bg-slate-50 p-4 rounded-3xl mb-6 shadow-inner border border-slate-100"><Key size={48} className="text-blue-600" /></div>
           <h1 className="font-black text-2xl uppercase tracking-tighter text-slate-900 mb-1">Cadel Manager</h1>
           <p className="text-[10px] uppercase tracking-widest text-slate-400 mb-8 font-bold">Espace Sécurisé</p>
-
           <form onSubmit={handlePinSubmit} className="w-full flex flex-col gap-4">
             <div>
-              <input
-                type="password"
-                value={pinInput}
-                onChange={(e) => { setPinInput(e.target.value); setPinError(false); }}
-                placeholder="Votre mot de passe"
-                className={`w-full p-4 bg-slate-50 border rounded-2xl font-black text-center text-lg tracking-widest outline-none transition-all ${pinError ? 'border-rose-500 bg-rose-50/50 text-rose-500 placeholder-rose-300' : 'border-slate-200 focus:border-blue-500 focus:bg-white focus:shadow-md'}`}
-                autoFocus
-              />
+              <input type="password" value={pinInput} onChange={(e) => { setPinInput(e.target.value); setPinError(false); }} placeholder="Votre mot de passe" className={`w-full p-4 bg-slate-50 border rounded-2xl font-black text-center text-lg tracking-widest outline-none transition-all ${pinError ? 'border-rose-500 bg-rose-50/50 text-rose-500 placeholder-rose-300' : 'border-slate-200 focus:border-blue-500 focus:bg-white focus:shadow-md'}`} autoFocus />
               {pinError && <p className="text-rose-500 text-[10px] font-black uppercase tracking-widest mt-2 animate-pulse">Mot de passe incorrect</p>}
             </div>
-            <button type="submit" className="w-full bg-blue-600 text-white p-4 rounded-2xl font-black uppercase text-sm shadow-xl shadow-blue-200 hover:bg-indigo-600 transition-all hover:-translate-y-0.5 active:translate-y-0">
-              Déverrouiller
-            </button>
+            <button type="submit" className="w-full bg-blue-600 text-white p-4 rounded-2xl font-black uppercase text-sm shadow-xl shadow-blue-200 hover:bg-indigo-600 transition-all hover:-translate-y-0.5 active:translate-y-0">Déverrouiller</button>
           </form>
         </div>
       </div>
     );
   }
 
-  // --- ECRAN DE CHARGEMENT ---
   if (loading) return <div className="h-screen w-full flex items-center justify-center bg-slate-50 font-black uppercase text-xs"><Loader2 className="animate-spin text-blue-600 mr-2" /> CADEL MANAGER...</div>;
 
   const curChargesModale = (formData?.resExpenses || []).reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
   const isDirectFormModale = formData?.platform === 'En direct';
   const isCplxFormModale = formData?.platform === 'Booking' || formData?.platform === 'Abritel';
-  
-  const nModale = isDirectFormModale 
-    ? (parseFloat(formData?.grossAmount) || 0) 
-    : isCplxFormModale 
-      ? (parseFloat(formData?.displayedAmount || 0) - parseFloat(formData?.cityTax || 0)) - (parseFloat(formData?.platformFees || 0) + parseFloat(formData?.bankFees || 0))
-      : (parseFloat(formData?.grossAmount || 0) - parseFloat(formData?.platformFees || 0));
+  const nModale = isDirectFormModale ? (parseFloat(formData?.grossAmount) || 0) : isCplxFormModale ? (parseFloat(formData?.displayedAmount || 0) - parseFloat(formData?.cityTax || 0)) - (parseFloat(formData?.platformFees || 0) + parseFloat(formData?.bankFees || 0)) : (parseFloat(formData?.grossAmount || 0) - parseFloat(formData?.platformFees || 0));
 
+  // --- RENDU PRINCIPAL DE L'APPLICATION ---
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col md:flex-row font-sans text-slate-900">
       <aside className={`fixed md:sticky top-0 left-0 z-50 w-72 h-[100dvh] bg-white border-r transform md:translate-x-0 transition-transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-10 border-b flex flex-col items-center relative">
           <img src="/icon.svg" alt="Cadel Manager Logo" className="w-24 h-24 rounded-3xl shadow-xl mb-2 object-contain" />
-          <button onClick={() => { localStorage.removeItem('cadel_unlocked'); setIsUnlocked(false); }} className="absolute top-4 right-4 p-2 text-slate-300 hover:text-slate-900 transition-colors" title="Verrouiller l'application">
-             <Lock size={16} />
-          </button>
+          <button onClick={() => { localStorage.removeItem('cadel_unlocked'); setIsUnlocked(false); }} className="absolute top-4 right-4 p-2 text-slate-300 hover:text-slate-900 transition-colors" title="Verrouiller l'application"><Lock size={16} /></button>
         </div>
         <nav className="flex-1 p-6 space-y-2 overflow-y-auto">
           {[{ id: 'reservations', label: 'Réservations', icon: <List size={18}/> }, { id: 'agenda', label: 'Agenda', icon: <CalendarRange size={18}/> }, { id: 'statistiques', label: 'Statistiques', icon: <BarChart2 size={18}/> }, { id: 'finances', label: 'Finances', icon: <Calculator size={18}/> }, { id: 'settings', label: 'Paramètres', icon: <Settings size={18}/> }].map(item => (
@@ -1242,7 +1108,6 @@ const App = () => {
 
       <main onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} className="flex-1 w-full px-0 md:px-12 py-6 md:py-12 min-h-screen relative" style={{ touchAction: 'pan-x pan-y pinch-zoom' }}>
         
-        {/* MODALE DE PAIEMENT RAPIDE */}
         {quickPayConfig && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
              <div className="bg-white p-8 rounded-[40px] shadow-2xl max-w-sm w-full border border-slate-100 flex flex-col gap-6 animate-in zoom-in-95">
@@ -1260,14 +1125,11 @@ const App = () => {
           </div>
         )}
 
-        {/* MODALE DES DETAILS DE STATISTIQUES (TIROIR CLIC) */}
         {statsDetailConfig && (
            <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-in fade-in">
               <div className="bg-[#F8FAFC] rounded-[40px] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-slate-100 overflow-hidden relative">
                  <div className="p-6 md:p-8 border-b flex justify-between items-center bg-white sticky top-0 z-10 shadow-sm">
-                    <div className="flex items-center gap-3 text-blue-600 font-black uppercase tracking-tighter text-xl">
-                        <Search size={24} /> {statsDetailConfig.title}
-                    </div>
+                    <div className="flex items-center gap-3 text-blue-600 font-black uppercase tracking-tighter text-xl"><Search size={24} /> {statsDetailConfig.title}</div>
                     <button onClick={() => setStatsDetailConfig(null)} className="p-3 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900 transition-all"><X size={20}/></button>
                  </div>
                  <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-4">
@@ -1278,21 +1140,11 @@ const App = () => {
                           {statsDetailList.map(t => (
                               <div key={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="bg-white p-5 rounded-[24px] shadow-sm border border-slate-100 hover:border-blue-300 hover:shadow-lg cursor-pointer transition-all group hover:scale-[1.02]">
                                   <div className="flex justify-between items-start mb-2">
-                                      <div>
-                                         <h4 className="font-black uppercase text-sm group-hover:text-blue-600 transition-colors">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</h4>
-                                         <p className="text-[10px] text-slate-400 font-bold mt-0.5">{t.platform} • {t.name}</p>
-                                      </div>
-                                      <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase inline-block ${getStatusProps(t).color}`}>
-                                          {getStatusProps(t).label}
-                                      </span>
+                                      <div><h4 className="font-black uppercase text-sm group-hover:text-blue-600 transition-colors">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</h4><p className="text-[10px] text-slate-400 font-bold mt-0.5">{t.platform} • {t.name}</p></div>
+                                      <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase inline-block ${getStatusProps(t).color}`}>{getStatusProps(t).label}</span>
                                   </div>
-                                  <div className="bg-slate-50 p-2.5 rounded-xl flex justify-between font-black text-[10px] items-center mb-2 text-slate-500">
-                                      <span>{formatDateFr(t.startDate)}</span><ArrowRight size={12} className="text-slate-300"/><span>{formatDateFr(t.endDate)}</span>
-                                  </div>
-                                  <div className="flex justify-between items-end mt-4 border-t border-slate-50 pt-3">
-                                      <div className="text-[9px] text-slate-400 uppercase font-black tracking-widest">Net estimé</div>
-                                      <div className="font-black text-lg text-slate-800">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</div>
-                                  </div>
+                                  <div className="bg-slate-50 p-2.5 rounded-xl flex justify-between font-black text-[10px] items-center mb-2 text-slate-500"><span>{formatDateFr(t.startDate)}</span><ArrowRight size={12} className="text-slate-300"/><span>{formatDateFr(t.endDate)}</span></div>
+                                  <div className="flex justify-between items-end mt-4 border-t border-slate-50 pt-3"><div className="text-[9px] text-slate-400 uppercase font-black tracking-widest">Net estimé</div><div className="font-black text-lg text-slate-800">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</div></div>
                               </div>
                           ))}
                        </div>
@@ -1304,7 +1156,7 @@ const App = () => {
 
         <div className="max-w-7xl mx-auto pb-32">
           
-          {/* LES FILTRES INTÉGRÉS "EN DUR" (C'est ce qui corrige l'erreur) */}
+          {/* BARRE DES FILTRES INCLUSE DIRECTEMENT ICI */}
           <div className="sticky top-0 z-30 bg-[#F8FAFC]/95 backdrop-blur-md pt-2 pb-4 mb-2 md:-mx-4 md:px-4">
             <div className="flex flex-wrap items-center gap-2 bg-white/80 p-3 rounded-[28px] border border-white shadow-lg mx-2 md:mx-0">
               <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
@@ -1331,26 +1183,16 @@ const App = () => {
                  <h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2>
                  <div className="flex items-center gap-2 md:gap-4">
                     <button onClick={() => scrollToCurrentRes(true)} className="p-3 md:px-4 md:py-3 bg-white text-blue-600 rounded-full md:rounded-[20px] shadow-lg border border-slate-100 hover:bg-blue-50 transition-all flex items-center justify-center gap-2" title="Aller à aujourd'hui">
-                       <LocateFixed size={18} />
-                       <span className="hidden md:inline font-black text-[10px] uppercase">Aujourd'hui</span>
+                       <LocateFixed size={18} /><span className="hidden md:inline font-black text-[10px] uppercase">Aujourd'hui</span>
                     </button>
                     <button onClick={() => { setEditingResId(null); setFormData({ propertyId: properties[0]?.id || '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '', acompte1Amount: '', acompte1Date: '', acompte2Amount: '', acompte2Date: '', soldeAmount: '', soldeDate: '' }); setIsModalOpen(true); }} className="bg-blue-600 text-white px-6 py-3 md:px-8 md:py-4 rounded-[20px] md:rounded-[24px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button>
                  </div>
               </div>
               
-              {/* VUE MOBILE : Liste déroulante Ultra Compacte avec marge mx-2 */}
               <div className="md:hidden max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain p-1 rounded-[20px] border border-slate-100 bg-slate-50/50 shadow-inner mx-2 touch-manipulation" style={{ touchAction: 'manipulation' }}>
                 <div className="grid grid-cols-1 gap-2.5">
                   {(groupedReservationsList || []).map(item => {
-                    if (item.isSeparator) {
-                      return (
-                        <div key={item.id} className="flex items-center justify-center mt-2 mb-0.5">
-                            <span className="bg-slate-800 text-white px-4 py-1.5 rounded-[10px] text-[8px] font-black uppercase tracking-[0.2em] shadow-sm">
-                                {item.label}
-                            </span>
-                        </div>
-                      );
-                    }
+                    if (item.isSeparator) return (<div key={item.id} className="flex items-center justify-center mt-2 mb-0.5"><span className="bg-slate-800 text-white px-4 py-1.5 rounded-[10px] text-[8px] font-black uppercase tracking-[0.2em] shadow-sm">{item.label}</span></div>);
                     
                     const t = item;
                     const colors = getRowColors(t.propertyId);
@@ -1359,36 +1201,24 @@ const App = () => {
                       <div className="flex justify-between items-start mb-1.5">
                         <div>
                           <h3 className="text-sm font-black uppercase leading-tight">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</h3>
-                          <div className="flex items-center gap-1.5 mt-1 leading-tight">
-                              <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{t.platform}</span>
-                              <span className="text-[11px] font-black text-slate-700">{t.name}</span>
-                          </div>
+                          <div className="flex items-center gap-1.5 mt-1 leading-tight"><span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{t.platform}</span><span className="text-[11px] font-black text-slate-700">{t.name}</span></div>
                         </div>
                         <div className="flex flex-col items-end">
-                          <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>
-                            {getStatusProps(t).label}
-                          </span>
+                          <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>{getStatusProps(t).label}</span>
                           {t.paymentDate && t.platform !== 'En direct' && <span className="text-[7px] text-slate-400 mt-1 font-bold">{formatDateFr(t.paymentDate)}</span>}
                           {t.platform === 'En direct' && t.soldeDate && <span className="text-[7px] text-slate-400 mt-1 font-bold">{formatDateFr(t.soldeDate)}</span>}
                         </div>
                       </div>
                       
-                      <div className="bg-white/60 p-2 rounded-[12px] flex justify-between font-black text-[9px] mb-1.5 items-center">
-                        <span>{formatDateFr(t.startDate)}</span><ArrowRight size={10} className="text-slate-300"/><span>{formatDateFr(t.endDate)}</span>
-                      </div>
+                      <div className="bg-white/60 p-2 rounded-[12px] flex justify-between font-black text-[9px] mb-1.5 items-center"><span>{formatDateFr(t.startDate)}</span><ArrowRight size={10} className="text-slate-300"/><span>{formatDateFr(t.endDate)}</span></div>
                       
-                      {/* LIGNE DES COMMENTAIRES / NOTES (S'IL Y EN A) */}
-                      {t.comment && (
-                        <div className="text-[9px] italic text-slate-600 mb-1.5 px-1 leading-tight whitespace-pre-wrap">
-                          📝 {t.comment}
-                        </div>
-                      )}
+                      {t.comment && (<div className="text-[9px] italic text-slate-600 mb-1.5 px-1 leading-tight whitespace-pre-wrap">📝 {t.comment}</div>)}
 
                       {t.resExpenses && t.resExpenses.length > 0 && (
                         <div className="space-y-1 border-t border-slate-100 pt-1.5 mb-1.5">
                           {(t.resExpenses || []).map((exp, idx) => (
                             <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[8px] bg-white/60 p-1.5 rounded-xl cursor-pointer hover:bg-white transition-colors leading-tight">
-                              <span className="uppercase font-black text-slate-500">{exp.type} ({exp.person})</span>
+                              <span className="uppercase font-black text-slate-500">{exp.type} ({exp.person}) {exp.sendEmail !== false && providerEmails[exp.person] && <Mail size={8} className="inline text-blue-500"/>}</span>
                               <div className="text-right">
                                 <span className={`font-black flex items-center justify-end gap-1 ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€ {exp.paymentDate ? <CheckCircle size={8}/> : <Clock size={8}/>}</span>
                                 {exp.paymentDate && <div className="text-[7px] text-slate-400 mt-0.5">{formatDateFr(exp.paymentDate)}</div>}
@@ -1403,69 +1233,32 @@ const App = () => {
                 </div>
               </div>
 
-              {/* VUE ORDINATEUR : Liste déroulante avec colonnes forcées et colonne Notes ajoutée */}
               <div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden border border-slate-100">
                 <div className="max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain relative touch-manipulation" style={{ touchAction: 'manipulation' }}>
                     <table className="w-full text-left text-xs">
                     <thead className="bg-slate-50 font-black uppercase border-b text-slate-400 sticky top-0 z-20 shadow-sm">
-                        <tr>
-                            <th className="p-4 w-[15%]">Logement</th>
-                            <th className="p-4 w-[15%]">Client</th>
-                            <th className="p-4 w-[12%] text-center">Dates</th>
-                            <th className="p-4 w-[25%]">Notes</th>
-                            <th className="p-4 w-[18%]">Prestations</th>
-                            <th className="p-4 text-right">Net</th>
-                            <th className="p-4 text-center">État</th>
-                        </tr>
+                        <tr><th className="p-4 w-[15%]">Logement</th><th className="p-4 w-[15%]">Client</th><th className="p-4 w-[12%] text-center">Dates</th><th className="p-4 w-[25%]">Notes</th><th className="p-4 w-[18%]">Prestations</th><th className="p-4 text-right">Net</th><th className="p-4 text-center">État</th></tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 font-bold">
                         {(groupedReservationsList || []).map(item => {
-                        
-                        if (item.isSeparator) {
-                           return (
-                               <tr key={item.id} className="bg-slate-100/50">
-                                   <td colSpan="7" className="p-3 text-center">
-                                       <span className="bg-slate-800 text-white px-5 py-2 rounded-[14px] text-[10px] font-black uppercase tracking-[0.2em] shadow-md inline-block">
-                                           {item.label}
-                                       </span>
-                                   </td>
-                               </tr>
-                           );
-                        }
+                        if (item.isSeparator) return (<tr key={item.id} className="bg-slate-100/50"><td colSpan="7" className="p-3 text-center"><span className="bg-slate-800 text-white px-5 py-2 rounded-[14px] text-[10px] font-black uppercase tracking-[0.2em] shadow-md inline-block">{item.label}</span></td></tr>);
 
                         const t = item;
                         const colors = getRowColors(t.propertyId);
                         
                         return (
                         <tr key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className={`${colors.bg} ${colors.hover} cursor-pointer transition-colors`}>
-                            <td className="p-4 uppercase">
-                                <div className="font-black">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</div>
-                                <div className="text-blue-600 text-xs font-black tracking-widest mt-0.5">{t.platform}</div>
-                            </td>
-                            <td className="p-4">
-                                <div className="text-sm font-black">{t.name}</div>
-                                {t.phone && <div className="text-slate-400 text-[10px] mt-0.5">{t.phone}</div>}
-                            </td>
-                            <td className="p-4 text-center text-slate-500 whitespace-nowrap">
-                                {formatDateFr(t.startDate)} <ArrowRight size={10} className="inline text-slate-300" /> {formatDateFr(t.endDate)}
-                            </td>
-                            <td className="p-4 text-[11px] text-slate-600 font-medium">
-                                {t.comment ? (
-                                    <div className="bg-slate-50/50 p-2 rounded-xl border border-slate-100/50 italic whitespace-pre-wrap" title={t.comment}>
-                                        📝 {t.comment}
-                                    </div>
-                                ) : ''}
-                            </td>
+                            <td className="p-4 uppercase"><div className="font-black">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</div><div className="text-blue-600 text-xs font-black tracking-widest mt-0.5">{t.platform}</div></td>
+                            <td className="p-4"><div className="text-sm font-black">{t.name}</div>{t.phone && <div className="text-slate-400 text-[10px] mt-0.5">{t.phone}</div>}</td>
+                            <td className="p-4 text-center text-slate-500 whitespace-nowrap">{formatDateFr(t.startDate)} <ArrowRight size={10} className="inline text-slate-300" /> {formatDateFr(t.endDate)}</td>
+                            <td className="p-4 text-[11px] text-slate-600 font-medium">{t.comment ? (<div className="bg-slate-50/50 p-2 rounded-xl border border-slate-100/50 italic whitespace-pre-wrap" title={t.comment}>📝 {t.comment}</div>) : ''}</td>
                             <td className="p-4">
                             <div className="space-y-1.5">
                                 {(t.resExpenses || []).map((exp, idx) => (
                                     <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-white/50 p-1.5 rounded-lg border border-slate-100/50 cursor-pointer hover:border-blue-300 hover:bg-white hover:shadow-sm transition-all">
-                                    <span className="uppercase font-black text-slate-500 leading-none">{exp.type} ({exp.person})</span>
+                                    <span className="uppercase font-black text-slate-500 leading-none">{exp.type} ({exp.person}) {exp.sendEmail !== false && providerEmails[exp.person] && <Mail size={10} className="inline text-blue-500 ml-1"/>}</span>
                                     <div className="text-right">
-                                        <div className="flex items-center justify-end gap-1.5">
-                                            <span className={`font-black ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€</span>
-                                            {exp.paymentDate ? <CheckCircle size={10} className="text-emerald-500" /> : <Clock size={10} className="text-orange-400" />}
-                                        </div>
+                                        <div className="flex items-center justify-end gap-1.5"><span className={`font-black ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€</span>{exp.paymentDate ? <CheckCircle size={10} className="text-emerald-500" /> : <Clock size={10} className="text-orange-400" />}</div>
                                         {exp.paymentDate && <div className="text-[8px] text-slate-400 mt-0.5 leading-none">{formatDateFr(exp.paymentDate)}</div>}
                                     </div>
                                     </div>
@@ -1475,9 +1268,7 @@ const App = () => {
                             <td className="p-4 text-right font-black">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</td>
                             <td className="p-4 text-center">
                             <div className="flex flex-col items-center">
-                                <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-4 py-2 rounded-full text-[9px] uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>
-                                {getStatusProps(t).label}
-                                </span>
+                                <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-4 py-2 rounded-full text-[9px] uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>{getStatusProps(t).label}</span>
                                 {t.platform !== 'En direct' && t.paymentDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.paymentDate)}</span>}
                                 {t.platform === 'En direct' && t.soldeDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.soldeDate)}</span>}
                             </div>
@@ -1501,63 +1292,31 @@ const App = () => {
           {activeTab === 'statistiques' && (
              <div className="space-y-10 animate-in fade-in">
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mx-2 md:mx-0">
-                   <div>
-                      <h2 className="text-3xl md:text-4xl font-black uppercase text-slate-900 tracking-tighter leading-none mb-2">Statistiques</h2>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tableau de bord et croisements dynamiques</p>
-                   </div>
+                   <div><h2 className="text-3xl md:text-4xl font-black uppercase text-slate-900 tracking-tighter leading-none mb-2">Statistiques</h2><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tableau de bord et croisements dynamiques</p></div>
                 </div>
 
-                {/* Blocs indicateurs clés (Réduits de moitié sur mobile) */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mx-2 md:mx-0">
                   <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `CA Généré Brut (${statsCalculations.year})` })} className="bg-white p-3 md:p-6 rounded-[20px] md:rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-24 md:h-40 relative overflow-hidden group hover:scale-[1.03] transition-transform cursor-pointer hover:ring-2 ring-blue-500 ring-offset-4">
-                    <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 md:mb-2 z-10">CA Brut ({statsCalculations.year})</p>
-                    <p className="text-xl md:text-3xl font-black text-indigo-600 z-10">{Math.round(statsCalculations.currentYearGross).toLocaleString('fr-FR')}€</p>
-                    <div className={`mt-1 md:mt-2 flex items-center gap-1 text-[8px] md:text-[10px] font-black px-2 py-0.5 md:py-1 rounded-full z-10 ${statsCalculations.grossGrowth >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                        {statsCalculations.grossGrowth >= 0 ? <TrendingUp size={10}/> : <TrendingDown size={10}/>} {statsCalculations.grossGrowth}% vs {statsCalculations.prevYear}
-                    </div>
-                    <div className="absolute inset-0 bg-blue-50/0 group-hover:bg-blue-50/50 transition-colors pointer-events-none"></div>
+                    <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 md:mb-2 z-10">CA Brut ({statsCalculations.year})</p><p className="text-xl md:text-3xl font-black text-indigo-600 z-10">{Math.round(statsCalculations.currentYearGross).toLocaleString('fr-FR')}€</p>
+                    <div className={`mt-1 md:mt-2 flex items-center gap-1 text-[8px] md:text-[10px] font-black px-2 py-0.5 md:py-1 rounded-full z-10 ${statsCalculations.grossGrowth >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>{statsCalculations.grossGrowth >= 0 ? <TrendingUp size={10}/> : <TrendingDown size={10}/>} {statsCalculations.grossGrowth}% vs {statsCalculations.prevYear}</div>
                   </div>
-                  
                   <div onClick={() => setStatsDetailConfig({ type: 'upcoming', title: `CA à venir (Impayés)` })} className="bg-white p-3 md:p-6 rounded-[20px] md:rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-24 md:h-40 relative group hover:scale-[1.03] transition-transform cursor-pointer hover:ring-2 ring-blue-500 ring-offset-4">
-                    <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 md:mb-2">CA à venir (Impayés)</p>
-                    <p className="text-xl md:text-3xl font-black text-blue-600">{Math.round(statsCalculations.upcomingGross).toLocaleString('fr-FR')}€</p>
-                    <p className="text-[7px] md:text-[9px] text-blue-400 mt-1 md:mt-2 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">👉 Clic pour voir</p>
+                    <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 md:mb-2">CA à venir (Impayés)</p><p className="text-xl md:text-3xl font-black text-blue-600">{Math.round(statsCalculations.upcomingGross).toLocaleString('fr-FR')}€</p><p className="text-[7px] md:text-[9px] text-blue-400 mt-1 md:mt-2 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">👉 Clic pour voir</p>
                   </div>
-                  
                   <div onClick={() => setStatsDetailConfig({ type: 'expenses', title: `Réservations avec Prestations (${statsCalculations.year})` })} className="bg-white p-3 md:p-6 rounded-[20px] md:rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-24 md:h-40 group hover:scale-[1.03] transition-transform cursor-pointer hover:ring-2 ring-blue-500 ring-offset-4">
-                    <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Coût des Prestations</p>
-                    <p className="text-xl md:text-3xl font-black text-rose-500">-{Math.round(statsCalculations.currentYearExp).toLocaleString('fr-FR')}€</p>
-                    <p className="text-[7px] md:text-[9px] text-blue-400 mt-1 md:mt-2 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">👉 Clic pour voir</p>
+                    <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Coût des Prestations</p><p className="text-xl md:text-3xl font-black text-rose-500">-{Math.round(statsCalculations.currentYearExp).toLocaleString('fr-FR')}€</p><p className="text-[7px] md:text-[9px] text-blue-400 mt-1 md:mt-2 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">👉 Clic pour voir</p>
                   </div>
-                  
                   <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-white p-3 md:p-6 rounded-[20px] md:rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-24 md:h-40 group hover:scale-[1.03] transition-transform cursor-pointer hover:ring-2 ring-blue-500 ring-offset-4">
-                    <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Revenu Brut / Nuit</p>
-                    <p className="text-xl md:text-3xl font-black text-emerald-600">{statsCalculations.revPerNight}€</p>
-                    <p className="text-[7px] md:text-[9px] text-blue-400 mt-1 md:mt-2 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">👉 Clic pour voir</p>
+                    <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Revenu Brut / Nuit</p><p className="text-xl md:text-3xl font-black text-emerald-600">{statsCalculations.revPerNight}€</p><p className="text-[7px] md:text-[9px] text-blue-400 mt-1 md:mt-2 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">👉 Clic pour voir</p>
                   </div>
-
-                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-slate-50 p-3 md:p-6 rounded-[20px] md:rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-16 md:h-32 hover:bg-slate-100 cursor-pointer transition-colors group">
-                    <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 md:mb-1">Nuitées Louées</p>
-                    <p className="text-lg md:text-2xl font-black text-slate-700">{statsCalculations.currentYearNights}</p>
-                  </div>
-                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-slate-50 p-3 md:p-6 rounded-[20px] md:rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-16 md:h-32 hover:bg-slate-100 cursor-pointer transition-colors group">
-                    <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 md:mb-1">Durée Moyenne</p>
-                    <p className="text-lg md:text-2xl font-black text-slate-700">{statsCalculations.avgStay} <span className="text-xs md:text-sm">j</span></p>
-                  </div>
-                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-slate-50 p-3 md:p-6 rounded-[20px] md:rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-16 md:h-32 hover:bg-slate-100 cursor-pointer transition-colors group">
-                    <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 md:mb-1">Panier Moyen</p>
-                    <p className="text-lg md:text-2xl font-black text-slate-700">{statsCalculations.avgGrossPerRes}€</p>
-                  </div>
-                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-slate-50 p-3 md:p-6 rounded-[20px] md:rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-16 md:h-32 hover:bg-slate-100 cursor-pointer transition-colors group">
-                    <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 md:mb-1">Nb. Réservations</p>
-                    <p className="text-lg md:text-2xl font-black text-slate-700">{baseTenants.filter(t => t.startDate && t.startDate.startsWith(statsCalculations.year.toString())).length}</p>
-                  </div>
+                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-slate-50 p-3 md:p-6 rounded-[20px] md:rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-16 md:h-32 hover:bg-slate-100 cursor-pointer transition-colors group"><p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 md:mb-1">Nuitées Louées</p><p className="text-lg md:text-2xl font-black text-slate-700">{statsCalculations.currentYearNights}</p></div>
+                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-slate-50 p-3 md:p-6 rounded-[20px] md:rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-16 md:h-32 hover:bg-slate-100 cursor-pointer transition-colors group"><p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 md:mb-1">Durée Moyenne</p><p className="text-lg md:text-2xl font-black text-slate-700">{statsCalculations.avgStay} <span className="text-xs md:text-sm">j</span></p></div>
+                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-slate-50 p-3 md:p-6 rounded-[20px] md:rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-16 md:h-32 hover:bg-slate-100 cursor-pointer transition-colors group"><p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 md:mb-1">Panier Moyen</p><p className="text-lg md:text-2xl font-black text-slate-700">{statsCalculations.avgGrossPerRes}€</p></div>
+                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-slate-50 p-3 md:p-6 rounded-[20px] md:rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-16 md:h-32 hover:bg-slate-100 cursor-pointer transition-colors group"><p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 md:mb-1">Nb. Réservations</p><p className="text-lg md:text-2xl font-black text-slate-700">{baseTenants.filter(t => t.startDate && t.startDate.startsWith(statsCalculations.year.toString())).length}</p></div>
                 </div>
 
-                {/* GRAPHIQUE MULTI-COURBES DYNAMIQUE */}
                 <ComparisonChart data={baseTenants} properties={properties} platforms={availablePlatforms} yearsAvailable={yearsAvailable} />
 
-                {/* ROSACES DE REPARTITION */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-10 mx-2 md:mx-0">
                    <DonutChart title={"Net Reçu (Banque) par Logement (" + (filterYear === 'all' ? 'Toutes années' : filterYear) + ")"} data={(properties || []).map((p,idx)=>({label:p.name,value:(baseTenants || []).reduce((acc,t) => t.propertyId===p.id ? acc + getTenantProfitForFilters(t) : acc, 0),color:CHART_COLORS[idx%CHART_COLORS.length]}))} />
                    <DonutChart title={"Net Reçu (Banque) par Plateforme (" + (filterYear === 'all' ? 'Toutes années' : filterYear) + ")"} data={(availablePlatforms || []).map((p,idx)=>({label:p,value:(baseTenants || []).reduce((acc,t) => t.platform===p ? acc + getTenantProfitForFilters(t) : acc, 0),color:CHART_COLORS[(idx+4)%CHART_COLORS.length]}))} />
@@ -1568,30 +1327,18 @@ const App = () => {
           {activeTab === 'finances' && (
             <div className="space-y-10 animate-in fade-in">
               <h2 className="text-3xl font-black uppercase mx-2 md:mx-0">Comptabilité</h2>
-              
-              {/* TABLEAU BILAN GLOBAL (Ultra-Compact sur mobile) */}
               <div className="bg-white rounded-[24px] md:rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100 mx-2 md:mx-0">
                 <div className="p-3 md:p-8 bg-slate-900 text-white font-black uppercase flex justify-between items-center text-[10px] md:text-xs"><div>Bilan Global</div></div>
                 <div className="max-h-[60vh] overflow-y-auto overflow-x-auto custom-scrollbar overscroll-contain relative no-swipe touch-manipulation" style={{ touchAction: 'manipulation' }}>
                   <table className="w-full text-left min-w-[280px] md:min-w-[700px]">
                     <thead className="bg-slate-50 uppercase text-slate-400 border-b sticky top-0 z-10 shadow-sm text-[6px] md:text-xs tracking-tighter md:tracking-normal">
-                      <tr>
-                        <th className="p-1 md:p-6">Période</th>
-                        <th className="p-1 md:p-6 text-right">Brut URSSAF</th>
-                        <th className="p-1 md:p-6 text-right text-emerald-600">Direct (hors)</th>
-                        <th className="p-1 md:p-6 text-right text-indigo-600">Virement</th>
-                        <th className="p-1 md:p-6 text-right text-slate-500">Prest.</th>
-                        <th className="p-1 md:p-6 text-right text-rose-500">Cotis.</th>
-                        <th className="p-1 md:p-6 text-right font-black">Profit</th>
-                      </tr>
+                      <tr><th className="p-1 md:p-6">Période</th><th className="p-1 md:p-6 text-right">Brut URSSAF</th><th className="p-1 md:p-6 text-right text-emerald-600">Direct (hors)</th><th className="p-1 md:p-6 text-right text-indigo-600">Virement</th><th className="p-1 md:p-6 text-right text-slate-500">Prest.</th><th className="p-1 md:p-6 text-right text-rose-500">Cotis.</th><th className="p-1 md:p-6 text-right font-black">Profit</th></tr>
                     </thead>
                     <tbody className="divide-y font-bold">
                       {(monthlyRecapData || []).map(([m, d]) => (
                         <tr key={m} className="group hover:bg-slate-50/50 transition-colors">
                           <td className="p-1 md:p-6 capitalize text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{formatMonthYear(m)}</td>
-                          <td className="p-1 md:p-6 text-right text-slate-500">
-                             <div className="text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{d.urssafGross.toLocaleString('fr-FR')}€</div>
-                          </td>
+                          <td className="p-1 md:p-6 text-right text-slate-500"><div className="text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{d.urssafGross.toLocaleString('fr-FR')}€</div></td>
                           <td className="p-1 md:p-6 text-right text-emerald-600 font-black text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{d.directNet > 0 ? `${d.directNet.toLocaleString('fr-FR')}€` : '-'}</td>
                           <td className="p-1 md:p-6 text-right text-indigo-600 font-black text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{d.totalBank.toLocaleString('fr-FR')}€</td>
                           <td className="p-1 md:p-6 text-right text-slate-500 text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">-{d.charges.toLocaleString('fr-FR')}€</td>
@@ -1603,9 +1350,7 @@ const App = () => {
                     <tfoot className="bg-indigo-600 text-white font-black text-[10px] md:text-lg sticky bottom-0 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
                       <tr>
                         <td className="p-1.5 md:p-8 uppercase text-[6px] md:text-[10px] leading-tight tracking-tighter md:tracking-normal">TOTAL</td>
-                        <td className="p-1.5 md:p-8 text-right opacity-90">
-                           <div className="leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.urssafGross, 0).toLocaleString('fr-FR')}€</div>
-                        </td>
+                        <td className="p-1.5 md:p-8 text-right opacity-90"><div className="leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.urssafGross, 0).toLocaleString('fr-FR')}€</div></td>
                         <td className="p-1.5 md:p-8 text-right text-emerald-300 leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.directNet, 0).toLocaleString('fr-FR')}€</td>
                         <td className="p-1.5 md:p-8 text-right leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0).toLocaleString('fr-FR')}€</td>
                         <td className="p-1.5 md:p-8 text-right text-indigo-200 leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">-{monthlyRecapData.reduce((acc, [m, d]) => acc + d.charges, 0).toLocaleString('fr-FR')}€</td>
@@ -1617,7 +1362,6 @@ const App = () => {
                 </div>
               </div>
 
-              {/* TABLEAU SUIVI PRESTATAIRES (Ultra-Compact sur mobile) */}
               <div className="bg-white rounded-[24px] md:rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100 mx-2 md:mx-0">
                 <div className="p-3 md:p-8 bg-slate-900 text-white font-black uppercase flex justify-between text-[10px] md:text-xs">Suivi Prestataires</div>
                 <div className="max-h-[60vh] overflow-y-auto overflow-x-auto custom-scrollbar overscroll-contain relative no-swipe touch-manipulation" style={{ touchAction: 'manipulation' }}>
@@ -1645,23 +1389,15 @@ const App = () => {
           {activeTab === 'settings' && (
             <div className="space-y-10 animate-in fade-in mx-2 md:mx-0">
               <h2 className="text-3xl font-black uppercase">Paramètres</h2>
-              
               <div className="bg-white p-8 rounded-[40px] border-2 border-dashed shadow-xl flex flex-col items-center justify-center text-center">
                 <UploadCloud size={40} className="text-blue-600 mb-4"/>
                 <h3 className="text-xl font-black uppercase">Importation de Réservations (CSV)</h3>
-                <p className="text-xs text-slate-400 mt-2 mb-6">Sélectionnez la plateforme source et collez votre export CSV (gère les colonnes automatiquement).</p>
-                
+                <p className="text-xs text-slate-400 mt-2 mb-6">Sélectionnez la plateforme source et collez votre export CSV.</p>
                 <div className="flex items-center gap-4 bg-slate-50 p-2 rounded-2xl shadow-inner border border-slate-100">
-                  <label className={`flex-1 py-3 px-6 rounded-xl font-black uppercase text-[10px] cursor-pointer transition-all ${importSource === 'Airbnb' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-200'}`}>
-                    <input type="radio" value="Airbnb" checked={importSource === 'Airbnb'} onChange={e => setImportSource(e.target.value)} className="hidden" /> Airbnb
-                  </label>
-                  <label className={`flex-1 py-3 px-6 rounded-xl font-black uppercase text-[10px] cursor-pointer transition-all ${importSource === 'Booking' ? 'bg-blue-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-200'}`}>
-                    <input type="radio" value="Booking" checked={importSource === 'Booking'} onChange={e => setImportSource(e.target.value)} className="hidden" /> Booking
-                  </label>
+                  <label className={`flex-1 py-3 px-6 rounded-xl font-black uppercase text-[10px] cursor-pointer transition-all ${importSource === 'Airbnb' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-200'}`}><input type="radio" value="Airbnb" checked={importSource === 'Airbnb'} onChange={e => setImportSource(e.target.value)} className="hidden" /> Airbnb</label>
+                  <label className={`flex-1 py-3 px-6 rounded-xl font-black uppercase text-[10px] cursor-pointer transition-all ${importSource === 'Booking' ? 'bg-blue-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-200'}`}><input type="radio" value="Booking" checked={importSource === 'Booking'} onChange={e => setImportSource(e.target.value)} className="hidden" /> Booking</label>
                 </div>
-
                 <textarea value={importText} onChange={(e)=>setImportText(e.target.value)} placeholder={`Collez les lignes de votre export ${importSource} ici...`} className="w-full mt-6 p-4 bg-slate-50 border rounded-3xl min-h-[150px] font-mono text-[10px] outline-none" />
-                
                 {importStatus && <p className="mt-4 font-black text-emerald-600 uppercase">{importStatus}</p>}
                 
                 {(reviewList || []).length > 0 && (
@@ -1674,9 +1410,7 @@ const App = () => {
                             <td className="p-1.5 md:p-3"><input type="checkbox" checked={item.selected} disabled={!item.hasProperty} onChange={()=>setReviewList(reviewList.map(r=>r.id===item.id?{...r,selected:!r.selected}:r))} /></td>
                             <td className="p-1.5 md:p-3">{item.name}<div className="text-slate-400">{formatDateFr(item.startDate)}</div></td>
                             <td className="p-1.5 md:p-3 uppercase">{item.propertyName}</td>
-                            <td className="p-1.5 md:p-3 uppercase">
-                              {!item.hasProperty ? <span className="text-rose-600 flex items-center gap-1"><AlertTriangle size={10}/> Logement Inconnu</span> : item.isDuplicate ? <span className="text-orange-600 flex items-center gap-1"><AlertTriangle size={10}/> Doublon</span> : <span className="text-emerald-600 flex items-center gap-1"><Check size={10}/> Nouveau</span>}
-                            </td>
+                            <td className="p-1.5 md:p-3 uppercase">{!item.hasProperty ? <span className="text-rose-600 flex items-center gap-1"><AlertTriangle size={10}/> Logement Inconnu</span> : item.isDuplicate ? <span className="text-orange-600 flex items-center gap-1"><AlertTriangle size={10}/> Doublon</span> : <span className="text-emerald-600 flex items-center gap-1"><Check size={10}/> Nouveau</span>}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1685,19 +1419,71 @@ const App = () => {
                 )}
                 
                 <div className="flex gap-4 w-full mt-8">
-                  {reviewList.length === 0 ? (
-                    <button onClick={startReview} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase shadow-xl hover:bg-blue-600 transition-colors">Analyser le texte</button>
-                  ) : (
-                    <button onClick={confirmImport} disabled={reviewList.filter(r=>r.selected).length === 0} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase shadow-xl hover:bg-emerald-600 transition-colors disabled:opacity-50">Importer ({reviewList.filter(r=>r.selected).length})</button>
-                  )}
+                  {reviewList.length === 0 ? (<button onClick={startReview} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase shadow-xl hover:bg-blue-600 transition-colors">Analyser le texte</button>) : (<button onClick={confirmImport} disabled={reviewList.filter(r=>r.selected).length === 0} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase shadow-xl hover:bg-emerald-600 transition-colors disabled:opacity-50">Importer ({reviewList.filter(r=>r.selected).length})</button>)}
                 </div>
               </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
-                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full"><h3 className="text-[10px] font-black uppercase text-slate-400 mb-4">Plateformes</h3><div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">{(availablePlatforms || []).map(p=>(<div key={p} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl"><span>{p}</span><button onClick={()=>{const n = availablePlatforms.filter(x=>x!==p); setAvailablePlatforms(n); updateSettings({platforms:n})}} className="text-slate-300 hover:text-rose-500"><X size={14}/></button></div>))}</div><form onSubmit={(e)=>{e.preventDefault(); if(inputPlat.trim()){const n = [...availablePlatforms, inputPlat.trim()]; setAvailablePlatforms(n); updateSettings({platforms:n}); setInputPlat('')}}} className="flex gap-2"><input value={inputPlat} onChange={e=>setInputPlat(e.target.value)} className="flex-1 p-2 bg-slate-50 border rounded-xl text-[10px]" /><button className="bg-slate-900 text-white p-2 rounded-xl">+</button></form></div>
-                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full"><h3 className="text-[10px] font-black uppercase text-slate-400 mb-4">Prestataires</h3><div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">{(availableProviders || []).map(p=>(<div key={p} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl"><span>{p}</span><button onClick={()=>{const n = availableProviders.filter(x=>x!==p); setAvailableProviders(n); updateSettings({providers:n})}} className="text-slate-300 hover:text-rose-500"><X size={14}/></button></div>))}</div><form onSubmit={(e)=>{e.preventDefault(); if(inputProv.trim()){const n = [...availableProviders, inputProv.trim()]; setAvailableProviders(n); updateSettings({providers:n}); setInputProv('')}}} className="flex gap-2"><input value={inputProv} onChange={e=>setInputProv(e.target.value)} className="flex-1 p-2 bg-slate-50 border rounded-xl text-[10px]" /><button className="bg-slate-900 text-white p-2 rounded-xl">+</button></form></div>
-                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full"><h3 className="text-[10px] font-black uppercase text-slate-400 mb-4">Services</h3><div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">{(availableServiceTypes || []).map(p=>(<div key={p} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl"><span>{p}</span><button onClick={()=>{const n = availableServiceTypes.filter(x=>x!==p); setAvailableServiceTypes(n); updateSettings({services:n})}} className="text-slate-300 hover:text-rose-500"><X size={14}/></button></div>))}</div><form onSubmit={(e)=>{e.preventDefault(); if(inputSvc.trim()){const n = [...availableServiceTypes, inputSvc.trim()]; setAvailableServiceTypes(n); updateSettings({services:n}); setInputSvc('')}}} className="flex gap-2"><input value={inputSvc} onChange={e=>setInputSvc(e.target.value)} className="flex-1 p-2 bg-slate-50 border rounded-xl text-[10px]" /><button className="bg-slate-900 text-white p-2 rounded-xl">+</button></form></div>
-                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full border-2 border-blue-50"><h3 className="text-[10px] font-black uppercase text-blue-600 mb-4">Logements</h3><div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">{(properties || []).map(p=>(<div key={p.id} className="flex justify-between items-center p-3 bg-blue-50 rounded-xl"><span>{p.name}</span><button onClick={async()=>{if(window.confirm('Supprimer ?'))await deleteDoc(doc(db,'artifacts',appId,'public', 'data', 'properties', p.id))}} className="text-slate-300 hover:text-rose-500"><Trash2 size={14}/></button></div>))}</div><form onSubmit={async(e)=>{e.preventDefault(); if(inputProp.name.trim()){await addDoc(collection(db,'artifacts',appId,'public','data','properties'),{name:inputProp.name.trim(),address:inputProp.address.trim()}); setInputProp({name:'',address:''})}}} className="flex flex-col gap-2"><input required value={inputProp.name} onChange={e=>setInputProp({...inputProp,name:e.target.value})} className="p-3 bg-slate-50 rounded-xl text-[10px] outline-none" placeholder="Nom du bien" /><button type="submit" className="bg-blue-600 text-white p-3 rounded-xl font-black text-[10px] uppercase shadow-md">+ Ajouter</button></form></div>
+                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full">
+                  <h3 className="text-[10px] font-black uppercase text-slate-400 mb-4">Plateformes</h3>
+                  <div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">
+                     {(availablePlatforms || []).map(p=>(<div key={p} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl"><span>{p}</span><button onClick={()=>{const n = availablePlatforms.filter(x=>x!==p); setAvailablePlatforms(n); updateSettings({platforms:n})}} className="text-slate-300 hover:text-rose-500"><X size={14}/></button></div>))}
+                  </div>
+                  <form onSubmit={(e)=>{e.preventDefault(); if(inputPlat.trim()){const n = [...availablePlatforms, inputPlat.trim()]; setAvailablePlatforms(n); updateSettings({platforms:n}); setInputPlat('')}}} className="flex gap-2">
+                     <input value={inputPlat} onChange={e=>setInputPlat(e.target.value)} className="flex-1 p-2 bg-slate-50 border rounded-xl text-[10px]" /><button className="bg-slate-900 text-white p-2 rounded-xl">+</button>
+                  </form>
+                </div>
+                
+                {/* --- NOUVEAU BLOC : PRESTATAIRES AVEC EMAIL --- */}
+                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full border-2 border-blue-50">
+                  <h3 className="text-[10px] font-black uppercase text-blue-600 mb-4">Prestataires (Emails)</h3>
+                  <div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">
+                     {(availableProviders || []).map(p=>(
+                         <div key={p} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100">
+                             <div>
+                                <span className="block">{p}</span>
+                                {providerEmails[p] && <span className="text-[8px] normal-case text-slate-400 block mt-0.5"><Mail size={8} className="inline mr-1"/>{providerEmails[p]}</span>}
+                             </div>
+                             <button onClick={()=>{
+                                 const n = availableProviders.filter(x=>x!==p);
+                                 setAvailableProviders(n);
+                                 const newEmails = {...providerEmails};
+                                 delete newEmails[p];
+                                 setProviderEmails(newEmails);
+                                 updateSettings({providers:n, providerEmails: newEmails});
+                             }} className="text-slate-300 hover:text-rose-500"><Trash2 size={14}/></button>
+                         </div>
+                     ))}
+                  </div>
+                  <form onSubmit={(e)=>{
+                      e.preventDefault(); 
+                      if(inputProv.trim()){
+                         const n = [...availableProviders, inputProv.trim()]; 
+                         setAvailableProviders(n); 
+                         const newEmails = {...providerEmails};
+                         if (inputProvEmail.trim()) newEmails[inputProv.trim()] = inputProvEmail.trim();
+                         setProviderEmails(newEmails);
+                         updateSettings({providers:n, providerEmails: newEmails}); 
+                         setInputProv(''); setInputProvEmail('');
+                      }
+                  }} className="flex flex-col gap-2">
+                     <input value={inputProv} onChange={e=>setInputProv(e.target.value)} className="w-full p-2.5 bg-slate-50 border rounded-xl text-[10px]" placeholder="Nom (ex: Dias)" />
+                     <input type="email" value={inputProvEmail} onChange={e=>setInputProvEmail(e.target.value)} className="w-full p-2.5 bg-slate-50 border rounded-xl text-[10px]" placeholder="Email (facultatif)" />
+                     <button type="submit" className="bg-blue-600 text-white p-2.5 rounded-xl font-black text-[10px] uppercase">+ Ajouter</button>
+                  </form>
+                </div>
+
+                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full">
+                  <h3 className="text-[10px] font-black uppercase text-slate-400 mb-4">Services</h3>
+                  <div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">
+                     {(availableServiceTypes || []).map(p=>(<div key={p} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl"><span>{p}</span><button onClick={()=>{const n = availableServiceTypes.filter(x=>x!==p); setAvailableServiceTypes(n); updateSettings({services:n})}} className="text-slate-300 hover:text-rose-500"><X size={14}/></button></div>))}
+                  </div>
+                  <form onSubmit={(e)=>{e.preventDefault(); if(inputSvc.trim()){const n = [...availableServiceTypes, inputSvc.trim()]; setAvailableServiceTypes(n); updateSettings({services:n}); setInputSvc('')}}} className="flex gap-2">
+                     <input value={inputSvc} onChange={e=>setInputSvc(e.target.value)} className="flex-1 p-2 bg-slate-50 border rounded-xl text-[10px]" /><button className="bg-slate-900 text-white p-2 rounded-xl">+</button>
+                  </form>
+                </div>
+                
+                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full"><h3 className="text-[10px] font-black uppercase text-slate-400 mb-4">Logements</h3><div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">{(properties || []).map(p=>(<div key={p.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl"><span>{p.name}</span><button onClick={async()=>{if(window.confirm('Supprimer ?'))await deleteDoc(doc(db,'artifacts',appId,'public', 'data', 'properties', p.id))}} className="text-slate-300 hover:text-rose-500"><Trash2 size={14}/></button></div>))}</div><form onSubmit={async(e)=>{e.preventDefault(); if(inputProp.name.trim()){await addDoc(collection(db,'artifacts',appId,'public','data','properties'),{name:inputProp.name.trim(),address:inputProp.address.trim()}); setInputProp({name:'',address:''})}}} className="flex flex-col gap-2"><input required value={inputProp.name} onChange={e=>setInputProp({...inputProp,name:e.target.value})} className="p-3 bg-slate-50 rounded-xl text-[10px] outline-none" placeholder="Nom du bien" /><button type="submit" className="bg-slate-900 text-white p-3 rounded-xl font-black text-[10px] uppercase shadow-md">+ Ajouter</button></form></div>
               </div>
             </div>
           )}
@@ -1798,27 +1584,22 @@ const App = () => {
                     <span className="font-black text-lg text-emerald-400">{((parseFloat(formData.displayedAmount) || 0) - (parseFloat(formData.cityTax) || 0)).toFixed(2)}€</span>
                   </div>
                 )}
-
               </div>
               
               <div className="space-y-4">
                   <div className="flex justify-between font-black uppercase tracking-widest text-slate-400 text-[10px]">
                       Prestations
                       <button type="button" onClick={() => {
-                          const newExp = { id: Date.now().toString(), person: availableProviders[0] || '', type: availableServiceTypes[0] || '', amount: 0, paymentDate: '', hoursEntry: '', rateEntry: '', hoursExit: '', rateExit: '', dateEntry: formData.startDate || '', dateExit: formData.endDate || '' };
-                          
-                          // Si le prestataire par défaut est Dias, on pré-calcule tout de suite
+                          const newExp = { id: Date.now().toString(), person: availableProviders[0] || '', type: availableServiceTypes[0] || '', amount: 0, paymentDate: '', hoursEntry: '', rateEntry: '', hoursExit: '', rateExit: '', dateEntry: formData.startDate || '', dateExit: formData.endDate || '', sendEmail: true };
                           if (newExp.person.toLowerCase().includes('dias')) {
                               newExp.rateEntry = isSundayOrHoliday(newExp.dateEntry) ? 25 : 15;
                               newExp.rateExit = isSundayOrHoliday(newExp.dateExit) ? 25 : 15;
                           }
-                          
                           setFormData({ ...formData, resExpenses: [...(formData.resExpenses || []), newExp] })
                       }} className="bg-slate-900 text-white px-4 py-2 rounded-xl">+ Ajouter</button>
                   </div>
                   
                   {(formData.resExpenses || []).map(exp => {
-                      // DETECTION AUTOMATIQUE DE DIAS
                       const isDias = exp.person && exp.person.toLowerCase().includes('dias');
 
                       if (isDias) {
@@ -1849,43 +1630,30 @@ const App = () => {
                                       <button type="button" onClick={() => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).filter(x => x.id !== exp.id) })} className="text-rose-500 font-black px-2 hover:scale-110 transition-transform"><Trash2 size={18}/></button>
                                   </div>
                                   
+                                  {/* --- OPTION EMAIL AGENDA --- */}
+                                  {providerEmails[exp.person] && (
+                                      <label className="flex items-center gap-2 cursor-pointer relative z-10 px-1">
+                                          <input type="checkbox" checked={exp.sendEmail !== false} onChange={e => updateDiasField(exp.id, 'sendEmail', e.target.checked)} className="w-3.5 h-3.5 accent-blue-600" />
+                                          <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1"><Mail size={12}/> Inviter à l'agenda ({providerEmails[exp.person]})</span>
+                                      </label>
+                                  )}
+
                                   {/* Milieu : Dates et Heures (Spécial DIAS) */}
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 relative z-10">
-                                      {/* Bloc Entrée */}
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 relative z-10 mt-1">
                                       <div className="bg-white p-3 rounded-[20px] border border-blue-100 shadow-sm space-y-2">
-                                          <div className="flex justify-between items-center">
-                                              <span className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Date d'Entrée</span>
-                                              {isSundayOrHoliday(exp.dateEntry) && <span className="text-[8px] font-black text-white bg-rose-500 px-2 py-0.5 rounded-full shadow-sm">Férié / Dim</span>}
-                                          </div>
+                                          <div className="flex justify-between items-center"><span className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Date d'Entrée</span>{isSundayOrHoliday(exp.dateEntry) && <span className="text-[8px] font-black text-white bg-rose-500 px-2 py-0.5 rounded-full shadow-sm">Férié / Dim</span>}</div>
                                           <input type="date" value={exp.dateEntry || ''} onChange={e => updateDiasField(exp.id, 'dateEntry', e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-600 outline-none cursor-pointer" />
                                           <div className="flex gap-2">
-                                              <div className="flex-1">
-                                                  <label className="text-[8px] uppercase text-slate-400 font-bold block mb-1">Heures (h)</label>
-                                                  <input type="number" step="0.5" value={exp.hoursEntry || ''} onChange={e => updateDiasField(exp.id, 'hoursEntry', e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl font-black text-center text-sm outline-none focus:border-blue-400" placeholder="0" />
-                                              </div>
-                                              <div className="flex-1">
-                                                  <label className="text-[8px] uppercase text-slate-400 font-bold block mb-1">Tarif Hor. (€)</label>
-                                                  <input type="number" step="0.5" value={exp.rateEntry || ''} onChange={e => updateDiasField(exp.id, 'rateEntry', e.target.value)} className={`w-full p-2.5 border rounded-xl font-black text-center text-sm outline-none focus:border-blue-400 transition-colors ${isSundayOrHoliday(exp.dateEntry) ? 'bg-rose-50 border-rose-200 text-rose-700' : 'border-slate-200 text-slate-900'}`} placeholder="0" />
-                                              </div>
+                                              <div className="flex-1"><label className="text-[8px] uppercase text-slate-400 font-bold block mb-1">Heures (h)</label><input type="number" step="0.5" value={exp.hoursEntry || ''} onChange={e => updateDiasField(exp.id, 'hoursEntry', e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl font-black text-center text-sm outline-none focus:border-blue-400" placeholder="0" /></div>
+                                              <div className="flex-1"><label className="text-[8px] uppercase text-slate-400 font-bold block mb-1">Tarif Hor. (€)</label><input type="number" step="0.5" value={exp.rateEntry || ''} onChange={e => updateDiasField(exp.id, 'rateEntry', e.target.value)} className={`w-full p-2.5 border rounded-xl font-black text-center text-sm outline-none focus:border-blue-400 transition-colors ${isSundayOrHoliday(exp.dateEntry) ? 'bg-rose-50 border-rose-200 text-rose-700' : 'border-slate-200 text-slate-900'}`} placeholder="0" /></div>
                                           </div>
                                       </div>
-                                      
-                                      {/* Bloc Sortie */}
                                       <div className="bg-white p-3 rounded-[20px] border border-blue-100 shadow-sm space-y-2">
-                                          <div className="flex justify-between items-center">
-                                              <span className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Date de Sortie</span>
-                                              {isSundayOrHoliday(exp.dateExit) && <span className="text-[8px] font-black text-white bg-rose-500 px-2 py-0.5 rounded-full shadow-sm">Férié / Dim</span>}
-                                          </div>
+                                          <div className="flex justify-between items-center"><span className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Date de Sortie</span>{isSundayOrHoliday(exp.dateExit) && <span className="text-[8px] font-black text-white bg-rose-500 px-2 py-0.5 rounded-full shadow-sm">Férié / Dim</span>}</div>
                                           <input type="date" value={exp.dateExit || ''} onChange={e => updateDiasField(exp.id, 'dateExit', e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-600 outline-none cursor-pointer" />
                                           <div className="flex gap-2">
-                                              <div className="flex-1">
-                                                  <label className="text-[8px] uppercase text-slate-400 font-bold block mb-1">Heures (h)</label>
-                                                  <input type="number" step="0.5" value={exp.hoursExit || ''} onChange={e => updateDiasField(exp.id, 'hoursExit', e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl font-black text-center text-sm outline-none focus:border-blue-400" placeholder="0" />
-                                              </div>
-                                              <div className="flex-1">
-                                                  <label className="text-[8px] uppercase text-slate-400 font-bold block mb-1">Tarif Hor. (€)</label>
-                                                  <input type="number" step="0.5" value={exp.rateExit || ''} onChange={e => updateDiasField(exp.id, 'rateExit', e.target.value)} className={`w-full p-2.5 border rounded-xl font-black text-center text-sm outline-none focus:border-blue-400 transition-colors ${isSundayOrHoliday(exp.dateExit) ? 'bg-rose-50 border-rose-200 text-rose-700' : 'border-slate-200 text-slate-900'}`} placeholder="0" />
-                                              </div>
+                                              <div className="flex-1"><label className="text-[8px] uppercase text-slate-400 font-bold block mb-1">Heures (h)</label><input type="number" step="0.5" value={exp.hoursExit || ''} onChange={e => updateDiasField(exp.id, 'hoursExit', e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl font-black text-center text-sm outline-none focus:border-blue-400" placeholder="0" /></div>
+                                              <div className="flex-1"><label className="text-[8px] uppercase text-slate-400 font-bold block mb-1">Tarif Hor. (€)</label><input type="number" step="0.5" value={exp.rateExit || ''} onChange={e => updateDiasField(exp.id, 'rateExit', e.target.value)} className={`w-full p-2.5 border rounded-xl font-black text-center text-sm outline-none focus:border-blue-400 transition-colors ${isSundayOrHoliday(exp.dateExit) ? 'bg-rose-50 border-rose-200 text-rose-700' : 'border-slate-200 text-slate-900'}`} placeholder="0" /></div>
                                           </div>
                                       </div>
                                   </div>
@@ -1901,27 +1669,41 @@ const App = () => {
 
                       // LIGNE CLASSIQUE POUR LES AUTRES PRESTATAIRES
                       return (
-                          <div key={exp.id} className="flex gap-2 bg-slate-50 p-4 rounded-[28px] border border-slate-100 items-center">
-                              <select value={exp.person || ''} onChange={e => {
-                                  const val = e.target.value;
-                                  setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => {
-                                      if (x.id === exp.id) {
-                                          const isDiasNow = val.toLowerCase().includes('dias');
-                                          if (isDiasNow) {
-                                              const rE = isSundayOrHoliday(x.dateEntry) ? 25 : 15;
-                                              const rX = isSundayOrHoliday(x.dateExit) ? 25 : 15;
-                                              const he = parseFloat(x.hoursEntry) || 0;
-                                              const hs = parseFloat(x.hoursExit) || 0;
-                                              return { ...x, person: val, rateEntry: rE, rateExit: rX, amount: (he * rE) + (hs * rX) };
+                          <div key={exp.id} className="flex flex-col gap-2 bg-slate-50 p-4 rounded-[28px] border border-slate-100">
+                              <div className="flex gap-2 items-center">
+                                  <select value={exp.person || ''} onChange={e => {
+                                      const val = e.target.value;
+                                      setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => {
+                                          if (x.id === exp.id) {
+                                              const isDiasNow = val.toLowerCase().includes('dias');
+                                              if (isDiasNow) {
+                                                  const rE = isSundayOrHoliday(x.dateEntry) ? 25 : 15;
+                                                  const rX = isSundayOrHoliday(x.dateExit) ? 25 : 15;
+                                                  const he = parseFloat(x.hoursEntry) || 0;
+                                                  const hs = parseFloat(x.hoursExit) || 0;
+                                                  return { ...x, person: val, rateEntry: rE, rateExit: rX, amount: (he * rE) + (hs * rX) };
+                                              }
+                                              return { ...x, person: val };
                                           }
-                                          return { ...x, person: val };
-                                      }
-                                      return x;
-                                  })});
-                              }} className="flex-1 p-3 border rounded-xl font-black uppercase text-[10px] outline-none">{(availableProviders || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
-                              <select value={exp.type || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, type: e.target.value } : x) })} className="flex-1 p-3 border rounded-xl font-black uppercase text-[10px] outline-none">{(availableServiceTypes || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
-                              <input type="number" value={exp.amount || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, amount: e.target.value } : x) })} className="w-20 p-3 border rounded-xl font-black text-right outline-none" />
-                              <button type="button" onClick={() => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).filter(x => x.id !== exp.id) })} className="text-rose-500 font-black px-2"><Trash2 size={18}/></button>
+                                          return x;
+                                      })});
+                                  }} className="flex-1 p-3 border rounded-xl font-black uppercase text-[10px] outline-none">{(availableProviders || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
+                                  <select value={exp.type || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, type: e.target.value } : x) })} className="flex-1 p-3 border rounded-xl font-black uppercase text-[10px] outline-none">{(availableServiceTypes || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
+                                  <input type="number" value={exp.amount || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, amount: e.target.value } : x) })} className="w-20 p-3 border rounded-xl font-black text-right outline-none" />
+                                  <button type="button" onClick={() => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).filter(x => x.id !== exp.id) })} className="text-rose-500 font-black px-2"><Trash2 size={18}/></button>
+                              </div>
+                              {/* --- OPTION EMAIL AGENDA POUR LES AUTRES --- */}
+                              {providerEmails[exp.person] && (
+                                  <label className="flex items-center gap-2 cursor-pointer pl-1 mt-1">
+                                      <input type="checkbox" checked={exp.sendEmail !== false} onChange={e => {
+                                          setFormData(prev => ({
+                                              ...prev,
+                                              resExpenses: prev.resExpenses.map(x => x.id === exp.id ? { ...x, sendEmail: e.target.checked } : x)
+                                          }));
+                                      }} className="w-3.5 h-3.5 accent-slate-600" />
+                                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1"><Mail size={12}/> Inviter à l'agenda ({providerEmails[exp.person]})</span>
+                                  </label>
+                              )}
                           </div>
                       );
                   })}
@@ -1941,9 +1723,7 @@ const App = () => {
                  <div className="text-center md:text-left leading-none">
                      <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Net Estimé</p>
                      <p className="text-4xl font-black text-blue-400 tracking-tighter">
-                       {formData.platform === 'En direct' 
-                         ? (parseFloat(formData?.grossAmount) || 0).toFixed(2)
-                         : (nModale - curChargesModale).toFixed(2)}€
+                       {formData.platform === 'En direct' ? (parseFloat(formData?.grossAmount) || 0).toFixed(2) : (nModale - curChargesModale).toFixed(2)}€
                      </p>
                  </div>
                  <div className="flex items-center gap-4 w-full md:w-auto">
