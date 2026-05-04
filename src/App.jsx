@@ -199,6 +199,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
                       }
                       if (metric === 'net' && tax > 0) processItem(expectedDate, -tax, true);
                   }
+
               } else {
                   if (t.paymentDate) {
                       processItem(t.paymentDate, metric === 'gross' ? g : n, false);
@@ -550,7 +551,7 @@ const App = () => {
     runInjection();
   }, [user, loading, properties, tenants, db]);
 
-  // 3. MEMOIZATION (CALCULS) -> TOUT EST MAINTENANT ICI EN HAUT !
+  // 3. MEMOIZATION (CALCULS)
   const baseTenants = useMemo(() => {
     return (tenants || []).filter(t => 
        (filterProp === 'all' || t.propertyId === filterProp) &&
@@ -712,7 +713,6 @@ const App = () => {
     return days;
   }, [filterYear, filterMonth]);
 
-  // LE FAMEUX CALCUL DES ANNÉES, DÉFINI BIEN AU DESSUS DU RETURN !
   const yearsAvailable = useMemo(() => {
     const years = new Set([new Date().getFullYear()]);
     tenants.forEach(t => {
@@ -724,6 +724,32 @@ const App = () => {
     return Array.from(years).filter(y => !isNaN(y)).sort((a, b) => b - a).map(String);
   }, [tenants]);
 
+
+  // 4. FONCTIONS DE SCROLL ET TOUCH (LES VOICI DE RETOUR !)
+  const scrollToCurrentRes = (withFlash = false) => {
+    if (reservationsList.length === 0) return;
+    
+    let targetRes = reservationsList.find(t => t.startDate >= todayStr || (t.endDate && t.endDate >= todayStr));
+    if (!targetRes) targetRes = reservationsList[reservationsList.length - 1];
+
+    if (targetRes) {
+        const els = document.querySelectorAll(`[data-res-id="${targetRes.id}"]`);
+        for (let el of els) {
+            if (el.offsetParent !== null) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                if (withFlash) {
+                    const originalBg = el.style.backgroundColor;
+                    el.style.backgroundColor = '#FEF9C3';
+                    el.style.transition = 'background-color 0.8s ease';
+                    setTimeout(() => { el.style.backgroundColor = originalBg; }, 2500);
+                }
+                break;
+            }
+        }
+    }
+  };
+
   useEffect(() => {
     if (activeTab !== 'reservations') { setHasScrolledToNext(false); return; }
     if (hasScrolledToNext || reservationsList.length === 0) return;
@@ -731,8 +757,55 @@ const App = () => {
     return () => clearTimeout(timer);
   }, [activeTab, reservationsList, hasScrolledToNext, todayStr]);
 
+  const onTouchStart = (e) => {
+    if (e.touches && e.touches.length > 1) {
+       touchStartX.current = null;
+       touchStartY.current = null;
+       return;
+    }
+    if (e.target.closest('.no-swipe')) {
+      touchStartX.current = null;
+      touchStartY.current = null;
+      return;
+    }
+    touchStartX.current = e.targetTouches[0].clientX;
+    touchStartY.current = e.targetTouches[0].clientY;
+  };
 
-  // 4. FONCTIONS DE GESTION
+  const onTouchMove = (e) => {
+    if (e.touches && e.touches.length > 1) {
+       touchStartX.current = null;
+       touchStartY.current = null;
+       return;
+    }
+  };
+
+  const onTouchEnd = (e) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const endX = e.changedTouches[0].clientX;
+    const endY = e.changedTouches[0].clientY;
+    const distanceX = touchStartX.current - endX;
+    const distanceY = touchStartY.current - endY;
+    
+    if (Math.abs(distanceY) > 50) return;
+    
+    const isLeftSwipe = distanceX > 60;
+    const isRightSwipe = distanceX < -60;
+    const currentIndex = TABS_ORDER.indexOf(activeTab);
+    
+    if (isLeftSwipe && currentIndex < TABS_ORDER.length - 1) {
+      setActiveTab(TABS_ORDER[currentIndex + 1]);
+    }
+    if (isRightSwipe && currentIndex > 0) {
+      setActiveTab(TABS_ORDER[currentIndex - 1]);
+    }
+    
+    touchStartX.current = null;
+    touchStartY.current = null;
+  };
+
+
+  // 5. FONCTIONS OUTILS ET LOGIQUE METIER
   const formatMonthYear = (m) => {
     if (!m) return "";
     const [year, month] = m.split('-');
@@ -747,7 +820,6 @@ const App = () => {
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
   };
 
-  // --- GOOGLE AGENDA AVEC EMAILS AUTO ---
   const getGoogleCalendarUrl = (res, prop) => {
     if (!res.startDate || !res.endDate) return '#';
     const text = encodeURIComponent(`Réservation : ${res.name} - ${prop?.name || ''}`);
@@ -757,7 +829,6 @@ const App = () => {
 
     if (res.resExpenses && res.resExpenses.length > 0) {
        expensesText = '\n\nPrestations prévues :\n' + res.resExpenses.map(e => {
-           // Ajout de l'email si case cochée
            if (e.sendEmail !== false && providerEmails[e.person]) {
                guestEmails.push(providerEmails[e.person]);
            }
@@ -783,7 +854,6 @@ const App = () => {
     
     let url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${details}`;
     
-    // Ajout magique des emails
     if (guestEmails.length > 0) {
         const uniqueEmails = [...new Set(guestEmails)];
         const emailsParam = uniqueEmails.map(email => `add=${encodeURIComponent(email)}`).join('&');
@@ -1055,6 +1125,29 @@ const App = () => {
     }
   };
 
+  // NOUVEAU COMPOSANT : Filtres en mode "Sticky" (fixé en haut)
+  const RenderFilters = () => (
+    <div className="sticky top-0 z-30 bg-[#F8FAFC]/95 backdrop-blur-md pt-2 pb-4 mb-2 md:-mx-4 md:px-4">
+      <div className="flex flex-wrap items-center gap-2 bg-white/80 p-3 rounded-[28px] border border-white shadow-lg mx-2 md:mx-0">
+        <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+          <Filter size={12} className="text-slate-400" />
+          <select value={filterYear} onChange={e => {setFilterYear(e.target.value); setHasScrolledToNext(false);}} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer">
+            <option value="all">Toutes Années</option>{(yearsAvailable || []).map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+        <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+          <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Mois (Tous)</option>{['Janv','Févr','Mars','Avril','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'].map((m,i)=><option key={i} value={i}>{m}</option>)}</select>
+        </div>
+        <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+          <select value={filterProp} onChange={e => setFilterProp(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none max-w-[100px] md:max-w-[130px] cursor-pointer"><option value="all">Logements</option>{(properties || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+        </div>
+        <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+          <select value={filterPlat} onChange={e => setFilterPlat(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Plateformes</option>{(availablePlatforms || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
+        </div>
+      </div>
+    </div>
+  );
+
   if (!isUnlocked) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-4 font-sans relative overflow-hidden">
@@ -1156,26 +1249,7 @@ const App = () => {
 
         <div className="max-w-7xl mx-auto pb-32">
           
-          {/* BARRE DES FILTRES INCLUSE DIRECTEMENT ICI */}
-          <div className="sticky top-0 z-30 bg-[#F8FAFC]/95 backdrop-blur-md pt-2 pb-4 mb-2 md:-mx-4 md:px-4">
-            <div className="flex flex-wrap items-center gap-2 bg-white/80 p-3 rounded-[28px] border border-white shadow-lg mx-2 md:mx-0">
-              <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-                <Filter size={12} className="text-slate-400" />
-                <select value={filterYear} onChange={e => {setFilterYear(e.target.value); setHasScrolledToNext(false);}} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer">
-                  <option value="all">Toutes Années</option>{(yearsAvailable || []).map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
-              </div>
-              <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-                <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Mois (Tous)</option>{['Janv','Févr','Mars','Avril','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'].map((m,i)=><option key={i} value={i}>{m}</option>)}</select>
-              </div>
-              <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-                <select value={filterProp} onChange={e => setFilterProp(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none max-w-[100px] md:max-w-[130px] cursor-pointer"><option value="all">Logements</option>{(properties || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
-              </div>
-              <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-                <select value={filterPlat} onChange={e => setFilterPlat(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Plateformes</option>{(availablePlatforms || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
-              </div>
-            </div>
-          </div>
+          <RenderFilters />
 
           {activeTab === 'reservations' && (
             <div className="space-y-8 animate-in fade-in">
@@ -1483,7 +1557,7 @@ const App = () => {
                   </form>
                 </div>
                 
-                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full"><h3 className="text-[10px] font-black uppercase text-slate-400 mb-4">Logements</h3><div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">{(properties || []).map(p=>(<div key={p.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl"><span>{p.name}</span><button onClick={async()=>{if(window.confirm('Supprimer ?'))await deleteDoc(doc(db,'artifacts',appId,'public', 'data', 'properties', p.id))}} className="text-slate-300 hover:text-rose-500"><Trash2 size={14}/></button></div>))}</div><form onSubmit={async(e)=>{e.preventDefault(); if(inputProp.name.trim()){await addDoc(collection(db,'artifacts',appId,'public','data','properties'),{name:inputProp.name.trim(),address:inputProp.address.trim()}); setInputProp({name:'',address:''})}}} className="flex flex-col gap-2"><input required value={inputProp.name} onChange={e=>setInputProp({...inputProp,name:e.target.value})} className="p-3 bg-slate-50 rounded-xl text-[10px] outline-none" placeholder="Nom du bien" /><button type="submit" className="bg-slate-900 text-white p-3 rounded-xl font-black text-[10px] uppercase shadow-md">+ Ajouter</button></form></div>
+                <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full border-2 border-blue-50"><h3 className="text-[10px] font-black uppercase text-blue-600 mb-4">Logements</h3><div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">{(properties || []).map(p=>(<div key={p.id} className="flex justify-between items-center p-3 bg-blue-50 rounded-xl"><span>{p.name}</span><button onClick={async()=>{if(window.confirm('Supprimer ?'))await deleteDoc(doc(db,'artifacts',appId,'public', 'data', 'properties', p.id))}} className="text-slate-300 hover:text-rose-500"><Trash2 size={14}/></button></div>))}</div><form onSubmit={async(e)=>{e.preventDefault(); if(inputProp.name.trim()){await addDoc(collection(db,'artifacts',appId,'public','data','properties'),{name:inputProp.name.trim(),address:inputProp.address.trim()}); setInputProp({name:'',address:''})}}} className="flex flex-col gap-2"><input required value={inputProp.name} onChange={e=>setInputProp({...inputProp,name:e.target.value})} className="p-3 bg-slate-50 rounded-xl text-[10px] outline-none" placeholder="Nom du bien" /><button type="submit" className="bg-slate-900 text-white p-3 rounded-xl font-black text-[10px] uppercase shadow-md">+ Ajouter</button></form></div>
               </div>
             </div>
           )}
