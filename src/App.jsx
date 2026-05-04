@@ -1345,8 +1345,11 @@ const App = () => {
                     <div key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className={`${colors.bg} p-3 rounded-[16px] shadow-sm border border-slate-50 cursor-pointer transition-colors`}>
                       <div className="flex justify-between items-start mb-1.5">
                         <div>
-                          <h3 className="text-xs font-black uppercase leading-tight">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</h3>
-                          <div className="flex gap-1.5 text-[8px] text-slate-400 mt-0.5 leading-tight"><span>{t.platform}</span><span>{t.name}</span></div>
+                          <h3 className="text-sm font-black uppercase leading-tight">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</h3>
+                          <div className="flex items-center gap-1.5 mt-1 leading-tight">
+                              <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{t.platform}</span>
+                              <span className="text-[11px] font-black text-slate-700">{t.name}</span>
+                          </div>
                         </div>
                         <div className="flex flex-col items-end">
                           <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>
@@ -1363,7 +1366,7 @@ const App = () => {
                       
                       {/* LIGNE DES COMMENTAIRES / NOTES (S'IL Y EN A) */}
                       {t.comment && (
-                        <div className="text-[8px] italic text-slate-600 mb-1.5 px-1 leading-tight line-clamp-2">
+                        <div className="text-[9px] italic text-slate-600 mb-1.5 px-1 leading-tight line-clamp-2">
                           📝 {t.comment}
                         </div>
                       )}
@@ -1387,19 +1390,19 @@ const App = () => {
                 </div>
               </div>
 
-              {/* VUE ORDINATEUR : Liste déroulante indépendante avec colonnes "Notes" */}
+              {/* VUE ORDINATEUR : Liste déroulante avec colonnes forcées et colonne Notes ajoutée */}
               <div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden border border-slate-100">
                 <div className="max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain relative touch-manipulation" style={{ touchAction: 'manipulation' }}>
                     <table className="w-full text-left text-xs">
                     <thead className="bg-slate-50 font-black uppercase border-b text-slate-400 sticky top-0 z-20 shadow-sm">
                         <tr>
-                            <th className="p-6">Logement</th>
-                            <th className="p-6">Client</th>
-                            <th className="p-6 text-center">Dates</th>
-                            <th className="p-6">Notes</th>
-                            <th className="p-6">Prestations</th>
-                            <th className="p-6 text-right">Net</th>
-                            <th className="p-6 text-center">État</th>
+                            <th className="p-4 w-[15%]">Logement</th>
+                            <th className="p-4 w-[15%]">Client</th>
+                            <th className="p-4 w-[12%] text-center">Dates</th>
+                            <th className="p-4 w-[25%]">Notes</th>
+                            <th className="p-4 w-[18%]">Prestations</th>
+                            <th className="p-4 text-right">Net</th>
+                            <th className="p-4 text-center">État</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 font-bold">
@@ -1422,16 +1425,25 @@ const App = () => {
                         
                         return (
                         <tr key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className={`${colors.bg} ${colors.hover} cursor-pointer transition-colors`}>
-                            <td className="p-6 uppercase">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}<div className="text-blue-600 text-[10px]">{t.platform}</div></td>
-                            <td className="p-6">
-                            <div>{t.name}</div>
-                            {t.phone && <div className="text-slate-400 text-[9px] mt-0.5">{t.phone}</div>}
+                            <td className="p-4 uppercase">
+                                <div className="font-black">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</div>
+                                <div className="text-blue-600 text-xs font-black tracking-widest mt-0.5">{t.platform}</div>
                             </td>
-                            <td className="p-6 text-center text-slate-500">{formatDateFr(t.startDate)} ➔ {formatDateFr(t.endDate)}</td>
-                            <td className="p-6 text-[10px] text-slate-500 italic max-w-[150px] overflow-hidden text-ellipsis whitespace-nowrap" title={t.comment}>
-                               {t.comment ? `📝 ${t.comment}` : ''}
+                            <td className="p-4">
+                                <div className="text-sm font-black">{t.name}</div>
+                                {t.phone && <div className="text-slate-400 text-[10px] mt-0.5">{t.phone}</div>}
                             </td>
-                            <td className="p-6">
+                            <td className="p-4 text-center text-slate-500 whitespace-nowrap">
+                                {formatDateFr(t.startDate)} <ArrowRight size={10} className="inline text-slate-300" /> {formatDateFr(t.endDate)}
+                            </td>
+                            <td className="p-4 text-[11px] text-slate-600 font-medium">
+                                {t.comment ? (
+                                    <div className="bg-slate-50/50 p-2 rounded-xl border border-slate-100/50 italic line-clamp-2" title={t.comment}>
+                                        📝 {t.comment}
+                                    </div>
+                                ) : ''}
+                            </td>
+                            <td className="p-4">
                             <div className="space-y-1.5">
                                 {(t.resExpenses || []).map((exp, idx) => (
                                     <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-white/50 p-1.5 rounded-lg border border-slate-100/50 cursor-pointer hover:border-blue-300 hover:bg-white hover:shadow-sm transition-all">
@@ -1447,8 +1459,8 @@ const App = () => {
                                 ))}
                             </div>
                             </td>
-                            <td className="p-6 text-right font-black">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</td>
-                            <td className="p-6 text-center">
+                            <td className="p-4 text-right font-black">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</td>
+                            <td className="p-4 text-center">
                             <div className="flex flex-col items-center">
                                 <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-4 py-2 rounded-full text-[9px] uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>
                                 {getStatusProps(t).label}
