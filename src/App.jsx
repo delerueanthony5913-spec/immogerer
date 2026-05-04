@@ -424,7 +424,6 @@ const App = () => {
     
     const details = encodeURIComponent(`Client : ${res.name}${phoneText}\nLogement : ${prop?.name || ''}\nPlateforme : ${res.platform}\nNotes : ${res.comment || ''}${expensesText}`);
     
-    // Correction Google Calendar : l'ajout d'une journée à la date de fin
     const endDateObj = new Date(res.endDate);
     endDateObj.setDate(endDateObj.getDate() + 1);
     const endYear = endDateObj.getFullYear();
@@ -640,7 +639,14 @@ const App = () => {
       acompte1Amount: a1,
       acompte2Amount: a2,
       soldeAmount: s,
-      resExpenses: (formData.resExpenses || []).map(r => ({ ...r, amount: parseFloat(r.amount) || 0 })) 
+      resExpenses: (formData.resExpenses || []).map(r => ({ 
+          ...r, 
+          amount: parseFloat(r.amount) || 0,
+          hoursEntry: parseFloat(r.hoursEntry) || 0,
+          rateEntry: parseFloat(r.rateEntry) || 0,
+          hoursExit: parseFloat(r.hoursExit) || 0,
+          rateExit: parseFloat(r.rateExit) || 0,
+      })) 
     };
     
     delete d.id;
@@ -710,6 +716,25 @@ const App = () => {
       }
       setQuickPayConfig(null);
     } catch (err) { alert("Erreur d'encaissement: " + err.message); }
+  };
+
+  // FONCTION DE CALCUL DYNAMIQUE POUR "DIAS NETTOYAGE"
+  const updateDiasField = (expId, field, value) => {
+    setFormData(prev => {
+        const newExpenses = (prev.resExpenses || []).map(x => {
+            if (x.id === expId) {
+                const updated = { ...x, [field]: value };
+                const he = parseFloat(updated.hoursEntry) || 0;
+                const re = parseFloat(updated.rateEntry) || 0;
+                const hs = parseFloat(updated.hoursExit) || 0;
+                const rs = parseFloat(updated.rateExit) || 0;
+                updated.amount = (he * re) + (hs * rs);
+                return updated;
+            }
+            return x;
+        });
+        return { ...prev, resExpenses: newExpenses };
+    });
   };
 
   const getRowColors = (propertyId) => {
@@ -1789,15 +1814,88 @@ const App = () => {
               </div>
               
               <div className="space-y-4">
-                  <div className="flex justify-between font-black uppercase tracking-widest text-slate-400 text-[10px]">Prestations<button type="button" onClick={() => setFormData({ ...formData, resExpenses: [...(formData.resExpenses || []), { id: Date.now().toString(), person: availableProviders[0] || '', type: availableServiceTypes[0] || '', amount: 0, paymentDate: '' }] })} className="bg-slate-900 text-white px-4 py-2 rounded-xl">+ Ajouter</button></div>
-                  {(formData.resExpenses || []).map(exp => (
-                    <div key={exp.id} className="flex gap-2 bg-slate-50 p-4 rounded-[28px] border border-slate-100 items-center">
-                      <select value={exp.person || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, person: e.target.value } : x) })} className="flex-1 p-3 border rounded-xl font-black uppercase text-[10px] outline-none">{(availableProviders || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
-                      <select value={exp.type || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, type: e.target.value } : x) })} className="flex-1 p-3 border rounded-xl font-black uppercase text-[10px] outline-none">{(availableServiceTypes || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
-                      <input type="number" value={exp.amount || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, amount: e.target.value } : x) })} className="w-20 p-3 border rounded-xl font-black text-right outline-none" />
-                      <button type="button" onClick={() => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).filter(x => x.id !== exp.id) })} className="text-rose-500 font-black px-2"><Trash2 size={18}/></button>
-                    </div>
-                  ))}
+                  <div className="flex justify-between font-black uppercase tracking-widest text-slate-400 text-[10px]">
+                      Prestations
+                      <button type="button" onClick={() => setFormData({ ...formData, resExpenses: [...(formData.resExpenses || []), { id: Date.now().toString(), person: availableProviders[0] || '', type: availableServiceTypes[0] || '', amount: 0, paymentDate: '', hoursEntry: '', rateEntry: '', hoursExit: '', rateExit: '', dateEntry: formData.startDate || '', dateExit: formData.endDate || '' }] })} className="bg-slate-900 text-white px-4 py-2 rounded-xl">+ Ajouter</button>
+                  </div>
+                  
+                  {(formData.resExpenses || []).map(exp => {
+                      // DETECTION AUTOMATIQUE DE DIAS
+                      const isDias = exp.person && exp.person.toLowerCase().includes('dias');
+
+                      if (isDias) {
+                          return (
+                              <div key={exp.id} className="flex flex-col gap-3 bg-blue-50/50 p-4 rounded-[28px] border border-blue-100 shadow-sm relative overflow-hidden">
+                                  {/* Haut : Sélecteurs de base */}
+                                  <div className="flex gap-2 items-center relative z-10">
+                                      <select value={exp.person || ''} onChange={e => {
+                                          const val = e.target.value;
+                                          setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, person: val } : x) })
+                                      }} className="flex-1 p-3 border border-blue-200 rounded-xl font-black uppercase text-[10px] outline-none bg-white">{(availableProviders || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
+                                      
+                                      <select value={exp.type || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, type: e.target.value } : x) })} className="flex-1 p-3 border border-blue-200 rounded-xl font-black uppercase text-[10px] outline-none bg-white">{(availableServiceTypes || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
+                                      
+                                      <button type="button" onClick={() => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).filter(x => x.id !== exp.id) })} className="text-rose-500 font-black px-2 hover:scale-110 transition-transform"><Trash2 size={18}/></button>
+                                  </div>
+                                  
+                                  {/* Milieu : Dates et Heures (Spécial DIAS) */}
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 relative z-10">
+                                      {/* Bloc Entrée */}
+                                      <div className="bg-white p-3 rounded-[20px] border border-blue-100 shadow-sm space-y-2">
+                                          <div className="flex justify-between items-center">
+                                              <span className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Date d'Entrée</span>
+                                          </div>
+                                          <input type="date" value={exp.dateEntry || ''} onChange={e => updateDiasField(exp.id, 'dateEntry', e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-600 outline-none cursor-pointer" />
+                                          <div className="flex gap-2">
+                                              <div className="flex-1">
+                                                  <label className="text-[8px] uppercase text-slate-400 font-bold block mb-1">Heures (h)</label>
+                                                  <input type="number" step="0.5" value={exp.hoursEntry || ''} onChange={e => updateDiasField(exp.id, 'hoursEntry', e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl font-black text-center text-sm outline-none focus:border-blue-400" placeholder="0" />
+                                              </div>
+                                              <div className="flex-1">
+                                                  <label className="text-[8px] uppercase text-slate-400 font-bold block mb-1">Tarif Hor. (€)</label>
+                                                  <input type="number" step="0.5" value={exp.rateEntry || ''} onChange={e => updateDiasField(exp.id, 'rateEntry', e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl font-black text-center text-sm outline-none focus:border-blue-400" placeholder="0" />
+                                              </div>
+                                          </div>
+                                      </div>
+                                      
+                                      {/* Bloc Sortie */}
+                                      <div className="bg-white p-3 rounded-[20px] border border-blue-100 shadow-sm space-y-2">
+                                          <div className="flex justify-between items-center">
+                                              <span className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Date de Sortie</span>
+                                          </div>
+                                          <input type="date" value={exp.dateExit || ''} onChange={e => updateDiasField(exp.id, 'dateExit', e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-600 outline-none cursor-pointer" />
+                                          <div className="flex gap-2">
+                                              <div className="flex-1">
+                                                  <label className="text-[8px] uppercase text-slate-400 font-bold block mb-1">Heures (h)</label>
+                                                  <input type="number" step="0.5" value={exp.hoursExit || ''} onChange={e => updateDiasField(exp.id, 'hoursExit', e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl font-black text-center text-sm outline-none focus:border-blue-400" placeholder="0" />
+                                              </div>
+                                              <div className="flex-1">
+                                                  <label className="text-[8px] uppercase text-slate-400 font-bold block mb-1">Tarif Hor. (€)</label>
+                                                  <input type="number" step="0.5" value={exp.rateExit || ''} onChange={e => updateDiasField(exp.id, 'rateExit', e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl font-black text-center text-sm outline-none focus:border-blue-400" placeholder="0" />
+                                              </div>
+                                          </div>
+                                      </div>
+                                  </div>
+
+                                  {/* Bas : Total calculé bloqué */}
+                                  <div className="flex justify-between items-center bg-blue-600 text-white p-4 rounded-[18px] shadow-sm relative z-10">
+                                      <span className="text-[10px] font-black uppercase tracking-widest text-blue-200">Total Automatique Bloqué</span>
+                                      <span className="font-black text-xl">{(parseFloat(exp.amount) || 0).toFixed(2)} €</span>
+                                  </div>
+                              </div>
+                          );
+                      }
+
+                      // LIGNE CLASSIQUE POUR LES AUTRES PRESTATAIRES
+                      return (
+                          <div key={exp.id} className="flex gap-2 bg-slate-50 p-4 rounded-[28px] border border-slate-100 items-center">
+                              <select value={exp.person || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, person: e.target.value } : x) })} className="flex-1 p-3 border rounded-xl font-black uppercase text-[10px] outline-none">{(availableProviders || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
+                              <select value={exp.type || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, type: e.target.value } : x) })} className="flex-1 p-3 border rounded-xl font-black uppercase text-[10px] outline-none">{(availableServiceTypes || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
+                              <input type="number" value={exp.amount || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, amount: e.target.value } : x) })} className="w-20 p-3 border rounded-xl font-black text-right outline-none" />
+                              <button type="button" onClick={() => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).filter(x => x.id !== exp.id) })} className="text-rose-500 font-black px-2"><Trash2 size={18}/></button>
+                          </div>
+                      );
+                  })}
               </div>
               
               {formData.platform !== 'En direct' && (
