@@ -261,12 +261,14 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
   return (
     <div className="w-full bg-white p-6 md:p-8 rounded-[48px] shadow-2xl border border-slate-50 animate-in fade-in relative mt-8">
       
+      {/* 1. SELECTION DU MODE */}
       <div className="flex bg-slate-100 p-1.5 rounded-[20px] w-max mb-6">
          <button onClick={()=>{setMode('years'); setContextProp('all'); setContextPlat('all');}} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${mode === 'years' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>📅 Années</button>
          <button onClick={()=>{setMode('properties'); setContextYear(currentYear); setContextPlat('all');}} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${mode === 'properties' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>🏠 Logements</button>
          <button onClick={()=>{setMode('platforms'); setContextYear(currentYear); setContextProp('all');}} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${mode === 'platforms' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>💻 Plateformes</button>
       </div>
 
+      {/* 2. BOUTONS DE SELECTION MULTIPLE + FILTRES */}
       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6 mb-8 bg-slate-50 p-4 md:p-6 rounded-3xl border border-slate-100">
          <div className="flex-1">
             <span className="text-[10px] font-black uppercase text-slate-400 mb-3 block">Que voulez-vous afficher ? (Cochez)</span>
@@ -305,12 +307,14 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
          </div>
       </div>
 
+      {/* 3. LE GRAPHIQUE */}
       {series.length === 0 ? (
           <div className="h-[300px] flex items-center justify-center text-slate-300 font-black uppercase text-xs">Cochez au moins une option pour voir le graphique</div>
       ) : (
           <div className="overflow-x-auto no-scrollbar">
             <div className="min-w-[600px] relative">
               <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
+                {/* Lignes de grille horizontales */}
                 {yTicks.map((tick, i) => (
                   <g key={`grid-${i}`}>
                     <line x1={padX} y1={getY(tick)} x2={w - padX} y2={getY(tick)} stroke="#F1F5F9" strokeWidth="2" />
@@ -318,21 +322,27 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
                   </g>
                 ))}
 
+                {/* Highlight vertical line pour le survol */}
                 {hoveredMonth !== null && (
                     <line x1={getX(hoveredMonth)} y1={padY} x2={getX(hoveredMonth)} y2={h - padY} stroke="#CBD5E1" strokeWidth="2" strokeDasharray="4 4" />
                 )}
                 
+                {/* Lignes de mois */}
                 {months.map((m, i) => (
                   <text key={m} x={getX(i)} y={h - 5} fill={hoveredMonth === i ? "#0F172A" : "#94A3B8"} fontSize="12" fontFamily="sans-serif" fontWeight="900" textAnchor="middle" className="transition-colors cursor-pointer" onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)}>{m}</text>
                 ))}
                 
+                {/* Tracer chaque courbe avec pointillé intelligent */}
                 {series.map((s, idx) => (
                    <g key={`series-${s.id}`}>
+                      {/* Ligne Pleine (Réel) */}
                       <path d={buildPath(s.data, 0, Math.max(0, s.splitIndex))} stroke={s.color} strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />
+                      {/* Ligne Pointillée (Prévisionnel) */}
                       <path d={buildPath(s.data, Math.max(0, s.splitIndex), 11)} stroke={s.color} strokeWidth="4" fill="none" strokeDasharray="6 8" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />
                    </g>
                 ))}
 
+                {/* Tracer les points pour le hover */}
                 {months.map((_, i) => (
                   <g key={`points-${i}`} onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)} className="cursor-pointer">
                     <rect x={getX(i) - 20} y={0} width="40" height={h} fill="transparent" />
@@ -343,6 +353,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
                 ))}
               </svg>
 
+              {/* TOOLTIP INTERACTIF AU SURVOL */}
               {hoveredMonth !== null && series.length > 0 && (
                 <div 
                   className="absolute z-20 bg-slate-900/95 backdrop-blur-sm text-white p-4 rounded-2xl shadow-2xl pointer-events-none transition-all duration-200 min-w-[160px] border border-slate-700"
@@ -367,6 +378,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
           </div>
       )}
       
+      {/* 4. TOTAUX GLOBAUX */}
       {series.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
             {series.map(s => (
@@ -1201,7 +1213,6 @@ const App = () => {
             <div className="space-y-8 animate-in fade-in">
               <div className="flex justify-between items-center"><h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2><button onClick={() => { setEditingResId(null); setFormData({ propertyId: properties[0]?.id || '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '', acompte1Amount: '', acompte1Date: '', acompte2Amount: '', acompte2Date: '', soldeAmount: '', soldeDate: '' }); setIsModalOpen(true); }} className="bg-blue-600 text-white px-8 py-4 rounded-[24px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button></div>
               
-              {/* VUE MOBILE : Liste déroulante indépendante (overscroll-contain) */}
               <div className="md:hidden max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain p-1 rounded-[32px] border border-slate-100 bg-slate-50/50 shadow-inner">
                 <div className="grid grid-cols-1 gap-4">
                   {(reservationsList || []).map(t => (
@@ -1240,7 +1251,6 @@ const App = () => {
                 </div>
               </div>
 
-              {/* VUE ORDINATEUR : Liste déroulante indépendante (overscroll-contain) */}
               <div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden border border-slate-100">
                 <div className="max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain relative">
                     <table className="w-full text-left text-xs">
@@ -1294,7 +1304,7 @@ const App = () => {
           {activeTab === 'agenda' && (
             <div className="space-y-8 animate-in fade-in">
               <div className="flex justify-between items-center"><div><h2 className="text-2xl font-black uppercase">Agenda</h2></div><div className="flex items-center gap-4 bg-white px-4 py-2 rounded-2xl shadow-lg"><button onClick={()=>handleMonthChange('prev')}><ChevronLeft/></button><div className="text-center font-black min-w-[120px] uppercase text-xs">{['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][filterMonth==='all'?new Date().getMonth():parseInt(filterMonth)]}</div><button onClick={()=>handleMonthChange('next')}><ChevronRight/></button></div></div>
-              <div className="bg-white p-6 rounded-[40px] shadow-2xl overflow-x-auto"><div className="min-w-[700px]"><div className="grid grid-cols-7 text-center font-black text-slate-300 text-[10px] uppercase mb-4">{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d=><div key={d}>{d}</div>)}</div><div className="grid grid-cols-7 gap-2">{(agendaDays || []).map((item,idx)=>{ if(item.empty) return <div key={idx} className="h-24 bg-slate-50/30 rounded-2xl"></div>; const dayRes = (reservationsList || []).filter(r=>item.dateStr>=r.startDate && item.dateStr<=r.endDate); return (<div key={item.dateStr} className={`h-24 md:h-32 border rounded-2xl p-2 relative flex flex-col ${item.dateStr===todayStr?'border-blue-500 bg-blue-50/10':'border-slate-100'}`}><span className="text-[10px] font-black text-slate-300">{item.day}</span><div className="flex-1 space-y-1 overflow-y-auto no-scrollbar">{dayRes.map(r=>(<div key={r.id} onClick={(e)=>{e.stopPropagation();setEditingResId(r.id);setFormData(r);setIsModalOpen(true)}} className="text-[8px] font-black text-white p-1 rounded truncate cursor-pointer" style={{backgroundColor: CHART_COLORS[(properties || []).findIndex(p=>p.id===r.propertyId)%CHART_COLORS.length]}}>{r.name?.split(' ')[0]}</div>))}</div></div>);})}</div></div></div>
+              <div className="bg-white p-6 rounded-[40px] shadow-2xl overflow-x-auto"><div className="min-w-[700px]"><div className="grid grid-cols-7 text-center font-black text-slate-300 text-[10px] uppercase mb-4">{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d=><div key={d}>{d}</div>)}</div><div className="grid grid-cols-7 gap-2">{(agendaDays || []).map((item,idx)=>{ if(item.empty) return <div key={idx} className="h-24 bg-slate-50/30 rounded-2xl"></div>; const dayRes = (reservationsList || []).filter(r=>item.dateStr>=r.startDate && item.dateStr<=r.endDate); return (<div key={item.dateStr} className={`h-24 md:h-32 border rounded-2xl p-2 relative flex flex-col ${item.dateStr===todayStr?'border-blue-500 bg-blue-50/10':'border-slate-100'}`}><span className="text-[10px] font-black text-slate-300">{item.day}</span><div className="flex-1 space-y-1 overflow-y-auto no-scrollbar">{dayRes.map(r=>(<div key={r.id} onClick={(e)=>{e.stopPropagation();setEditingResId(r.id);setFormData(r);setIsModalOpen(true)}} className="text-[8px] font-black text-white p-1 rounded truncate cursor-pointer" style={{backgroundColor: CHART_COLORS[(properties || []).findIndex(p=>p.id===r.propertyId)%CHART_COLORS.length]}}>{r.name?.split(' ')[0] || 'Résa'}</div>))}</div></div>);})}</div></div></div>
             </div>
           )}
           
@@ -1368,11 +1378,13 @@ const App = () => {
           {activeTab === 'finances' && (
             <div className="space-y-10 animate-in fade-in">
               <h2 className="text-3xl font-black uppercase">Comptabilité</h2>
-              <div className="bg-white rounded-[40px] shadow-2xl overflow-hidden text-xs">
+              
+              {/* TABLEAU BILAN GLOBAL (Avec isolation overscroll et Sticky Footer/Header) */}
+              <div className="bg-white rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100">
                 <div className="p-8 bg-slate-900 text-white font-black uppercase flex justify-between items-center"><div>Bilan Global</div></div>
-                <div className="overflow-x-auto">
+                <div className="max-h-[60vh] overflow-y-auto custom-scrollbar overscroll-contain relative">
                   <table className="w-full text-left min-w-[700px]">
-                    <thead className="bg-slate-50 uppercase text-slate-400 border-b">
+                    <thead className="bg-slate-50 uppercase text-slate-400 border-b sticky top-0 z-10 shadow-sm">
                       <tr>
                         <th className="p-6">Période</th>
                         <th className="p-6 text-right">Brut URSSAF</th>
@@ -1401,7 +1413,7 @@ const App = () => {
                         </tr>
                       ))}
                     </tbody>
-                    <tfoot className="bg-indigo-600 text-white font-black text-lg">
+                    <tfoot className="bg-indigo-600 text-white font-black text-lg sticky bottom-0 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
                       <tr>
                         <td className="p-8 uppercase text-[10px]">TOTAL</td>
                         <td className="p-8 text-right opacity-90">
@@ -1425,7 +1437,28 @@ const App = () => {
                 </div>
               </div>
 
-              <div className="bg-white rounded-[40px] shadow-2xl overflow-hidden text-xs"><div className="p-8 bg-slate-900 text-white font-black uppercase flex justify-between">Suivi Prestataires</div><div className="overflow-x-auto"><table className="w-full text-left min-w-[700px]"><thead className="bg-slate-50 uppercase text-slate-400 border-b"><tr><th className="p-6">Date</th><th className="p-6">Logement</th><th className="p-6">Prestataire</th><th className="p-6 text-right">Montant</th><th className="p-6 text-center">Statut</th></tr></thead><tbody className="divide-y font-bold">{(detailedExpenses || []).map((exp) => (<tr key={exp.id}><td className="p-6">{formatDateFr(exp.dateRes)}</td><td className="p-6 uppercase">{exp.propertyName}</td><td className="p-6 text-blue-600 uppercase">{exp.person}</td><td className="p-6 text-right">{(exp.amount || 0).toLocaleString('fr-FR')}€</td><td className="p-6 text-center"><span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${exp.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>{exp.paymentDate ? 'Payé' : 'Attente'}</span></td></tr>))}</tbody></table></div></div>
+              {/* TABLEAU SUIVI PRESTATAIRES (Avec isolation overscroll et Sticky Header) */}
+              <div className="bg-white rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100">
+                <div className="p-8 bg-slate-900 text-white font-black uppercase flex justify-between">Suivi Prestataires</div>
+                <div className="max-h-[60vh] overflow-y-auto custom-scrollbar overscroll-contain relative">
+                    <table className="w-full text-left min-w-[700px]">
+                        <thead className="bg-slate-50 uppercase text-slate-400 border-b sticky top-0 z-10 shadow-sm">
+                            <tr><th className="p-6">Date</th><th className="p-6">Logement</th><th className="p-6">Prestataire</th><th className="p-6 text-right">Montant</th><th className="p-6 text-center">Statut</th></tr>
+                        </thead>
+                        <tbody className="divide-y font-bold">
+                            {(detailedExpenses || []).map((exp) => (
+                                <tr key={exp.id}>
+                                    <td className="p-6">{formatDateFr(exp.dateRes)}</td>
+                                    <td className="p-6 uppercase">{exp.propertyName}</td>
+                                    <td className="p-6 text-blue-600 uppercase">{exp.person}</td>
+                                    <td className="p-6 text-right">{(exp.amount || 0).toLocaleString('fr-FR')}€</td>
+                                    <td className="p-6 text-center"><span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${exp.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>{exp.paymentDate ? 'Payé' : 'Attente'}</span></td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1612,12 +1645,12 @@ const App = () => {
 
               <div className="bg-slate-900 p-8 rounded-[48px] text-white flex flex-col md:flex-row justify-between items-center gap-6">
                  <div className="text-center md:text-left leading-none">
-                    <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Net Estimé</p>
-                    <p className="text-4xl font-black text-blue-400 tracking-tighter">
-                      {formData.platform === 'En direct' 
-                        ? (parseFloat(formData?.grossAmount) || 0).toFixed(2)
-                        : (nModale - curChargesModale).toFixed(2)}€
-                    </p>
+                     <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Net Estimé</p>
+                     <p className="text-4xl font-black text-blue-400 tracking-tighter">
+                       {formData.platform === 'En direct' 
+                         ? (parseFloat(formData?.grossAmount) || 0).toFixed(2)
+                         : (nModale - curChargesModale).toFixed(2)}€
+                     </p>
                  </div>
                  <div className="flex items-center gap-4 w-full md:w-auto">
                    {editingResId && <button type="button" onClick={() => deleteRes(editingResId)} className="p-4 text-rose-500 bg-rose-50 rounded-[24px] hover:bg-rose-500 hover:text-white transition-colors"><Trash2 size={24}/></button>}
