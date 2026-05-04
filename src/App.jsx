@@ -30,6 +30,21 @@ const appId = 'immogerer-prod-final';
 
 const CHART_COLORS = ['#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#6366F1', '#F43F5E', '#06B6D4'];
 
+// --- COMPOSANT ICONE VILLA SUR-MESURE ---
+const VillaIcon = ({ size = 24, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 512 512" fill="currentColor" className={className} xmlns="http://www.w3.org/2000/svg">
+    <g transform="translate(6, -10)">
+      <rect x="120" y="160" width="140" height="120" rx="8" fill="currentColor" opacity="0.6" />
+      <rect x="220" y="100" width="160" height="180" rx="8" fill="currentColor" />
+      <rect x="100" y="150" width="180" height="16" rx="8" fill="currentColor" opacity="0.9" />
+      <rect x="200" y="90" width="200" height="16" rx="8" fill="currentColor" opacity="0.9" />
+      <rect x="140" y="200" width="60" height="80" rx="6" fill="#fff" opacity="0.3" />
+      <rect x="260" y="140" width="80" height="140" rx="6" fill="#fff" opacity="0.3" />
+      <rect x="100" y="280" width="300" height="12" rx="6" fill="currentColor" opacity="0.4" />
+    </g>
+  </svg>
+);
+
 // --- COMPOSANTS GRAPHIQUES ---
 const DonutChart = ({ data, title }) => {
   const visibleData = (data || []).filter(d => d && d.value > 0);
@@ -417,7 +432,21 @@ const App = () => {
     
     let expensesText = '';
     if (res.resExpenses && res.resExpenses.length > 0) {
-       expensesText = '\n\nPrestations prévues :\n' + res.resExpenses.map(e => `- ${e.type} (${e.person}) : ${e.amount}€`).join('\n');
+       expensesText = '\n\nPrestations prévues :\n' + res.resExpenses.map(e => {
+           // Si c'est Dias, on ajoute le détail des heures dans l'agenda
+           const isDias = e.person && e.person.toLowerCase().includes('dias');
+           if (isDias) {
+               let diasDetails = `- ${e.type} (${e.person}) : ${e.amount}€`;
+               if (e.hoursEntry > 0) {
+                   diasDetails += `\n   ↳ Entrée le ${formatDateFr(e.dateEntry || res.startDate)} : ${e.hoursEntry}h (à ${e.rateEntry}€/h)`;
+               }
+               if (e.hoursExit > 0) {
+                   diasDetails += `\n   ↳ Sortie le ${formatDateFr(e.dateExit || res.endDate)} : ${e.hoursExit}h (à ${e.rateExit}€/h)`;
+               }
+               return diasDetails;
+           }
+           return `- ${e.type} (${e.person}) : ${e.amount}€`;
+       }).join('\n');
     }
     
     const phoneText = res.phone ? `\nContact : ${res.phone}` : '';
@@ -1258,7 +1287,9 @@ const App = () => {
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col md:flex-row font-sans text-slate-900">
       <aside className={`fixed md:sticky top-0 left-0 z-50 w-72 h-[100dvh] bg-white border-r transform md:translate-x-0 transition-transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-10 border-b flex flex-col items-center">
-          <div className="bg-gradient-to-tr from-blue-600 to-indigo-600 p-4 rounded-2xl text-white shadow-xl mb-2"><Building2 size={28} /></div>
+          <div className="bg-gradient-to-tr from-blue-600 to-indigo-600 p-4 rounded-2xl text-white shadow-xl mb-2">
+            <VillaIcon size={32} />
+          </div>
           <h1 className="font-black uppercase tracking-tighter text-2xl">CADEL</h1><h2 className="font-black uppercase tracking-[0.3em] text-[10px] text-blue-600">MANAGER</h2>
         </div>
         <nav className="flex-1 p-6 space-y-2 overflow-y-auto">
@@ -1268,7 +1299,15 @@ const App = () => {
         </nav>
       </aside>
 
-      <div className="md:hidden flex justify-between p-5 bg-white border-b sticky top-0 z-40 shadow-sm"><div className="flex items-center gap-2"><div className="bg-blue-600 p-1.5 rounded-lg text-white"><Building2 size={16}/></div><h1 className="font-black text-sm uppercase">CADEL MANAGER</h1></div><button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2">{isMobileMenuOpen ? <X /> : <Menu />}</button></div>
+      <div className="md:hidden flex justify-between p-5 bg-white border-b sticky top-0 z-40 shadow-sm">
+        <div className="flex items-center gap-2">
+            <div className="bg-blue-600 p-1.5 rounded-lg text-white">
+                <VillaIcon size={18}/>
+            </div>
+            <h1 className="font-black text-sm uppercase">CADEL MANAGER</h1>
+        </div>
+        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2">{isMobileMenuOpen ? <X /> : <Menu />}</button>
+      </div>
 
       <main onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} className="flex-1 w-full px-0 md:px-12 py-6 md:py-12 min-h-screen relative" style={{ touchAction: 'pan-x pan-y pinch-zoom' }}>
         
