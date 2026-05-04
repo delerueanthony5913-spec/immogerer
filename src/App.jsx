@@ -81,7 +81,7 @@ const DonutChart = ({ data, title }) => {
   );
 };
 
-// GRAPHIQUE MULTI-COURBES DYNAMIQUE (Moteur "Classic" compatible)
+// GRAPHIQUE MULTI-COURBES DYNAMIQUE
 const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) => {
   const currentYear = new Date().getFullYear().toString();
   const currentMonth = new Date().getMonth();
@@ -207,7 +207,6 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
   const [hoveredMonth, setHoveredMonth] = useState(null);
   const months = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
 
-  // Remplacement du .flat() pour la compatibilité absolue
   const allDataValues = series.reduce((acc, currentSeries) => {
       return acc.concat(currentSeries.data);
   }, []);
@@ -300,7 +299,6 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
           <div className="overflow-x-auto no-scrollbar">
             <div className="min-w-[600px] relative">
               <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
-                {/* Lignes de grille horizontales */}
                 {yTicks.map((tick, i) => (
                   <g key={`grid-${i}`}>
                     <line x1={padX} y1={getY(tick)} x2={w - padX} y2={getY(tick)} stroke="#F1F5F9" strokeWidth="2" />
@@ -308,17 +306,14 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
                   </g>
                 ))}
 
-                {/* Highlight vertical line pour le survol */}
                 {hoveredMonth !== null && (
                     <line x1={getX(hoveredMonth)} y1={padY} x2={getX(hoveredMonth)} y2={h - padY} stroke="#CBD5E1" strokeWidth="2" strokeDasharray="4 4" />
                 )}
                 
-                {/* Lignes de mois (verticales invisibles pour le hover) */}
                 {months.map((m, i) => (
                   <text key={m} x={getX(i)} y={h - 5} fill={hoveredMonth === i ? "#0F172A" : "#94A3B8"} fontSize="12" fontFamily="sans-serif" fontWeight="900" textAnchor="middle" className="transition-colors cursor-pointer" onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)}>{m}</text>
                 ))}
                 
-                {/* Tracer chaque courbe */}
                 {series.map((s, idx) => (
                    <g key={`series-${s.id}`}>
                       <path d={buildPath(s.data, 0, Math.max(0, s.splitIndex))} stroke={s.color} strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />
@@ -326,7 +321,6 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
                    </g>
                 ))}
 
-                {/* Tracer les points pour le hover */}
                 {months.map((_, i) => (
                   <g key={`points-${i}`} onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)} className="cursor-pointer">
                     <rect x={getX(i) - 20} y={0} width="40" height={h} fill="transparent" />
@@ -337,7 +331,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
                 ))}
               </svg>
 
-              {/* TOOLTIP INTERACTIF AU SURVOL (Directement sur le graphique) */}
+              {/* TOOLTIP INTERACTIF AU SURVOL */}
               {hoveredMonth !== null && series.length > 0 && (
                 <div 
                   className="absolute z-20 bg-slate-900/95 backdrop-blur-sm text-white p-4 rounded-2xl shadow-2xl pointer-events-none transition-all duration-200 min-w-[160px] border border-slate-700"
@@ -429,7 +423,8 @@ const App = () => {
   const [availableProviders, setAvailableProviders] = useState(['Justine', 'Marc']);
   const [availableServiceTypes, setAvailableServiceTypes] = useState(['Ménage', 'Entrée/Sortie']);
 
-  const [filterYear, setFilterYear] = useState(new Date().getFullYear().toString());
+  // Par défaut sur "all" pour voir toutes les années et pouvoir trouver la prochaine réservation
+  const [filterYear, setFilterYear] = useState('all');
   const [filterMonth, setFilterMonth] = useState('all');
   const [filterProp, setFilterProp] = useState('all');
   const [filterPlat, setFilterPlat] = useState('all');
@@ -704,7 +699,7 @@ const App = () => {
     }).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
   }, [filteredData, filterStatus]);
 
-  // LOGIQUE D'AUTO-SCROLL AU PROCHAIN VOYAGEUR
+  // LOGIQUE D'AUTO-SCROLL AU PROCHAIN VOYAGEUR DANS LA LISTE DEROULANTE
   useEffect(() => {
     if (activeTab !== 'reservations') {
        setHasScrolledToNext(false);
@@ -718,133 +713,19 @@ const App = () => {
         const nextRes = reservationsList.find(t => t.startDate >= todayStr || (t.endDate && t.endDate >= todayStr));
         if (nextRes) {
             setTimeout(() => {
-                const els = document.querySelectorAll(`[data-res-id="${nextRes.id}"]`);
-                for (let el of els) {
-                    if (window.getComputedStyle(el).display !== 'none') {
-                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        el.classList.add('ring-4', 'ring-blue-500', 'ring-offset-4', 'transition-all', 'duration-1000');
-                        setTimeout(() => el.classList.remove('ring-4', 'ring-blue-500', 'ring-offset-4'), 3000);
-                        break;
-                    }
+                const el = document.querySelector(`[data-res-id="${nextRes.id}"]`);
+                if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    el.classList.add('ring-4', 'ring-blue-500', 'ring-offset-4', 'transition-all', 'duration-1000');
+                    setTimeout(() => el.classList.remove('ring-4', 'ring-blue-500', 'ring-offset-4'), 3000);
                 }
-            }, 300);
+            }, 500); // Petit délai pour laisser React afficher la liste
             setHasScrolledToNext(true);
         } else {
             setHasScrolledToNext(true); 
         }
     }
   }, [activeTab, reservationsList, hasScrolledToNext, todayStr]);
-
-  const agendaDays = useMemo(() => {
-    const y = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
-    const m = filterMonth === 'all' ? new Date().getMonth() : parseInt(filterMonth);
-    const firstDay = new Date(y, m, 1), lastDay = new Date(y, m + 1, 0), days = [];
-    let offset = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
-    for (let i = 0; i < offset; i++) days.push({ empty: true });
-    for (let i = 1; i <= lastDay.getDate(); i++) days.push({ day: i, dateStr: `${y}-${(m+1).toString().padStart(2, '0')}-${i.toString().padStart(2, '0')}` });
-    return days;
-  }, [filterYear, filterMonth]);
-
-  // ICI : LA LIGNE RESTAUREE QUI AVAIT DISPARU (yearsAvailable)
-  const yearsAvailable = useMemo(() => {
-    const years = tenants.map(t => t.startDate ? new Date(t.startDate).getFullYear() : null).filter(Boolean);
-    return [...new Set([...years, new Date().getFullYear()])].sort((a,b) => b-a);
-  }, [tenants]);
-
-  const parseCSVLine = (text) => {
-    const result = []; let current = '', inQuotes = false;
-    for (let i = 0; i < text.length; i++) {
-        const char = text[i];
-        if (char === '"') inQuotes = !inQuotes;
-        else if (char === ',' && !inQuotes) { result.push(current); current = ''; }
-        else current += char;
-    }
-    result.push(current); return result;
-  };
-
-  const startReview = () => {
-    if (!importText.trim()) return;
-    const lines = importText.split('\n').filter(l => l.trim() !== ''); 
-    if (lines.length < 2) return;
-
-    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
-    const voyageurIdx = headers.findIndex(h => h.includes('voyageur') || h.includes('client') || h.includes('nom'));
-    
-    const newList = [];
-    
-    lines.forEach((line, index) => {
-        if (index === 0) return; 
-        const parts = parseCSVLine(line);
-        if (parts.length < 5) return;
-
-        let guestName, startDate, endDate, listingName;
-        let gross = 0, fees = 0, cityTax = 0, bankFees = 0, dispAmount = 0, net = 0;
-
-        if (importSource === 'Airbnb') {
-            const typeIndex = parts.findIndex(p => p.toLowerCase().includes('réservation') || p.toLowerCase().includes('reservation'));
-            if (typeIndex === -1) return;
-            let rawStart, rawEnd, grossStr, serviceFeeStr;
-            if (typeIndex === 2) {
-                rawStart = parts[5]?.trim(); rawEnd = parts[6]?.trim(); guestName = parts[8]?.trim(); listingName = parts[9]?.trim();
-                grossStr = parts[18]?.trim() || parts[13]?.trim(); serviceFeeStr = parts[15]?.trim();
-            } else if (typeIndex === 1) {
-                rawStart = parts[4]?.trim(); rawEnd = parts[5]?.trim(); guestName = parts[7]?.trim(); listingName = parts[8]?.trim();
-                grossStr = parts[15]?.trim() || parts[12]?.trim(); serviceFeeStr = parts[13]?.trim();
-            } else return;
-
-            const formatDateStr = (raw) => { if(!raw) return ''; const [m, d, y] = raw.split('/'); return (m && d && y) ? `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}` : ''; };
-            startDate = formatDateStr(rawStart); endDate = formatDateStr(rawEnd);
-            if (!startDate || !endDate) return;
-
-            gross = parseFloat(grossStr?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
-            fees = Math.abs(parseFloat(serviceFeeStr?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
-            dispAmount = gross;
-            net = gross - fees;
-        } 
-        else if (importSource === 'Booking') {
-            const typeCol = parts[0]?.toLowerCase() || '';
-            if (!typeCol.includes('rã©servation') && !typeCol.includes('réservation') && !typeCol.includes('reservation')) return;
-
-            guestName = voyageurIdx !== -1 && parts[voyageurIdx] ? parts[voyageurIdx].trim() : `Réf: ${parts[2]?.trim()}`; 
-            
-            startDate = parts[3]?.trim(); 
-            endDate = parts[4]?.trim();   
-            listingName = parts[10]?.trim();
-
-            if (!startDate || !endDate) return;
-
-            dispAmount = parseFloat(parts[15]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
-            cityTax = Math.abs(parseFloat(parts[16]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
-            fees = Math.abs(parseFloat(parts[17]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
-            bankFees = Math.abs(parseFloat(parts[19]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
-
-            gross = dispAmount - cityTax;
-            net = gross - fees - bankFees;
-        }
-
-        const matchedProp = properties.find(p => listingName && p.name && (listingName.toLowerCase().includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(listingName.toLowerCase())));
-        const isDuplicate = tenants.some(t => t.startDate === startDate && t.propertyId === (matchedProp?.id || 'none'));
-        const hasProperty = !!matchedProp;
-
-        newList.push({ 
-            id: index, propertyId: matchedProp?.id || '', propertyName: matchedProp?.name || listingName || 'Inconnu', 
-            name: guestName || 'Client Inconnu', startDate, endDate, grossAmount: gross, platformFees: fees, 
-            displayedAmount: dispAmount, cityTax: cityTax, bankFees: bankFees,
-            netAmount: net, isDuplicate, hasProperty, selected: !isDuplicate && hasProperty 
-        });
-    });
-    setReviewList(newList);
-  };
-
-  const confirmImport = async () => {
-      const toImport = reviewList.filter(i => i.selected && i.hasProperty);
-      for (let item of toImport) {
-          const { id, selected, isDuplicate, hasProperty, propertyName, ...cleanItem } = item;
-          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), { ...cleanItem, platform: importSource, isUrssaf: true, comment: `Importé via CSV ${importSource}`, resExpenses: [], paymentDate: '' });
-      }
-      setReviewList([]); setImportText(''); setImportStatus(`${toImport.length} réservation(s) importée(s) !`);
-      setTimeout(() => setImportStatus(''), 5000);
-  };
 
   const checkDateFilter = (dateStr) => {
      if (!dateStr) return false;
@@ -991,12 +872,192 @@ const App = () => {
     };
   }, [baseTenants, filterYear]);
 
+  const statsDetailList = useMemo(() => {
+    if (!statsDetailConfig) return [];
+    const { type, monthIndex } = statsDetailConfig;
+    const yearNum = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
+    
+    return baseTenants.filter(t => {
+        if (type === 'upcoming') {
+             let isFullyPaid = false;
+             if (t.platform === 'En direct') isFullyPaid = !!t.soldeDate;
+             else isFullyPaid = !!t.paymentDate;
+             return !isFullyPaid;
+        }
+        
+        const sDate = t.startDate || '';
+        const [y, m] = sDate.split('-');
+        
+        if (type === 'month_current') {
+             return parseInt(y) === yearNum && parseInt(m)-1 === monthIndex;
+        }
+        if (type === 'month_prev') {
+             return parseInt(y) === yearNum - 1 && parseInt(m)-1 === monthIndex;
+        }
+        if (type === 'year_current') {
+             return parseInt(y) === yearNum;
+        }
+        if (type === 'expenses') {
+             return parseInt(y) === yearNum && (t.resExpenses||[]).length > 0;
+        }
+        return false;
+    }).sort((a,b) => (a.startDate||"").localeCompare(b.startDate||""));
+  }, [statsDetailConfig, baseTenants, filterYear]);
+
+  const getTenantProfitForFilters = (t) => {
+    let profit = 0;
+    if (t.platform === 'En direct') {
+        const a1 = parseFloat(t.acompte1Amount) || 0;
+        const a2 = parseFloat(t.acompte2Amount) || 0;
+        const s = parseFloat(t.soldeAmount) || 0;
+        
+        if (t.acompte1Date && checkDateFilter(t.acompte1Date)) profit += a1;
+        if (t.acompte2Date && checkDateFilter(t.acompte2Date)) profit += a2;
+        
+        if (t.soldeDate && checkDateFilter(t.soldeDate)) {
+            profit += s;
+            if (t.isUrssaf !== false) profit -= (parseFloat(t.grossAmount) || 0) * 0.077;
+        }
+    } else {
+        if (t.paymentDate && checkDateFilter(t.paymentDate)) {
+            profit += (parseFloat(t.netAmount) || 0);
+            if (t.isUrssaf !== false) profit -= (parseFloat(t.grossAmount) || 0) * 0.077;
+        }
+    }
+
+    (t.resExpenses || []).forEach(exp => {
+        if (exp.paymentDate && checkDateFilter(exp.paymentDate)) {
+            profit -= (parseFloat(exp.amount) || 0);
+        }
+    });
+
+    return profit;
+  };
+
+  const handleMonthChange = (direction) => {
+    let m = filterMonth === 'all' ? new Date().getMonth() : parseInt(filterMonth);
+    let y = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
+    if (direction === 'next') { if (m === 11) { m = 0; y += 1; } else m += 1; }
+    else { if (m === 0) { m = 11; y -= 1; } else m -= 1; }
+    setFilterMonth(m.toString()); setFilterYear(y.toString());
+  };
+
+  const agendaDays = useMemo(() => {
+    const y = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
+    const m = filterMonth === 'all' ? new Date().getMonth() : parseInt(filterMonth);
+    const firstDay = new Date(y, m, 1), lastDay = new Date(y, m + 1, 0), days = [];
+    let offset = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
+    for (let i = 0; i < offset; i++) days.push({ empty: true });
+    for (let i = 1; i <= lastDay.getDate(); i++) days.push({ day: i, dateStr: `${y}-${(m+1).toString().padStart(2, '0')}-${i.toString().padStart(2, '0')}` });
+    return days;
+  }, [filterYear, filterMonth]);
+
+  const yearsAvailable = useMemo(() => {
+    const years = tenants.map(t => t.startDate ? new Date(t.startDate).getFullYear() : null).filter(Boolean);
+    return [...new Set([...years, new Date().getFullYear()])].sort((a,b) => b-a);
+  }, [tenants]);
+
+  const parseCSVLine = (text) => {
+    const result = []; let current = '', inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        if (char === '"') inQuotes = !inQuotes;
+        else if (char === ',' && !inQuotes) { result.push(current); current = ''; }
+        else current += char;
+    }
+    result.push(current); return result;
+  };
+
+  const startReview = () => {
+    if (!importText.trim()) return;
+    const lines = importText.split('\n').filter(l => l.trim() !== ''); 
+    if (lines.length < 2) return;
+
+    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
+    const voyageurIdx = headers.findIndex(h => h.includes('voyageur') || h.includes('client') || h.includes('nom'));
+    
+    const newList = [];
+    
+    lines.forEach((line, index) => {
+        if (index === 0) return; 
+        const parts = parseCSVLine(line);
+        if (parts.length < 5) return;
+
+        let guestName, startDate, endDate, listingName;
+        let gross = 0, fees = 0, cityTax = 0, bankFees = 0, dispAmount = 0, net = 0;
+
+        if (importSource === 'Airbnb') {
+            const typeIndex = parts.findIndex(p => p.toLowerCase().includes('réservation') || p.toLowerCase().includes('reservation'));
+            if (typeIndex === -1) return;
+            let rawStart, rawEnd, grossStr, serviceFeeStr;
+            if (typeIndex === 2) {
+                rawStart = parts[5]?.trim(); rawEnd = parts[6]?.trim(); guestName = parts[8]?.trim(); listingName = parts[9]?.trim();
+                grossStr = parts[18]?.trim() || parts[13]?.trim(); serviceFeeStr = parts[15]?.trim();
+            } else if (typeIndex === 1) {
+                rawStart = parts[4]?.trim(); rawEnd = parts[5]?.trim(); guestName = parts[7]?.trim(); listingName = parts[8]?.trim();
+                grossStr = parts[15]?.trim() || parts[12]?.trim(); serviceFeeStr = parts[13]?.trim();
+            } else return;
+
+            const formatDateStr = (raw) => { if(!raw) return ''; const [m, d, y] = raw.split('/'); return (m && d && y) ? `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}` : ''; };
+            startDate = formatDateStr(rawStart); endDate = formatDateStr(rawEnd);
+            if (!startDate || !endDate) return;
+
+            gross = parseFloat(grossStr?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
+            fees = Math.abs(parseFloat(serviceFeeStr?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
+            dispAmount = gross;
+            net = gross - fees;
+        } 
+        else if (importSource === 'Booking') {
+            const typeCol = parts[0]?.toLowerCase() || '';
+            if (!typeCol.includes('rã©servation') && !typeCol.includes('réservation') && !typeCol.includes('reservation')) return;
+
+            guestName = voyageurIdx !== -1 && parts[voyageurIdx] ? parts[voyageurIdx].trim() : `Réf: ${parts[2]?.trim()}`; 
+            
+            startDate = parts[3]?.trim(); 
+            endDate = parts[4]?.trim();   
+            listingName = parts[10]?.trim();
+
+            if (!startDate || !endDate) return;
+
+            dispAmount = parseFloat(parts[15]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
+            cityTax = Math.abs(parseFloat(parts[16]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
+            fees = Math.abs(parseFloat(parts[17]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
+            bankFees = Math.abs(parseFloat(parts[19]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
+
+            gross = dispAmount - cityTax;
+            net = gross - fees - bankFees;
+        }
+
+        const matchedProp = properties.find(p => listingName && p.name && (listingName.toLowerCase().includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(listingName.toLowerCase())));
+        const isDuplicate = tenants.some(t => t.startDate === startDate && t.propertyId === (matchedProp?.id || 'none'));
+        const hasProperty = !!matchedProp;
+
+        newList.push({ 
+            id: index, propertyId: matchedProp?.id || '', propertyName: matchedProp?.name || listingName || 'Inconnu', 
+            name: guestName || 'Client Inconnu', startDate, endDate, grossAmount: gross, platformFees: fees, 
+            displayedAmount: dispAmount, cityTax: cityTax, bankFees: bankFees,
+            netAmount: net, isDuplicate, hasProperty, selected: !isDuplicate && hasProperty 
+        });
+    });
+    setReviewList(newList);
+  };
+
+  const confirmImport = async () => {
+      const toImport = reviewList.filter(i => i.selected && i.hasProperty);
+      for (let item of toImport) {
+          const { id, selected, isDuplicate, hasProperty, propertyName, ...cleanItem } = item;
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), { ...cleanItem, platform: importSource, isUrssaf: true, comment: `Importé via CSV ${importSource}`, resExpenses: [], paymentDate: '' });
+      }
+      setReviewList([]); setImportText(''); setImportStatus(`${toImport.length} réservation(s) importée(s) !`);
+      setTimeout(() => setImportStatus(''), 5000);
+  };
+
   const RenderFilters = () => (
     <div className="flex flex-wrap items-center gap-2 bg-white/70 backdrop-blur-md p-3 rounded-[28px] border border-white shadow-xl mb-6 md:mb-8">
       <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
         <Filter size={12} className="text-slate-400" />
-        <select value={filterYear} onChange={e => setFilterYear(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer">
-          <option value="all">Années</option>{(yearsAvailable || []).map(y => <option key={y} value={y}>{y}</option>)}
+        <select value={filterYear} onChange={e => {setFilterYear(e.target.value); setHasScrolledToNext(false);}} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer">
+          <option value="all">Toutes Années</option>{(yearsAvailable || []).map(y => <option key={y} value={y}>{y}</option>)}
         </select>
       </div>
       <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
@@ -1109,7 +1170,8 @@ const App = () => {
             <div className="space-y-8 animate-in fade-in">
               <div className="flex justify-between items-center"><h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2><button onClick={() => { setEditingResId(null); setFormData({ propertyId: properties[0]?.id || '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '', acompte1Amount: '', acompte1Date: '', acompte2Amount: '', acompte2Date: '', soldeAmount: '', soldeDate: '' }); setIsModalOpen(true); }} className="bg-blue-600 text-white px-8 py-4 rounded-[24px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button></div>
               
-              <div className="grid grid-cols-1 gap-4 md:hidden">
+              {/* LISTE DÉROULANTE MOBILE */}
+              <div className="grid grid-cols-1 gap-4 md:hidden max-h-[65vh] overflow-y-auto custom-scrollbar p-1">
                 {(reservationsList || []).map(t => (
                   <div key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="bg-white p-6 rounded-[32px] shadow-lg border border-slate-50 cursor-pointer">
                     <div className="flex justify-between items-start mb-3">
@@ -1145,50 +1207,53 @@ const App = () => {
                 ))}
               </div>
 
-              <div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 font-black uppercase border-b text-slate-400">
-                    <tr><th className="p-6">Logement</th><th className="p-6">Client</th><th className="p-6 text-center">Dates</th><th className="p-6">Prestations</th><th className="p-6 text-right">Net</th><th className="p-6 text-center">État</th></tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50 font-bold">
-                    {(reservationsList || []).map(t => (
-                      <tr key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="hover:bg-slate-50 cursor-pointer">
-                        <td className="p-6 uppercase">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}<div className="text-blue-600 text-[10px]">{t.platform}</div></td>
-                        <td className="p-6">
-                           <div>{t.name}</div>
-                           {t.phone && <div className="text-slate-400 text-[9px] mt-0.5">{t.phone}</div>}
-                        </td>
-                        <td className="p-6 text-center text-slate-500">{formatDateFr(t.startDate)} ➔ {formatDateFr(t.endDate)}</td>
-                        <td className="p-6">
-                           <div className="space-y-1.5">
-                              {(t.resExpenses || []).map((exp, idx) => (
-                                <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-slate-50 p-1.5 rounded-lg border border-slate-100 cursor-pointer hover:border-blue-300 hover:shadow-sm transition-all">
-                                  <span className="uppercase font-black text-slate-500 leading-none">{exp.type} ({exp.person})</span>
-                                  <div className="text-right">
-                                    <div className="flex items-center justify-end gap-1.5">
-                                        <span className={`font-black ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€</span>
-                                        {exp.paymentDate ? <CheckCircle size={10} className="text-emerald-500" /> : <Clock size={10} className="text-orange-400" />}
+              {/* LISTE DÉROULANTE ORDINATEUR */}
+              <div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden max-h-[65vh] flex flex-col">
+                <div className="overflow-y-auto custom-scrollbar flex-1 relative">
+                    <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 font-black uppercase border-b text-slate-400 sticky top-0 z-10 shadow-sm">
+                        <tr><th className="p-6">Logement</th><th className="p-6">Client</th><th className="p-6 text-center">Dates</th><th className="p-6">Prestations</th><th className="p-6 text-right">Net</th><th className="p-6 text-center">État</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 font-bold">
+                        {(reservationsList || []).map(t => (
+                        <tr key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="hover:bg-slate-50 cursor-pointer">
+                            <td className="p-6 uppercase">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}<div className="text-blue-600 text-[10px]">{t.platform}</div></td>
+                            <td className="p-6">
+                            <div>{t.name}</div>
+                            {t.phone && <div className="text-slate-400 text-[9px] mt-0.5">{t.phone}</div>}
+                            </td>
+                            <td className="p-6 text-center text-slate-500">{formatDateFr(t.startDate)} ➔ {formatDateFr(t.endDate)}</td>
+                            <td className="p-6">
+                            <div className="space-y-1.5">
+                                {(t.resExpenses || []).map((exp, idx) => (
+                                    <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-slate-50 p-1.5 rounded-lg border border-slate-100 cursor-pointer hover:border-blue-300 hover:shadow-sm transition-all">
+                                    <span className="uppercase font-black text-slate-500 leading-none">{exp.type} ({exp.person})</span>
+                                    <div className="text-right">
+                                        <div className="flex items-center justify-end gap-1.5">
+                                            <span className={`font-black ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€</span>
+                                            {exp.paymentDate ? <CheckCircle size={10} className="text-emerald-500" /> : <Clock size={10} className="text-orange-400" />}
+                                        </div>
+                                        {exp.paymentDate && <div className="text-[8px] text-slate-400 mt-0.5 leading-none">{formatDateFr(exp.paymentDate)}</div>}
                                     </div>
-                                    {exp.paymentDate && <div className="text-[8px] text-slate-400 mt-0.5 leading-none">{formatDateFr(exp.paymentDate)}</div>}
-                                  </div>
-                                </div>
-                              ))}
-                           </div>
-                        </td>
-                        <td className="p-6 text-right font-black">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</td>
-                        <td className="p-6 text-center">
-                          <div className="flex flex-col items-center">
-                            <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-4 py-2 rounded-full text-[9px] uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>
-                              {getStatusProps(t).label}
-                            </span>
-                            {t.platform !== 'En direct' && t.paymentDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.paymentDate)}</span>}
-                            {t.platform === 'En direct' && t.soldeDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.soldeDate)}</span>}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                                    </div>
+                                ))}
+                            </div>
+                            </td>
+                            <td className="p-6 text-right font-black">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</td>
+                            <td className="p-6 text-center">
+                            <div className="flex flex-col items-center">
+                                <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-4 py-2 rounded-full text-[9px] uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>
+                                {getStatusProps(t).label}
+                                </span>
+                                {t.platform !== 'En direct' && t.paymentDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.paymentDate)}</span>}
+                                {t.platform === 'En direct' && t.soldeDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.soldeDate)}</span>}
+                            </div>
+                            </td>
+                        </tr>
+                        ))}
+                    </tbody>
+                    </table>
+                </div>
               </div>
             </div>
           )}
