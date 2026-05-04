@@ -101,7 +101,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
     if (mode === 'years') setSelectedKeys(safeYears.slice(0, 3)); 
     if (mode === 'properties') setSelectedKeys(properties.map(p => p.id).slice(0, 4)); 
     if (mode === 'platforms') setSelectedKeys(platforms.slice(0, 4)); 
-  }, [mode, properties, platforms]);
+  }, [mode, properties, platforms, safeYears]);
 
   const toggleKey = (key) => {
     setSelectedKeys(prev => 
@@ -229,7 +229,9 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
   const [hoveredMonth, setHoveredMonth] = useState(null);
   const months = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
 
-  const allDataValues = series.reduce((acc, currentSeries) => acc.concat(currentSeries.data), []);
+  const allDataValues = series.reduce((acc, currentSeries) => {
+      return acc.concat(currentSeries.data);
+  }, []);
 
   const maxValRaw = Math.max(...allDataValues, 100);
   const maxVal = (!isFinite(maxValRaw) || maxValRaw <= 0) ? 100 : maxValRaw * 1.15;
@@ -996,9 +998,16 @@ const App = () => {
     return days;
   }, [filterYear, filterMonth]);
 
+  // LA CORRECTION DU TABLEAU DES ANNÉES (Ajout des dates de solde et de paiements pour voir 2027)
   const yearsAvailable = useMemo(() => {
-    const years = tenants.map(t => t.startDate ? new Date(t.startDate).getFullYear() : null).filter(Boolean);
-    return [...new Set([...years, new Date().getFullYear()])].sort((a,b) => b-a);
+    const years = new Set([new Date().getFullYear()]);
+    tenants.forEach(t => {
+      if (t.startDate) years.add(parseInt(t.startDate.split('-')[0], 10));
+      if (t.endDate) years.add(parseInt(t.endDate.split('-')[0], 10));
+      if (t.soldeDate) years.add(parseInt(t.soldeDate.split('-')[0], 10));
+      if (t.paymentDate) years.add(parseInt(t.paymentDate.split('-')[0], 10));
+    });
+    return Array.from(years).filter(y => !isNaN(y)).sort((a, b) => b - a).map(String);
   }, [tenants]);
 
   const parseCSVLine = (text) => {
@@ -1214,6 +1223,7 @@ const App = () => {
             <div className="space-y-8 animate-in fade-in">
               <div className="flex justify-between items-center"><h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2><button onClick={() => { setEditingResId(null); setFormData({ propertyId: properties[0]?.id || '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '', acompte1Amount: '', acompte1Date: '', acompte2Amount: '', acompte2Date: '', soldeAmount: '', soldeDate: '' }); setIsModalOpen(true); }} className="bg-blue-600 text-white px-8 py-4 rounded-[24px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button></div>
               
+              {/* VUE MOBILE : Liste naturelle */}
               <div className="grid grid-cols-1 gap-4 md:hidden">
                 {(reservationsList || []).map(t => (
                   <div key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="bg-white p-6 rounded-[32px] shadow-lg border border-slate-50 cursor-pointer">
@@ -1250,6 +1260,7 @@ const App = () => {
                 ))}
               </div>
 
+              {/* VUE ORDINATEUR : Liste naturelle sans restriction de hauteur */}
               <div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 font-black uppercase border-b text-slate-400">
@@ -1619,12 +1630,12 @@ const App = () => {
 
               <div className="bg-slate-900 p-8 rounded-[48px] text-white flex flex-col md:flex-row justify-between items-center gap-6">
                  <div className="text-center md:text-left leading-none">
-                    <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Net Estimé</p>
-                    <p className="text-4xl font-black text-blue-400 tracking-tighter">
-                      {formData.platform === 'En direct' 
-                        ? (parseFloat(formData?.grossAmount) || 0).toFixed(2)
-                        : (nModale - curChargesModale).toFixed(2)}€
-                    </p>
+                     <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Net Estimé</p>
+                     <p className="text-4xl font-black text-blue-400 tracking-tighter">
+                       {formData.platform === 'En direct' 
+                         ? (parseFloat(formData?.grossAmount) || 0).toFixed(2)
+                         : (nModale - curChargesModale).toFixed(2)}€
+                     </p>
                  </div>
                  <div className="flex items-center gap-4 w-full md:w-auto">
                    {editingResId && <button type="button" onClick={() => deleteRes(editingResId)} className="p-4 text-rose-500 bg-rose-50 rounded-[24px] hover:bg-rose-500 hover:text-white transition-colors"><Trash2 size={24}/></button>}
