@@ -61,21 +61,6 @@ const isSundayOrHoliday = (dateStr) => {
   return holidays.includes(dateStr);
 };
 
-// --- COMPOSANT ICONE VILLA SUR-MESURE ---
-const VillaIcon = ({ size = 24, className = "" }) => (
-  <svg width={size} height={size} viewBox="0 0 512 512" fill="currentColor" className={className} xmlns="http://www.w3.org/2000/svg">
-    <g transform="translate(6, -10)">
-      <rect x="120" y="160" width="140" height="120" rx="8" fill="currentColor" opacity="0.6" />
-      <rect x="220" y="100" width="160" height="180" rx="8" fill="currentColor" />
-      <rect x="100" y="150" width="180" height="16" rx="8" fill="currentColor" opacity="0.9" />
-      <rect x="200" y="90" width="200" height="16" rx="8" fill="currentColor" opacity="0.9" />
-      <rect x="140" y="200" width="60" height="80" rx="6" fill="#fff" opacity="0.3" />
-      <rect x="260" y="140" width="80" height="140" rx="6" fill="#fff" opacity="0.3" />
-      <rect x="100" y="280" width="300" height="12" rx="6" fill="currentColor" opacity="0.4" />
-    </g>
-  </svg>
-);
-
 const DonutChart = ({ data, title }) => {
   const visibleData = (data || []).filter(d => d && d.value > 0);
   const displayTotal = visibleData.reduce((acc, curr) => acc + curr.value, 0);
@@ -437,7 +422,7 @@ const App = () => {
   
   const [availablePlatforms, setAvailablePlatforms] = useState(['Airbnb', 'Booking', 'Abritel', 'En direct']);
   const [availableProviders, setAvailableProviders] = useState(['Justine', 'Marc']);
-  const [providerEmails, setProviderEmails] = useState({}); // <-- NOUVEAU : Dictionnaire des emails
+  const [providerEmails, setProviderEmails] = useState({});
   const [availableServiceTypes, setAvailableServiceTypes] = useState(['Ménage', 'Entrée/Sortie']);
 
   const [filterYear, setFilterYear] = useState('all');
@@ -458,7 +443,7 @@ const App = () => {
 
   const [inputPlat, setInputPlat] = useState('');
   const [inputProv, setInputProv] = useState('');
-  const [inputProvEmail, setInputProvEmail] = useState(''); // <-- NOUVEAU : Champ email paramètres
+  const [inputProvEmail, setInputProvEmail] = useState(''); 
   const [inputSvc, setInputSvc] = useState('');
   const [inputProp, setInputProp] = useState({ name: '', address: '' });
   
@@ -506,7 +491,7 @@ const App = () => {
         if (d.platforms) setAvailablePlatforms(d.platforms);
         if (d.providers) setAvailableProviders(d.providers);
         if (d.services) setAvailableServiceTypes(d.services);
-        if (d.providerEmails) setProviderEmails(d.providerEmails); // <-- Lecture des emails
+        if (d.providerEmails) setProviderEmails(d.providerEmails);
       }
     });
 
@@ -551,7 +536,7 @@ const App = () => {
     runInjection();
   }, [user, loading, properties, tenants, db]);
 
-  // 3. MEMOIZATION (CALCULS)
+  // 3. MEMOIZATION (CALCULS) 
   const baseTenants = useMemo(() => {
     return (tenants || []).filter(t => 
        (filterProp === 'all' || t.propertyId === filterProp) &&
@@ -725,7 +710,7 @@ const App = () => {
   }, [tenants]);
 
 
-  // 4. FONCTIONS DE SCROLL ET TOUCH (LES VOICI DE RETOUR !)
+  // 4. FONCTIONS DE SCROLL ET TOUCH (DE RETOUR)
   const scrollToCurrentRes = (withFlash = false) => {
     if (reservationsList.length === 0) return;
     
@@ -1508,7 +1493,6 @@ const App = () => {
                   </form>
                 </div>
                 
-                {/* --- NOUVEAU BLOC : PRESTATAIRES AVEC EMAIL --- */}
                 <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full border-2 border-blue-50">
                   <h3 className="text-[10px] font-black uppercase text-blue-600 mb-4">Prestataires (Emails)</h3>
                   <div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">
@@ -1680,7 +1664,7 @@ const App = () => {
                           return (
                               <div key={exp.id} className="flex flex-col gap-3 bg-blue-50/50 p-4 rounded-[28px] border border-blue-100 shadow-sm relative overflow-hidden">
                                   {/* Haut : Sélecteurs de base */}
-                                  <div className="flex gap-2 items-center relative z-10">
+                                  <div className="flex gap-1.5 md:gap-2 items-center relative z-10">
                                       <select value={exp.person || ''} onChange={e => {
                                           const val = e.target.value;
                                           setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => {
@@ -1697,18 +1681,18 @@ const App = () => {
                                               }
                                               return x;
                                           })});
-                                      }} className="flex-1 p-3 border border-blue-200 rounded-xl font-black uppercase text-[10px] outline-none bg-white">{(availableProviders || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
+                                      }} className="flex-1 min-w-0 p-2 md:p-3 border border-blue-200 rounded-xl font-black uppercase text-[9px] md:text-[10px] outline-none bg-white">{(availableProviders || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
                                       
-                                      <select value={exp.type || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, type: e.target.value } : x) })} className="flex-1 p-3 border border-blue-200 rounded-xl font-black uppercase text-[10px] outline-none bg-white">{(availableServiceTypes || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
+                                      <select value={exp.type || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, type: e.target.value } : x) })} className="flex-1 min-w-0 p-2 md:p-3 border border-blue-200 rounded-xl font-black uppercase text-[9px] md:text-[10px] outline-none bg-white">{(availableServiceTypes || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
                                       
-                                      <button type="button" onClick={() => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).filter(x => x.id !== exp.id) })} className="text-rose-500 font-black px-2 hover:scale-110 transition-transform"><Trash2 size={18}/></button>
+                                      <button type="button" onClick={() => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).filter(x => x.id !== exp.id) })} className="flex-shrink-0 text-rose-500 font-black px-1 md:px-2 hover:scale-110 transition-transform"><Trash2 size={18}/></button>
                                   </div>
                                   
                                   {/* --- OPTION EMAIL AGENDA --- */}
                                   {providerEmails[exp.person] && (
-                                      <label className="flex items-center gap-2 cursor-pointer relative z-10 px-1">
-                                          <input type="checkbox" checked={exp.sendEmail !== false} onChange={e => updateDiasField(exp.id, 'sendEmail', e.target.checked)} className="w-3.5 h-3.5 accent-blue-600" />
-                                          <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1"><Mail size={12}/> Inviter à l'agenda ({providerEmails[exp.person]})</span>
+                                      <label className="flex items-center gap-2 cursor-pointer relative z-10 px-1 mt-1 md:mt-0">
+                                          <input type="checkbox" checked={exp.sendEmail !== false} onChange={e => updateDiasField(exp.id, 'sendEmail', e.target.checked)} className="w-3.5 h-3.5 flex-shrink-0 accent-blue-600" />
+                                          <span className="text-[8px] md:text-[9px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1 min-w-0 break-words"><Mail size={12} className="flex-shrink-0"/> Inviter à l'agenda ({providerEmails[exp.person]})</span>
                                       </label>
                                   )}
 
@@ -1718,22 +1702,22 @@ const App = () => {
                                           <div className="flex justify-between items-center"><span className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Date d'Entrée</span>{isSundayOrHoliday(exp.dateEntry) && <span className="text-[8px] font-black text-white bg-rose-500 px-2 py-0.5 rounded-full shadow-sm">Férié / Dim</span>}</div>
                                           <input type="date" value={exp.dateEntry || ''} onChange={e => updateDiasField(exp.id, 'dateEntry', e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-600 outline-none cursor-pointer" />
                                           <div className="flex gap-2">
-                                              <div className="flex-1"><label className="text-[8px] uppercase text-slate-400 font-bold block mb-1">Heures (h)</label><input type="number" step="0.5" value={exp.hoursEntry || ''} onChange={e => updateDiasField(exp.id, 'hoursEntry', e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl font-black text-center text-sm outline-none focus:border-blue-400" placeholder="0" /></div>
-                                              <div className="flex-1"><label className="text-[8px] uppercase text-slate-400 font-bold block mb-1">Tarif Hor. (€)</label><input type="number" step="0.5" value={exp.rateEntry || ''} onChange={e => updateDiasField(exp.id, 'rateEntry', e.target.value)} className={`w-full p-2.5 border rounded-xl font-black text-center text-sm outline-none focus:border-blue-400 transition-colors ${isSundayOrHoliday(exp.dateEntry) ? 'bg-rose-50 border-rose-200 text-rose-700' : 'border-slate-200 text-slate-900'}`} placeholder="0" /></div>
+                                              <div className="flex-1 min-w-0"><label className="text-[8px] uppercase text-slate-400 font-bold block mb-1">Heures (h)</label><input type="number" step="0.5" value={exp.hoursEntry || ''} onChange={e => updateDiasField(exp.id, 'hoursEntry', e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl font-black text-center text-sm outline-none focus:border-blue-400" placeholder="0" /></div>
+                                              <div className="flex-1 min-w-0"><label className="text-[8px] uppercase text-slate-400 font-bold block mb-1">Tarif Hor. (€)</label><input type="number" step="0.5" value={exp.rateEntry || ''} onChange={e => updateDiasField(exp.id, 'rateEntry', e.target.value)} className={`w-full p-2.5 border rounded-xl font-black text-center text-sm outline-none focus:border-blue-400 transition-colors ${isSundayOrHoliday(exp.dateEntry) ? 'bg-rose-50 border-rose-200 text-rose-700' : 'border-slate-200 text-slate-900'}`} placeholder="0" /></div>
                                           </div>
                                       </div>
                                       <div className="bg-white p-3 rounded-[20px] border border-blue-100 shadow-sm space-y-2">
                                           <div className="flex justify-between items-center"><span className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Date de Sortie</span>{isSundayOrHoliday(exp.dateExit) && <span className="text-[8px] font-black text-white bg-rose-500 px-2 py-0.5 rounded-full shadow-sm">Férié / Dim</span>}</div>
                                           <input type="date" value={exp.dateExit || ''} onChange={e => updateDiasField(exp.id, 'dateExit', e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-600 outline-none cursor-pointer" />
                                           <div className="flex gap-2">
-                                              <div className="flex-1"><label className="text-[8px] uppercase text-slate-400 font-bold block mb-1">Heures (h)</label><input type="number" step="0.5" value={exp.hoursExit || ''} onChange={e => updateDiasField(exp.id, 'hoursExit', e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl font-black text-center text-sm outline-none focus:border-blue-400" placeholder="0" /></div>
-                                              <div className="flex-1"><label className="text-[8px] uppercase text-slate-400 font-bold block mb-1">Tarif Hor. (€)</label><input type="number" step="0.5" value={exp.rateExit || ''} onChange={e => updateDiasField(exp.id, 'rateExit', e.target.value)} className={`w-full p-2.5 border rounded-xl font-black text-center text-sm outline-none focus:border-blue-400 transition-colors ${isSundayOrHoliday(exp.dateExit) ? 'bg-rose-50 border-rose-200 text-rose-700' : 'border-slate-200 text-slate-900'}`} placeholder="0" /></div>
+                                              <div className="flex-1 min-w-0"><label className="text-[8px] uppercase text-slate-400 font-bold block mb-1">Heures (h)</label><input type="number" step="0.5" value={exp.hoursExit || ''} onChange={e => updateDiasField(exp.id, 'hoursExit', e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl font-black text-center text-sm outline-none focus:border-blue-400" placeholder="0" /></div>
+                                              <div className="flex-1 min-w-0"><label className="text-[8px] uppercase text-slate-400 font-bold block mb-1">Tarif Hor. (€)</label><input type="number" step="0.5" value={exp.rateExit || ''} onChange={e => updateDiasField(exp.id, 'rateExit', e.target.value)} className={`w-full p-2.5 border rounded-xl font-black text-center text-sm outline-none focus:border-blue-400 transition-colors ${isSundayOrHoliday(exp.dateExit) ? 'bg-rose-50 border-rose-200 text-rose-700' : 'border-slate-200 text-slate-900'}`} placeholder="0" /></div>
                                           </div>
                                       </div>
                                   </div>
 
                                   {/* Bas : Total calculé bloqué */}
-                                  <div className="flex justify-between items-center bg-blue-600 text-white p-4 rounded-[18px] shadow-sm relative z-10">
+                                  <div className="flex justify-between items-center bg-blue-600 text-white p-4 rounded-[18px] shadow-sm relative z-10 mt-1">
                                       <span className="text-[10px] font-black uppercase tracking-widest text-blue-200">Total Automatique Bloqué</span>
                                       <span className="font-black text-xl">{(parseFloat(exp.amount) || 0).toFixed(2)} €</span>
                                   </div>
@@ -1744,7 +1728,7 @@ const App = () => {
                       // LIGNE CLASSIQUE POUR LES AUTRES PRESTATAIRES
                       return (
                           <div key={exp.id} className="flex flex-col gap-2 bg-slate-50 p-4 rounded-[28px] border border-slate-100">
-                              <div className="flex gap-2 items-center">
+                              <div className="flex gap-1.5 md:gap-2 items-center">
                                   <select value={exp.person || ''} onChange={e => {
                                       const val = e.target.value;
                                       setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => {
@@ -1761,10 +1745,10 @@ const App = () => {
                                           }
                                           return x;
                                       })});
-                                  }} className="flex-1 p-3 border rounded-xl font-black uppercase text-[10px] outline-none">{(availableProviders || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
-                                  <select value={exp.type || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, type: e.target.value } : x) })} className="flex-1 p-3 border rounded-xl font-black uppercase text-[10px] outline-none">{(availableServiceTypes || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
-                                  <input type="number" value={exp.amount || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, amount: e.target.value } : x) })} className="w-20 p-3 border rounded-xl font-black text-right outline-none" />
-                                  <button type="button" onClick={() => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).filter(x => x.id !== exp.id) })} className="text-rose-500 font-black px-2"><Trash2 size={18}/></button>
+                                  }} className="flex-1 min-w-0 p-2 md:p-3 border rounded-xl font-black uppercase text-[9px] md:text-[10px] outline-none">{(availableProviders || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
+                                  <select value={exp.type || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, type: e.target.value } : x) })} className="flex-1 min-w-0 p-2 md:p-3 border rounded-xl font-black uppercase text-[9px] md:text-[10px] outline-none">{(availableServiceTypes || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
+                                  <input type="number" value={exp.amount || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, amount: e.target.value } : x) })} className="w-14 md:w-20 min-w-0 p-2 md:p-3 border rounded-xl font-black text-right outline-none text-[9px] md:text-[10px]" />
+                                  <button type="button" onClick={() => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).filter(x => x.id !== exp.id) })} className="flex-shrink-0 text-rose-500 font-black px-1 md:px-2"><Trash2 size={18}/></button>
                               </div>
                               {/* --- OPTION EMAIL AGENDA POUR LES AUTRES --- */}
                               {providerEmails[exp.person] && (
@@ -1774,8 +1758,8 @@ const App = () => {
                                               ...prev,
                                               resExpenses: prev.resExpenses.map(x => x.id === exp.id ? { ...x, sendEmail: e.target.checked } : x)
                                           }));
-                                      }} className="w-3.5 h-3.5 accent-slate-600" />
-                                      <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1"><Mail size={12}/> Inviter à l'agenda ({providerEmails[exp.person]})</span>
+                                      }} className="w-3.5 h-3.5 flex-shrink-0 accent-slate-600" />
+                                      <span className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1 min-w-0 break-words"><Mail size={12} className="flex-shrink-0"/> Inviter à l'agenda ({providerEmails[exp.person]})</span>
                                   </label>
                               )}
                           </div>
