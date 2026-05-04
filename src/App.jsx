@@ -81,7 +81,7 @@ const DonutChart = ({ data, title }) => {
   );
 };
 
-// GRAPHIQUE MULTI-COURBES DYNAMIQUE
+// GRAPHIQUE MULTI-COURBES DYNAMIQUE (Moteur "Classic" compatible)
 const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) => {
   const currentYear = new Date().getFullYear().toString();
   const currentMonth = new Date().getMonth();
@@ -300,6 +300,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
           <div className="overflow-x-auto no-scrollbar">
             <div className="min-w-[600px] relative">
               <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
+                {/* Lignes de grille horizontales */}
                 {yTicks.map((tick, i) => (
                   <g key={`grid-${i}`}>
                     <line x1={padX} y1={getY(tick)} x2={w - padX} y2={getY(tick)} stroke="#F1F5F9" strokeWidth="2" />
@@ -307,14 +308,17 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
                   </g>
                 ))}
 
+                {/* Highlight vertical line pour le survol */}
                 {hoveredMonth !== null && (
                     <line x1={getX(hoveredMonth)} y1={padY} x2={getX(hoveredMonth)} y2={h - padY} stroke="#CBD5E1" strokeWidth="2" strokeDasharray="4 4" />
                 )}
                 
+                {/* Lignes de mois (verticales invisibles pour le hover) */}
                 {months.map((m, i) => (
                   <text key={m} x={getX(i)} y={h - 5} fill={hoveredMonth === i ? "#0F172A" : "#94A3B8"} fontSize="12" fontFamily="sans-serif" fontWeight="900" textAnchor="middle" className="transition-colors cursor-pointer" onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)}>{m}</text>
                 ))}
                 
+                {/* Tracer chaque courbe */}
                 {series.map((s, idx) => (
                    <g key={`series-${s.id}`}>
                       <path d={buildPath(s.data, 0, Math.max(0, s.splitIndex))} stroke={s.color} strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />
@@ -322,6 +326,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
                    </g>
                 ))}
 
+                {/* Tracer les points pour le hover */}
                 {months.map((_, i) => (
                   <g key={`points-${i}`} onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)} className="cursor-pointer">
                     <rect x={getX(i) - 20} y={0} width="40" height={h} fill="transparent" />
@@ -332,7 +337,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
                 ))}
               </svg>
 
-              {/* TOOLTIP INTERACTIF AU SURVOL */}
+              {/* TOOLTIP INTERACTIF AU SURVOL (Directement sur le graphique) */}
               {hoveredMonth !== null && series.length > 0 && (
                 <div 
                   className="absolute z-20 bg-slate-900/95 backdrop-blur-sm text-white p-4 rounded-2xl shadow-2xl pointer-events-none transition-all duration-200 min-w-[160px] border border-slate-700"
@@ -707,31 +712,25 @@ const App = () => {
        return;
     }
     
-    // Attendre que Firebase ait chargé au moins quelques données
     if (hasScrolledToNext || reservationsList.length === 0) return;
 
     const todayStr = new Date().toISOString().split('T')[0];
 
-    // Cherche la prochaine résa (qui commence ou finit dans le futur/aujourd'hui)
     let targetRes = reservationsList.find(t => t.startDate >= todayStr || (t.endDate && t.endDate >= todayStr));
     
-    // Si tout est dans le passé, on cible la toute dernière (la plus récente)
     if (!targetRes) {
         targetRes = reservationsList[reservationsList.length - 1];
     }
 
     if (targetRes) {
-        // Un délai pour s'assurer que React a bien "dessiné" toutes les lignes du tableau
         const timer = setTimeout(() => {
             const els = document.querySelectorAll(`[data-res-id="${targetRes.id}"]`);
             let scrolled = false;
             
             for (let el of els) {
-                // offsetParent !== null veut dire que l'élément est bien visible à l'écran
                 if (el.offsetParent !== null) {
                     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     
-                    // Petit flash bleu pour bien montrer la ligne
                     el.style.backgroundColor = '#EFF6FF';
                     el.style.transition = 'background-color 1s ease';
                     setTimeout(() => { el.style.backgroundColor = ''; }, 3000);
@@ -741,8 +740,6 @@ const App = () => {
                 }
             }
             
-            // Si on a réussi à scroller, on bloque la fonction pour ne plus la refaire
-            // Sinon (DOM pas encore prêt), elle se relancera au prochain rendu
             if (scrolled) {
                 setHasScrolledToNext(true);
             }
@@ -1196,8 +1193,8 @@ const App = () => {
             <div className="space-y-8 animate-in fade-in">
               <div className="flex justify-between items-center"><h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2><button onClick={() => { setEditingResId(null); setFormData({ propertyId: properties[0]?.id || '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '', acompte1Amount: '', acompte1Date: '', acompte2Amount: '', acompte2Date: '', soldeAmount: '', soldeDate: '' }); setIsModalOpen(true); }} className="bg-blue-600 text-white px-8 py-4 rounded-[24px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button></div>
               
-              {/* LISTE DÉROULANTE MOBILE */}
-              <div className="grid grid-cols-1 gap-4 md:hidden max-h-[65vh] overflow-y-auto custom-scrollbar p-1">
+              {/* VUE MOBILE : Liste naturelle */}
+              <div className="grid grid-cols-1 gap-4 md:hidden">
                 {(reservationsList || []).map(t => (
                   <div key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="bg-white p-6 rounded-[32px] shadow-lg border border-slate-50 cursor-pointer">
                     <div className="flex justify-between items-start mb-3">
@@ -1233,53 +1230,51 @@ const App = () => {
                 ))}
               </div>
 
-              {/* LISTE DÉROULANTE ORDINATEUR */}
-              <div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden max-h-[65vh] flex flex-col">
-                <div className="overflow-y-auto custom-scrollbar flex-1 relative">
-                    <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-50 font-black uppercase border-b text-slate-400 sticky top-0 z-10 shadow-sm">
-                        <tr><th className="p-6">Logement</th><th className="p-6">Client</th><th className="p-6 text-center">Dates</th><th className="p-6">Prestations</th><th className="p-6 text-right">Net</th><th className="p-6 text-center">État</th></tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50 font-bold">
-                        {(reservationsList || []).map(t => (
-                        <tr key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="hover:bg-slate-50 cursor-pointer">
-                            <td className="p-6 uppercase">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}<div className="text-blue-600 text-[10px]">{t.platform}</div></td>
-                            <td className="p-6">
-                            <div>{t.name}</div>
-                            {t.phone && <div className="text-slate-400 text-[9px] mt-0.5">{t.phone}</div>}
-                            </td>
-                            <td className="p-6 text-center text-slate-500">{formatDateFr(t.startDate)} ➔ {formatDateFr(t.endDate)}</td>
-                            <td className="p-6">
-                            <div className="space-y-1.5">
-                                {(t.resExpenses || []).map((exp, idx) => (
-                                    <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-slate-50 p-1.5 rounded-lg border border-slate-100 cursor-pointer hover:border-blue-300 hover:shadow-sm transition-all">
-                                    <span className="uppercase font-black text-slate-500 leading-none">{exp.type} ({exp.person})</span>
-                                    <div className="text-right">
-                                        <div className="flex items-center justify-end gap-1.5">
-                                            <span className={`font-black ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€</span>
-                                            {exp.paymentDate ? <CheckCircle size={10} className="text-emerald-500" /> : <Clock size={10} className="text-orange-400" />}
-                                        </div>
-                                        {exp.paymentDate && <div className="text-[8px] text-slate-400 mt-0.5 leading-none">{formatDateFr(exp.paymentDate)}</div>}
-                                    </div>
-                                    </div>
-                                ))}
-                            </div>
-                            </td>
-                            <td className="p-6 text-right font-black">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</td>
-                            <td className="p-6 text-center">
-                            <div className="flex flex-col items-center">
-                                <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-4 py-2 rounded-full text-[9px] uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>
-                                {getStatusProps(t).label}
-                                </span>
-                                {t.platform !== 'En direct' && t.paymentDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.paymentDate)}</span>}
-                                {t.platform === 'En direct' && t.soldeDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.soldeDate)}</span>}
-                            </div>
-                            </td>
-                        </tr>
-                        ))}
-                    </tbody>
-                    </table>
-                </div>
+              {/* VUE ORDINATEUR : Liste naturelle sans restriction de hauteur */}
+              <div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 font-black uppercase border-b text-slate-400">
+                      <tr><th className="p-6">Logement</th><th className="p-6">Client</th><th className="p-6 text-center">Dates</th><th className="p-6">Prestations</th><th className="p-6 text-right">Net</th><th className="p-6 text-center">État</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 font-bold">
+                      {(reservationsList || []).map(t => (
+                      <tr key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="hover:bg-slate-50 cursor-pointer">
+                          <td className="p-6 uppercase">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}<div className="text-blue-600 text-[10px]">{t.platform}</div></td>
+                          <td className="p-6">
+                          <div>{t.name}</div>
+                          {t.phone && <div className="text-slate-400 text-[9px] mt-0.5">{t.phone}</div>}
+                          </td>
+                          <td className="p-6 text-center text-slate-500">{formatDateFr(t.startDate)} ➔ {formatDateFr(t.endDate)}</td>
+                          <td className="p-6">
+                          <div className="space-y-1.5">
+                              {(t.resExpenses || []).map((exp, idx) => (
+                                  <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-slate-50 p-1.5 rounded-lg border border-slate-100 cursor-pointer hover:border-blue-300 hover:shadow-sm transition-all">
+                                  <span className="uppercase font-black text-slate-500 leading-none">{exp.type} ({exp.person})</span>
+                                  <div className="text-right">
+                                      <div className="flex items-center justify-end gap-1.5">
+                                          <span className={`font-black ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€</span>
+                                          {exp.paymentDate ? <CheckCircle size={10} className="text-emerald-500" /> : <Clock size={10} className="text-orange-400" />}
+                                      </div>
+                                      {exp.paymentDate && <div className="text-[8px] text-slate-400 mt-0.5 leading-none">{formatDateFr(exp.paymentDate)}</div>}
+                                  </div>
+                                  </div>
+                              ))}
+                          </div>
+                          </td>
+                          <td className="p-6 text-right font-black">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</td>
+                          <td className="p-6 text-center">
+                          <div className="flex flex-col items-center">
+                              <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-4 py-2 rounded-full text-[9px] uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>
+                              {getStatusProps(t).label}
+                              </span>
+                              {t.platform !== 'En direct' && t.paymentDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.paymentDate)}</span>}
+                              {t.platform === 'En direct' && t.soldeDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.soldeDate)}</span>}
+                          </div>
+                          </td>
+                      </tr>
+                      ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
