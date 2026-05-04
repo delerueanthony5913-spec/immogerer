@@ -292,7 +292,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
         : platforms.map(p => ({ id: p, label: p }));
 
   return (
-    <div className="w-auto mx-2 md:mx-0 bg-white p-4 md:p-8 rounded-[32px] md:rounded-[48px] shadow-2xl border border-slate-50 animate-in fade-in relative mt-8">
+    <div className="w-auto mx-2 md:mx-0 bg-white p-4 md:p-8 rounded-[32px] md:rounded-[48px] shadow-2xl border border-slate-50 animate-in fade-in relative mt-8" style={{ touchAction: 'pan-x pan-y pinch-zoom' }}>
       <div className="flex bg-slate-100 p-1.5 rounded-[20px] w-max mb-6">
          <button onClick={()=>{setMode('years'); setContextProp('all'); setContextPlat('all');}} className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1 md:gap-2 ${mode === 'years' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>📅 Années</button>
          <button onClick={()=>{setMode('properties'); setContextYear(currentYear); setContextPlat('all');}} className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1 md:gap-2 ${mode === 'properties' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>🏠 Logements</button>
@@ -462,7 +462,10 @@ const App = () => {
 
   const [quickPayConfig, setQuickPayConfig] = useState(null); 
   const [statsDetailConfig, setStatsDetailConfig] = useState(null);
+  const [hasScrolledToNext, setHasScrolledToNext] = useState(false);
   
+  const touchStartX = useRef(null);
+  const touchStartY = useRef(null);
   const todayStr = new Date().toISOString().split('T')[0];
 
   // --- REFS POUR LE CARROUSEL NATIF ---
@@ -599,6 +602,20 @@ const App = () => {
      if (filterYear !== 'all' && y !== filterYear) return false;
      if (filterMonth !== 'all' && parseInt(mo)-1 !== parseInt(filterMonth)) return false;
      return true;
+  };
+
+  const getTenantProfitForFilters = (t) => {
+    let profit = 0;
+    if (t.platform === 'En direct') {
+        const a1 = parseFloat(t.acompte1Amount) || 0, a2 = parseFloat(t.acompte2Amount) || 0, s = parseFloat(t.soldeAmount) || 0;
+        if (t.acompte1Date && checkDateFilter(t.acompte1Date)) profit += a1;
+        if (t.acompte2Date && checkDateFilter(t.acompte2Date)) profit += a2;
+        if (t.soldeDate && checkDateFilter(t.soldeDate)) { profit += s; if (t.isUrssaf !== false) profit -= (parseFloat(t.grossAmount) || 0) * 0.077; }
+    } else {
+        if (t.paymentDate && checkDateFilter(t.paymentDate)) { profit += (parseFloat(t.netAmount) || 0); if (t.isUrssaf !== false) profit -= (parseFloat(t.grossAmount) || 0) * 0.077; }
+    }
+    (t.resExpenses || []).forEach(exp => { if (exp.paymentDate && checkDateFilter(exp.paymentDate)) { profit -= (parseFloat(exp.amount) || 0); } });
+    return profit;
   };
 
   const monthlyRecapData = useMemo(() => {
@@ -1516,7 +1533,6 @@ const App = () => {
                   </form>
                 </div>
                 
-                {/* --- NOUVEAU BLOC : PRESTATAIRES AVEC EMAIL --- */}
                 <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full border-2 border-blue-50">
                   <h3 className="text-[10px] font-black uppercase text-blue-600 mb-4">Prestataires (Emails)</h3>
                   <div className="space-y-2 mb-6 flex-1 overflow-y-auto max-h-[200px] text-[10px] font-black uppercase">
