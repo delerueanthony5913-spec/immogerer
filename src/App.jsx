@@ -1327,13 +1327,13 @@ const App = () => {
               </div>
               
               {/* VUE MOBILE : Liste déroulante indépendante avec marge mx-2 */}
-              <div className="md:hidden max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain p-1 rounded-[32px] border border-slate-100 bg-slate-50/50 shadow-inner mx-2 touch-manipulation" style={{ touchAction: 'manipulation' }}>
-                <div className="grid grid-cols-1 gap-4">
+              <div className="md:hidden max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain p-1 rounded-[24px] border border-slate-100 bg-slate-50/50 shadow-inner mx-2 touch-manipulation" style={{ touchAction: 'manipulation' }}>
+                <div className="grid grid-cols-1 gap-3">
                   {(groupedReservationsList || []).map(item => {
                     if (item.isSeparator) {
                       return (
                         <div key={item.id} className="flex items-center justify-center mt-2 mb-1">
-                            <span className="bg-slate-800 text-white px-5 py-2 rounded-[14px] text-[10px] font-black uppercase tracking-[0.2em] shadow-lg">
+                            <span className="bg-slate-800 text-white px-4 py-1.5 rounded-[12px] text-[9px] font-black uppercase tracking-[0.2em] shadow-sm">
                                 {item.label}
                             </span>
                         </div>
@@ -1343,36 +1343,36 @@ const App = () => {
                     const t = item;
                     const colors = getRowColors(t.propertyId);
                     return (
-                    <div key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className={`${colors.bg} p-6 rounded-[32px] shadow-lg border border-slate-50 cursor-pointer transition-colors`}>
-                      <div className="flex justify-between items-start mb-3">
+                    <div key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className={`${colors.bg} p-4 rounded-[24px] shadow-md border border-slate-50 cursor-pointer transition-colors`}>
+                      <div className="flex justify-between items-start mb-2">
                         <div>
-                          <h3 className="text-base font-black uppercase">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</h3>
-                          <div className="flex gap-2 text-[10px] text-slate-400"><span>{t.platform}</span><span>{t.name}</span></div>
+                          <h3 className="text-sm font-black uppercase">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</h3>
+                          <div className="flex gap-1.5 text-[9px] text-slate-400 mt-0.5"><span>{t.platform}</span><span>{t.name}</span></div>
                         </div>
                         <div className="flex flex-col items-end">
-                          <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>
+                          <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-2.5 py-1 rounded-full text-[8px] font-black uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>
                             {getStatusProps(t).label}
                           </span>
-                          {t.paymentDate && t.platform !== 'En direct' && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.paymentDate)}</span>}
-                          {t.platform === 'En direct' && t.soldeDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.soldeDate)}</span>}
+                          {t.paymentDate && t.platform !== 'En direct' && <span className="text-[7px] text-slate-400 mt-1 font-bold">{formatDateFr(t.paymentDate)}</span>}
+                          {t.platform === 'En direct' && t.soldeDate && <span className="text-[7px] text-slate-400 mt-1 font-bold">{formatDateFr(t.soldeDate)}</span>}
                         </div>
                       </div>
-                      <div className="bg-white/60 p-3 rounded-2xl flex justify-between font-black text-xs mb-3"><span>{formatDateFr(t.startDate)}</span><ArrowRight size={14} className="text-slate-300"/><span>{formatDateFr(t.endDate)}</span></div>
+                      <div className="bg-white/60 p-2.5 rounded-[16px] flex justify-between font-black text-[10px] mb-2 items-center"><span>{formatDateFr(t.startDate)}</span><ArrowRight size={12} className="text-slate-300"/><span>{formatDateFr(t.endDate)}</span></div>
                       
                       {t.resExpenses && t.resExpenses.length > 0 && (
-                        <div className="space-y-1.5 border-t border-slate-100 pt-3 mb-3">
+                        <div className="space-y-1 border-t border-slate-100 pt-2 mb-2">
                           {(t.resExpenses || []).map((exp, idx) => (
-                            <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-white/60 p-2 rounded-xl cursor-pointer hover:bg-white transition-colors">
+                            <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[9px] bg-white/60 p-1.5 rounded-xl cursor-pointer hover:bg-white transition-colors">
                               <span className="uppercase font-black text-slate-500">{exp.type} ({exp.person})</span>
                               <div className="text-right">
-                                <span className={`font-black flex items-center justify-end gap-1 ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€ {exp.paymentDate ? <CheckCircle size={10}/> : <Clock size={10}/>}</span>
-                                {exp.paymentDate && <div className="text-[8px] text-slate-400 mt-0.5">{formatDateFr(exp.paymentDate)}</div>}
+                                <span className={`font-black flex items-center justify-end gap-1 ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€ {exp.paymentDate ? <CheckCircle size={8}/> : <Clock size={8}/>}</span>
+                                {exp.paymentDate && <div className="text-[7px] text-slate-400 mt-0.5">{formatDateFr(exp.paymentDate)}</div>}
                               </div>
                             </div>
                           ))}
                         </div>
                       )}
-                      <div className="text-right font-black text-lg">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</div>
+                      <div className="text-right font-black text-base">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</div>
                     </div>
                   )})}
                 </div>
@@ -1449,7 +1449,7 @@ const App = () => {
           {activeTab === 'agenda' && (
             <div className="space-y-8 animate-in fade-in">
               <div className="flex justify-between items-center mx-2 md:mx-0"><div><h2 className="text-2xl font-black uppercase">Agenda</h2></div><div className="flex items-center gap-4 bg-white px-4 py-2 rounded-2xl shadow-lg"><button onClick={()=>handleMonthChange('prev')}><ChevronLeft/></button><div className="text-center font-black min-w-[120px] uppercase text-xs">{['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][filterMonth==='all'?new Date().getMonth():parseInt(filterMonth)]}</div><button onClick={()=>handleMonthChange('next')}><ChevronRight/></button></div></div>
-              <div className="bg-white p-4 md:p-6 rounded-[32px] md:rounded-[40px] shadow-2xl overflow-x-auto mx-2 md:mx-0 touch-manipulation" style={{ touchAction: 'manipulation' }}><div className="min-w-[320px] md:min-w-[700px]"><div className="grid grid-cols-7 text-center font-black text-slate-300 text-[8px] md:text-[10px] uppercase mb-2 md:mb-4">{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d=><div key={d}>{d}</div>)}</div><div className="grid grid-cols-7 gap-1 md:gap-2">{(agendaDays || []).map((item,idx)=>{ if(item.empty) return <div key={idx} className="h-16 md:h-32 bg-slate-50/30 rounded-xl md:rounded-2xl"></div>; const dayRes = (reservationsList || []).filter(r=>item.dateStr>=r.startDate && item.dateStr<=r.endDate); return (<div key={item.dateStr} className={`h-16 md:h-32 border rounded-xl md:rounded-2xl p-1 md:p-2 relative flex flex-col ${item.dateStr===todayStr?'border-blue-500 bg-blue-50/10':'border-slate-100'}`}><span className="text-[8px] md:text-[10px] font-black text-slate-300">{item.day}</span><div className="flex-1 space-y-0.5 md:space-y-1 overflow-y-auto no-scrollbar">{dayRes.map(r=>(<div key={r.id} onClick={(e)=>{e.stopPropagation();setEditingResId(r.id);setFormData(r);setIsModalOpen(true)}} className="text-[6px] md:text-[8px] font-black text-white p-0.5 md:p-1 rounded truncate cursor-pointer leading-tight" style={{backgroundColor: CHART_COLORS[(properties || []).findIndex(p=>p.id===r.propertyId)%CHART_COLORS.length]}}>{r.name?.split(' ')[0] || 'Résa'}</div>))}</div></div>);})}</div></div></div>
+              <div className="bg-white p-4 md:p-6 rounded-[32px] md:rounded-[40px] shadow-2xl overflow-x-auto no-swipe mx-2 md:mx-0 touch-manipulation" style={{ touchAction: 'manipulation' }}><div className="min-w-[320px] md:min-w-[700px]"><div className="grid grid-cols-7 text-center font-black text-slate-300 text-[8px] md:text-[10px] uppercase mb-2 md:mb-4">{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d=><div key={d}>{d}</div>)}</div><div className="grid grid-cols-7 gap-1 md:gap-2">{(agendaDays || []).map((item,idx)=>{ if(item.empty) return <div key={idx} className="h-16 md:h-32 bg-slate-50/30 rounded-xl md:rounded-2xl"></div>; const dayRes = (reservationsList || []).filter(r=>item.dateStr>=r.startDate && item.dateStr<=r.endDate); return (<div key={item.dateStr} className={`h-16 md:h-32 border rounded-xl md:rounded-2xl p-1 md:p-2 relative flex flex-col ${item.dateStr===todayStr?'border-blue-500 bg-blue-50/10':'border-slate-100'}`}><span className="text-[8px] md:text-[10px] font-black text-slate-300">{item.day}</span><div className="flex-1 space-y-0.5 md:space-y-1 overflow-y-auto no-scrollbar">{dayRes.map(r=>(<div key={r.id} onClick={(e)=>{e.stopPropagation();setEditingResId(r.id);setFormData(r);setIsModalOpen(true)}} className="text-[6px] md:text-[8px] font-black text-white p-0.5 md:p-1 rounded truncate cursor-pointer leading-tight" style={{backgroundColor: CHART_COLORS[(properties || []).findIndex(p=>p.id===r.propertyId)%CHART_COLORS.length]}}>{r.name?.split(' ')[0] || 'Résa'}</div>))}</div></div>);})}</div></div></div>
             </div>
           )}
           
