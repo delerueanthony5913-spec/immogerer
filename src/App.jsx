@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc, addDoc } from 'firebase/firestore';
+import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc, addDoc, query } from 'firebase/firestore';
 import { 
   Home, Euro, LayoutDashboard, Plus, Trash2, MapPin, Calendar as CalendarIcon,
   Menu, X, CalendarCheck, CheckCircle, Clock, PieChart as PieChartIcon,
@@ -29,6 +29,49 @@ const db = getFirestore(app);
 const appId = 'immogerer-prod-final';
 
 const CHART_COLORS = ['#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#6366F1', '#F43F5E', '#06B6D4'];
+
+// --- UTILITAIRE : CALCULATEUR DE DIMANCHES ET JOURS FERIES FRANCAIS ---
+const isSundayOrHoliday = (dateStr) => {
+  if (!dateStr) return false;
+  const [y, m, d] = dateStr.split('-');
+  const date = new Date(y, m - 1, d);
+  
+  // 1. Est-ce un Dimanche ? (0 = Dimanche en Javascript)
+  if (date.getDay() === 0) return true;
+  
+  // 2. Est-ce un jour férié français ?
+  const year = parseInt(y, 10);
+  const holidays = [
+      `${year}-01-01`, // Jour de l'an
+      `${year}-05-01`, // Fête du travail
+      `${year}-05-08`, // Victoire 1945
+      `${year}-07-14`, // Fête nationale
+      `${year}-08-15`, // Assomption
+      `${year}-11-01`, // Toussaint
+      `${year}-11-11`, // Armistice
+      `${year}-12-25`  // Noël
+  ];
+  
+  // Algorithme astronomique pour trouver Pâques (et déduire Ascension/Pentecôte)
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100,
+        d1 = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25),
+        g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d1 - g + 15) % 30,
+        i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7,
+        m1 = Math.floor((a + 11 * h + 22 * l) / 451), n0 = h + l - 7 * m1 + 114,
+        month = Math.floor(n0 / 31), day = (n0 % 31) + 1;
+        
+  const paques = new Date(year, month - 1, day);
+  const formatLocal = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+  
+  const lundiPaques = new Date(paques); lundiPaques.setDate(paques.getDate() + 1);
+  const ascension = new Date(paques); ascension.setDate(paques.getDate() + 39);
+  const lundiPentecote = new Date(paques); lundiPentecote.setDate(paques.getDate() + 50);
+  
+  holidays.push(formatLocal(lundiPaques), formatLocal(ascension), formatLocal(lundiPentecote));
+  
+  return holidays.includes(dateStr);
+};
+
 
 // --- COMPOSANT ICONE VILLA SUR-MESURE ---
 const VillaIcon = ({ size = 24, className = "" }) => (
@@ -733,12 +776,22 @@ const App = () => {
     } catch (err) { alert("Erreur d'encaissement: " + err.message); }
   };
 
-  // FONCTION DE CALCUL DYNAMIQUE POUR "DIAS NETTOYAGE"
+  // FONCTION DE CALCUL DYNAMIQUE POUR "DIAS NETTOYAGE" AVEC LES TARIFS AUTO
   const updateDiasField = (expId, field, value) => {
     setFormData(prev => {
         const newExpenses = (prev.resExpenses || []).map(x => {
             if (x.id === expId) {
                 const updated = { ...x, [field]: value };
+                
+                // Si l'on vient de changer une des deux dates, on recalcule le tarif !
+                if (field === 'dateEntry') {
+                    updated.rateEntry = isSundayOrHoliday(value) ? 25 : 15;
+                }
+                if (field === 'dateExit') {
+                    updated.rateExit = isSundayOrHoliday(value) ? 25 : 15;
+                }
+
+                // Recalcul du montant total
                 const he = parseFloat(updated.hoursEntry) || 0;
                 const re = parseFloat(updated.rateEntry) || 0;
                 const hs = parseFloat(updated.hoursExit) || 0;
@@ -1080,160 +1133,6 @@ const App = () => {
     }).sort((a,b) => (a.startDate||"").localeCompare(b.startDate||""));
   }, [statsDetailConfig, baseTenants, filterYear]);
 
-  const getTenantProfitForFilters = (t) => {
-    let profit = 0;
-    if (t.platform === 'En direct') {
-        const a1 = parseFloat(t.acompte1Amount) || 0;
-        const a2 = parseFloat(t.acompte2Amount) || 0;
-        const s = parseFloat(t.soldeAmount) || 0;
-        
-        if (t.acompte1Date && checkDateFilter(t.acompte1Date)) profit += a1;
-        if (t.acompte2Date && checkDateFilter(t.acompte2Date)) profit += a2;
-        
-        if (t.soldeDate && checkDateFilter(t.soldeDate)) {
-            profit += s;
-            if (t.isUrssaf !== false) profit -= (parseFloat(t.grossAmount) || 0) * 0.077;
-        }
-    } else {
-        if (t.paymentDate && checkDateFilter(t.paymentDate)) {
-            profit += (parseFloat(t.netAmount) || 0);
-            if (t.isUrssaf !== false) profit -= (parseFloat(t.grossAmount) || 0) * 0.077;
-        }
-    }
-
-    (t.resExpenses || []).forEach(exp => {
-        if (exp.paymentDate && checkDateFilter(exp.paymentDate)) {
-            profit -= (parseFloat(exp.amount) || 0);
-        }
-    });
-
-    return profit;
-  };
-
-  const handleMonthChange = (direction) => {
-    let m = filterMonth === 'all' ? new Date().getMonth() : parseInt(filterMonth);
-    let y = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
-    if (direction === 'next') { if (m === 11) { m = 0; y += 1; } else m += 1; }
-    else { if (m === 0) { m = 11; y -= 1; } else m -= 1; }
-    setFilterMonth(m.toString()); setFilterYear(y.toString());
-  };
-
-  const agendaDays = useMemo(() => {
-    const y = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
-    const m = filterMonth === 'all' ? new Date().getMonth() : parseInt(filterMonth);
-    const firstDay = new Date(y, m, 1), lastDay = new Date(y, m + 1, 0), days = [];
-    let offset = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
-    for (let i = 0; i < offset; i++) days.push({ empty: true });
-    for (let i = 1; i <= lastDay.getDate(); i++) days.push({ day: i, dateStr: `${y}-${(m+1).toString().padStart(2, '0')}-${i.toString().padStart(2, '0')}` });
-    return days;
-  }, [filterYear, filterMonth]);
-
-  const yearsAvailable = useMemo(() => {
-    const years = new Set([new Date().getFullYear()]);
-    tenants.forEach(t => {
-      if (t.startDate) years.add(parseInt(t.startDate.split('-')[0], 10));
-      if (t.endDate) years.add(parseInt(t.endDate.split('-')[0], 10));
-      if (t.soldeDate) years.add(parseInt(t.soldeDate.split('-')[0], 10));
-      if (t.paymentDate) years.add(parseInt(t.paymentDate.split('-')[0], 10));
-    });
-    return Array.from(years).filter(y => !isNaN(y)).sort((a, b) => b - a).map(String);
-  }, [tenants]);
-
-  const parseCSVLine = (text) => {
-    const result = []; let current = '', inQuotes = false;
-    for (let i = 0; i < text.length; i++) {
-        const char = text[i];
-        if (char === '"') inQuotes = !inQuotes;
-        else if (char === ',' && !inQuotes) { result.push(current); current = ''; }
-        else current += char;
-    }
-    result.push(current); return result;
-  };
-
-  const startReview = () => {
-    if (!importText.trim()) return;
-    const lines = importText.split('\n').filter(l => l.trim() !== ''); 
-    if (lines.length < 2) return;
-
-    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
-    const voyageurIdx = headers.findIndex(h => h.includes('voyageur') || h.includes('client') || h.includes('nom'));
-    
-    const newList = [];
-    
-    lines.forEach((line, index) => {
-        if (index === 0) return; 
-        const parts = parseCSVLine(line);
-        if (parts.length < 5) return;
-
-        let guestName, startDate, endDate, listingName;
-        let gross = 0, fees = 0, cityTax = 0, bankFees = 0, dispAmount = 0, net = 0;
-
-        if (importSource === 'Airbnb') {
-            const typeIndex = parts.findIndex(p => p.toLowerCase().includes('réservation') || p.toLowerCase().includes('reservation'));
-            if (typeIndex === -1) return;
-            let rawStart, rawEnd, grossStr, serviceFeeStr;
-            if (typeIndex === 2) {
-                rawStart = parts[5]?.trim(); rawEnd = parts[6]?.trim(); guestName = parts[8]?.trim(); listingName = parts[9]?.trim();
-                grossStr = parts[18]?.trim() || parts[13]?.trim(); serviceFeeStr = parts[15]?.trim();
-            } else if (typeIndex === 1) {
-                rawStart = parts[4]?.trim(); rawEnd = parts[5]?.trim(); guestName = parts[7]?.trim(); listingName = parts[8]?.trim();
-                grossStr = parts[15]?.trim() || parts[12]?.trim(); serviceFeeStr = parts[13]?.trim();
-            } else return;
-
-            const formatDateStr = (raw) => { if(!raw) return ''; const [m, d, y] = raw.split('/'); return (m && d && y) ? `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}` : ''; };
-            startDate = formatDateStr(rawStart); endDate = formatDateStr(rawEnd);
-            if (!startDate || !endDate) return;
-
-            gross = parseFloat(grossStr?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
-            fees = Math.abs(parseFloat(serviceFeeStr?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
-            dispAmount = gross;
-            net = gross - fees;
-        } 
-        else if (importSource === 'Booking') {
-            const typeCol = parts[0]?.toLowerCase() || '';
-            if (!typeCol.includes('rã©servation') && !typeCol.includes('réservation') && !typeCol.includes('reservation')) return;
-
-            guestName = voyageurIdx !== -1 && parts[voyageurIdx] ? parts[voyageurIdx].trim() : `Réf: ${parts[2]?.trim()}`; 
-            
-            startDate = parts[3]?.trim(); 
-            endDate = parts[4]?.trim();   
-            listingName = parts[10]?.trim();
-
-            if (!startDate || !endDate) return;
-
-            dispAmount = parseFloat(parts[15]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
-            cityTax = Math.abs(parseFloat(parts[16]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
-            fees = Math.abs(parseFloat(parts[17]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
-            bankFees = Math.abs(parseFloat(parts[19]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
-
-            gross = dispAmount - cityTax;
-            net = gross - fees - bankFees;
-        }
-
-        const matchedProp = properties.find(p => listingName && p.name && (listingName.toLowerCase().includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(listingName.toLowerCase())));
-        const isDuplicate = tenants.some(t => t.startDate === startDate && t.propertyId === (matchedProp?.id || 'none'));
-        const hasProperty = !!matchedProp;
-
-        newList.push({ 
-            id: index, propertyId: matchedProp?.id || '', propertyName: matchedProp?.name || listingName || 'Inconnu', 
-            name: guestName || 'Client Inconnu', startDate, endDate, grossAmount: gross, platformFees: fees, 
-            displayedAmount: dispAmount, cityTax: cityTax, bankFees: bankFees,
-            netAmount: net, isDuplicate, hasProperty, selected: !isDuplicate && hasProperty 
-        });
-    });
-    setReviewList(newList);
-  };
-
-  const confirmImport = async () => {
-      const toImport = reviewList.filter(i => i.selected && i.hasProperty);
-      for (let item of toImport) {
-          const { id, selected, isDuplicate, hasProperty, propertyName, ...cleanItem } = item;
-          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), { ...cleanItem, platform: importSource, isUrssaf: true, comment: `Importé via CSV ${importSource}`, resExpenses: [], paymentDate: '' });
-      }
-      setReviewList([]); setImportText(''); setImportStatus(`${toImport.length} réservation(s) importée(s) !`);
-      setTimeout(() => setImportStatus(''), 5000);
-  };
-
   // --- ECRAN DE VERROUILLAGE (OPTION 1) ---
   const handlePinSubmit = (e) => {
     e.preventDefault();
@@ -1245,6 +1144,29 @@ const App = () => {
       setPinInput('');
     }
   };
+
+  // NOUVEAU COMPOSANT : Filtres en mode "Sticky" (fixé en haut)
+  const RenderFilters = () => (
+    <div className="sticky top-0 z-30 bg-[#F8FAFC]/95 backdrop-blur-md pt-2 pb-4 mb-2 md:-mx-4 md:px-4">
+      <div className="flex flex-wrap items-center gap-2 bg-white/80 p-3 rounded-[28px] border border-white shadow-lg mx-2 md:mx-0">
+        <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+          <Filter size={12} className="text-slate-400" />
+          <select value={filterYear} onChange={e => {setFilterYear(e.target.value); setHasScrolledToNext(false);}} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer">
+            <option value="all">Toutes Années</option>{(yearsAvailable || []).map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+        <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+          <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Mois (Tous)</option>{['Janv','Févr','Mars','Avril','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'].map((m,i)=><option key={i} value={i}>{m}</option>)}</select>
+        </div>
+        <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+          <select value={filterProp} onChange={e => setFilterProp(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none max-w-[100px] md:max-w-[130px] cursor-pointer"><option value="all">Logements</option>{(properties || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+        </div>
+        <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+          <select value={filterPlat} onChange={e => setFilterPlat(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Plateformes</option>{(availablePlatforms || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
+        </div>
+      </div>
+    </div>
+  );
 
   if (!isUnlocked) {
     return (
@@ -1882,7 +1804,17 @@ const App = () => {
               <div className="space-y-4">
                   <div className="flex justify-between font-black uppercase tracking-widest text-slate-400 text-[10px]">
                       Prestations
-                      <button type="button" onClick={() => setFormData({ ...formData, resExpenses: [...(formData.resExpenses || []), { id: Date.now().toString(), person: availableProviders[0] || '', type: availableServiceTypes[0] || '', amount: 0, paymentDate: '', hoursEntry: '', rateEntry: '', hoursExit: '', rateExit: '', dateEntry: formData.startDate || '', dateExit: formData.endDate || '' }] })} className="bg-slate-900 text-white px-4 py-2 rounded-xl">+ Ajouter</button>
+                      <button type="button" onClick={() => {
+                          const newExp = { id: Date.now().toString(), person: availableProviders[0] || '', type: availableServiceTypes[0] || '', amount: 0, paymentDate: '', hoursEntry: '', rateEntry: '', hoursExit: '', rateExit: '', dateEntry: formData.startDate || '', dateExit: formData.endDate || '' };
+                          
+                          // Si le prestataire par défaut est Dias, on pré-calcule tout de suite
+                          if (newExp.person.toLowerCase().includes('dias')) {
+                              newExp.rateEntry = isSundayOrHoliday(newExp.dateEntry) ? 25 : 15;
+                              newExp.rateExit = isSundayOrHoliday(newExp.dateExit) ? 25 : 15;
+                          }
+                          
+                          setFormData({ ...formData, resExpenses: [...(formData.resExpenses || []), newExp] })
+                      }} className="bg-slate-900 text-white px-4 py-2 rounded-xl">+ Ajouter</button>
                   </div>
                   
                   {(formData.resExpenses || []).map(exp => {
@@ -1896,7 +1828,20 @@ const App = () => {
                                   <div className="flex gap-2 items-center relative z-10">
                                       <select value={exp.person || ''} onChange={e => {
                                           const val = e.target.value;
-                                          setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, person: val } : x) })
+                                          setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => {
+                                              if (x.id === exp.id) {
+                                                  const isDiasNow = val.toLowerCase().includes('dias');
+                                                  if (isDiasNow) {
+                                                      const rE = isSundayOrHoliday(x.dateEntry) ? 25 : 15;
+                                                      const rX = isSundayOrHoliday(x.dateExit) ? 25 : 15;
+                                                      const he = parseFloat(x.hoursEntry) || 0;
+                                                      const hs = parseFloat(x.hoursExit) || 0;
+                                                      return { ...x, person: val, rateEntry: rE, rateExit: rX, amount: (he * rE) + (hs * rX) };
+                                                  }
+                                                  return { ...x, person: val };
+                                              }
+                                              return x;
+                                          })});
                                       }} className="flex-1 p-3 border border-blue-200 rounded-xl font-black uppercase text-[10px] outline-none bg-white">{(availableProviders || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
                                       
                                       <select value={exp.type || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, type: e.target.value } : x) })} className="flex-1 p-3 border border-blue-200 rounded-xl font-black uppercase text-[10px] outline-none bg-white">{(availableServiceTypes || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
@@ -1910,6 +1855,7 @@ const App = () => {
                                       <div className="bg-white p-3 rounded-[20px] border border-blue-100 shadow-sm space-y-2">
                                           <div className="flex justify-between items-center">
                                               <span className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Date d'Entrée</span>
+                                              {isSundayOrHoliday(exp.dateEntry) && <span className="text-[8px] font-black text-white bg-rose-500 px-2 py-0.5 rounded-full shadow-sm">Férié / Dim</span>}
                                           </div>
                                           <input type="date" value={exp.dateEntry || ''} onChange={e => updateDiasField(exp.id, 'dateEntry', e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-600 outline-none cursor-pointer" />
                                           <div className="flex gap-2">
@@ -1919,7 +1865,7 @@ const App = () => {
                                               </div>
                                               <div className="flex-1">
                                                   <label className="text-[8px] uppercase text-slate-400 font-bold block mb-1">Tarif Hor. (€)</label>
-                                                  <input type="number" step="0.5" value={exp.rateEntry || ''} onChange={e => updateDiasField(exp.id, 'rateEntry', e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl font-black text-center text-sm outline-none focus:border-blue-400" placeholder="0" />
+                                                  <input type="number" step="0.5" value={exp.rateEntry || ''} onChange={e => updateDiasField(exp.id, 'rateEntry', e.target.value)} className={`w-full p-2.5 border rounded-xl font-black text-center text-sm outline-none focus:border-blue-400 transition-colors ${isSundayOrHoliday(exp.dateEntry) ? 'bg-rose-50 border-rose-200 text-rose-700' : 'border-slate-200 text-slate-900'}`} placeholder="0" />
                                               </div>
                                           </div>
                                       </div>
@@ -1928,6 +1874,7 @@ const App = () => {
                                       <div className="bg-white p-3 rounded-[20px] border border-blue-100 shadow-sm space-y-2">
                                           <div className="flex justify-between items-center">
                                               <span className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Date de Sortie</span>
+                                              {isSundayOrHoliday(exp.dateExit) && <span className="text-[8px] font-black text-white bg-rose-500 px-2 py-0.5 rounded-full shadow-sm">Férié / Dim</span>}
                                           </div>
                                           <input type="date" value={exp.dateExit || ''} onChange={e => updateDiasField(exp.id, 'dateExit', e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-600 outline-none cursor-pointer" />
                                           <div className="flex gap-2">
@@ -1937,7 +1884,7 @@ const App = () => {
                                               </div>
                                               <div className="flex-1">
                                                   <label className="text-[8px] uppercase text-slate-400 font-bold block mb-1">Tarif Hor. (€)</label>
-                                                  <input type="number" step="0.5" value={exp.rateExit || ''} onChange={e => updateDiasField(exp.id, 'rateExit', e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-xl font-black text-center text-sm outline-none focus:border-blue-400" placeholder="0" />
+                                                  <input type="number" step="0.5" value={exp.rateExit || ''} onChange={e => updateDiasField(exp.id, 'rateExit', e.target.value)} className={`w-full p-2.5 border rounded-xl font-black text-center text-sm outline-none focus:border-blue-400 transition-colors ${isSundayOrHoliday(exp.dateExit) ? 'bg-rose-50 border-rose-200 text-rose-700' : 'border-slate-200 text-slate-900'}`} placeholder="0" />
                                               </div>
                                           </div>
                                       </div>
@@ -1955,7 +1902,23 @@ const App = () => {
                       // LIGNE CLASSIQUE POUR LES AUTRES PRESTATAIRES
                       return (
                           <div key={exp.id} className="flex gap-2 bg-slate-50 p-4 rounded-[28px] border border-slate-100 items-center">
-                              <select value={exp.person || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, person: e.target.value } : x) })} className="flex-1 p-3 border rounded-xl font-black uppercase text-[10px] outline-none">{(availableProviders || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
+                              <select value={exp.person || ''} onChange={e => {
+                                  const val = e.target.value;
+                                  setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => {
+                                      if (x.id === exp.id) {
+                                          const isDiasNow = val.toLowerCase().includes('dias');
+                                          if (isDiasNow) {
+                                              const rE = isSundayOrHoliday(x.dateEntry) ? 25 : 15;
+                                              const rX = isSundayOrHoliday(x.dateExit) ? 25 : 15;
+                                              const he = parseFloat(x.hoursEntry) || 0;
+                                              const hs = parseFloat(x.hoursExit) || 0;
+                                              return { ...x, person: val, rateEntry: rE, rateExit: rX, amount: (he * rE) + (hs * rX) };
+                                          }
+                                          return { ...x, person: val };
+                                      }
+                                      return x;
+                                  })});
+                              }} className="flex-1 p-3 border rounded-xl font-black uppercase text-[10px] outline-none">{(availableProviders || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
                               <select value={exp.type || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, type: e.target.value } : x) })} className="flex-1 p-3 border rounded-xl font-black uppercase text-[10px] outline-none">{(availableServiceTypes || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
                               <input type="number" value={exp.amount || ''} onChange={e => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).map(x => x.id === exp.id ? { ...x, amount: e.target.value } : x) })} className="w-20 p-3 border rounded-xl font-black text-right outline-none" />
                               <button type="button" onClick={() => setFormData({ ...formData, resExpenses: (formData.resExpenses || []).filter(x => x.id !== exp.id) })} className="text-rose-500 font-black px-2"><Trash2 size={18}/></button>
