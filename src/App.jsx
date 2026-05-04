@@ -81,7 +81,7 @@ const DonutChart = ({ data, title }) => {
   );
 };
 
-// GRAPHIQUE MULTI-COURBES INTELLIGENT (Gère le Réel vs Prévisionnel)
+// GRAPHIQUE MULTI-COURBES INTELLIGENT
 const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) => {
   const currentYear = new Date().getFullYear().toString();
   
@@ -314,7 +314,6 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
           <div className="overflow-x-auto no-scrollbar">
             <div className="min-w-[600px] relative">
               <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
-                {/* Lignes de grille horizontales */}
                 {yTicks.map((tick, i) => (
                   <g key={`grid-${i}`}>
                     <line x1={padX} y1={getY(tick)} x2={w - padX} y2={getY(tick)} stroke="#F1F5F9" strokeWidth="2" />
@@ -322,27 +321,21 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
                   </g>
                 ))}
 
-                {/* Highlight vertical line pour le survol */}
                 {hoveredMonth !== null && (
                     <line x1={getX(hoveredMonth)} y1={padY} x2={getX(hoveredMonth)} y2={h - padY} stroke="#CBD5E1" strokeWidth="2" strokeDasharray="4 4" />
                 )}
                 
-                {/* Lignes de mois */}
                 {months.map((m, i) => (
                   <text key={m} x={getX(i)} y={h - 5} fill={hoveredMonth === i ? "#0F172A" : "#94A3B8"} fontSize="12" fontFamily="sans-serif" fontWeight="900" textAnchor="middle" className="transition-colors cursor-pointer" onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)}>{m}</text>
                 ))}
                 
-                {/* Tracer chaque courbe avec pointillé intelligent */}
                 {series.map((s, idx) => (
                    <g key={`series-${s.id}`}>
-                      {/* Ligne Pleine (Réel) */}
                       <path d={buildPath(s.data, 0, Math.max(0, s.splitIndex))} stroke={s.color} strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />
-                      {/* Ligne Pointillée (Prévisionnel) */}
                       <path d={buildPath(s.data, Math.max(0, s.splitIndex), 11)} stroke={s.color} strokeWidth="4" fill="none" strokeDasharray="6 8" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />
                    </g>
                 ))}
 
-                {/* Tracer les points pour le hover */}
                 {months.map((_, i) => (
                   <g key={`points-${i}`} onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)} className="cursor-pointer">
                     <rect x={getX(i) - 20} y={0} width="40" height={h} fill="transparent" />
@@ -445,7 +438,6 @@ const App = () => {
   const [availableProviders, setAvailableProviders] = useState(['Justine', 'Marc']);
   const [availableServiceTypes, setAvailableServiceTypes] = useState(['Ménage', 'Entrée/Sortie']);
 
-  // Par défaut sur "all" pour voir toutes les années et pouvoir trouver la prochaine réservation
   const [filterYear, setFilterYear] = useState('all');
   const [filterMonth, setFilterMonth] = useState('all');
   const [filterProp, setFilterProp] = useState('all');
@@ -477,7 +469,6 @@ const App = () => {
 
   const [hasScrolledToNext, setHasScrolledToNext] = useState(false);
   
-  // CORRECTION: DÉFINITION GLOBALE AU COMPOSANT POUR L'AGENDA
   const todayStr = new Date().toISOString().split('T')[0];
 
   useEffect(() => {
@@ -700,6 +691,21 @@ const App = () => {
     } catch (err) { alert("Erreur d'encaissement: " + err.message); }
   };
 
+  // FONCTION DE DÉTECTION DES COULEURS DES LOGEMENTS
+  const getRowColors = (propertyId) => {
+    const prop = (properties || []).find(p => p.id === propertyId);
+    if (!prop || !prop.name) return { bg: 'bg-white', hover: 'hover:bg-slate-50' };
+    
+    // On enlève les accents et met en minuscules pour ne pas rater le nom
+    const name = prop.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    
+    if (name.includes('villa cadelia')) return { bg: 'bg-red-50', hover: 'hover:bg-red-100' };
+    if (name.includes('signes de cadelio')) return { bg: 'bg-blue-50', hover: 'hover:bg-blue-100' };
+    if (name.includes('cocon de kadelia')) return { bg: 'bg-emerald-50', hover: 'hover:bg-emerald-100' };
+    
+    return { bg: 'bg-white', hover: 'hover:bg-slate-50' };
+  };
+
   const baseTenants = useMemo(() => {
     return (tenants || []).filter(t => 
        (filterProp === 'all' || t.propertyId === filterProp) &&
@@ -748,9 +754,13 @@ const App = () => {
                 if (el.offsetParent !== null) {
                     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     
+                    // On force un clignotement bleu temporaire
+                    const originalBg = el.style.backgroundColor;
                     el.style.backgroundColor = '#EFF6FF';
                     el.style.transition = 'background-color 1s ease';
-                    setTimeout(() => { el.style.backgroundColor = ''; }, 3000);
+                    setTimeout(() => { 
+                        el.style.backgroundColor = originalBg; // Retour à la couleur définie par la classe
+                    }, 3000);
                     
                     scrolled = true;
                     break;
@@ -1216,11 +1226,13 @@ const App = () => {
             <div className="space-y-8 animate-in fade-in">
               <div className="flex justify-between items-center"><h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2><button onClick={() => { setEditingResId(null); setFormData({ propertyId: properties[0]?.id || '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '', acompte1Amount: '', acompte1Date: '', acompte2Amount: '', acompte2Date: '', soldeAmount: '', soldeDate: '' }); setIsModalOpen(true); }} className="bg-blue-600 text-white px-8 py-4 rounded-[24px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button></div>
               
-              {/* VUE MOBILE : Liste déroulante indépendante (overscroll-contain) */}
+              {/* VUE MOBILE : Liste déroulante indépendante */}
               <div className="md:hidden max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain p-1 rounded-[32px] border border-slate-100 bg-slate-50/50 shadow-inner">
                 <div className="grid grid-cols-1 gap-4">
-                  {(reservationsList || []).map(t => (
-                    <div key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="bg-white p-6 rounded-[32px] shadow-lg border border-slate-50 cursor-pointer">
+                  {(reservationsList || []).map(t => {
+                    const colors = getRowColors(t.propertyId);
+                    return (
+                    <div key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className={`${colors.bg} p-6 rounded-[32px] shadow-lg border border-slate-50 cursor-pointer transition-colors`}>
                       <div className="flex justify-between items-start mb-3">
                         <div>
                           <h3 className="text-base font-black uppercase">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</h3>
@@ -1234,12 +1246,12 @@ const App = () => {
                           {t.platform === 'En direct' && t.soldeDate && <span className="text-[8px] text-slate-400 mt-1 font-bold">{formatDateFr(t.soldeDate)}</span>}
                         </div>
                       </div>
-                      <div className="bg-slate-50 p-3 rounded-2xl flex justify-between font-black text-xs mb-3"><span>{formatDateFr(t.startDate)}</span><ArrowRight size={14} className="text-slate-300"/><span>{formatDateFr(t.endDate)}</span></div>
+                      <div className="bg-white/60 p-3 rounded-2xl flex justify-between font-black text-xs mb-3"><span>{formatDateFr(t.startDate)}</span><ArrowRight size={14} className="text-slate-300"/><span>{formatDateFr(t.endDate)}</span></div>
                       
                       {t.resExpenses && t.resExpenses.length > 0 && (
-                        <div className="space-y-1.5 border-t border-slate-50 pt-3 mb-3">
+                        <div className="space-y-1.5 border-t border-slate-100 pt-3 mb-3">
                           {(t.resExpenses || []).map((exp, idx) => (
-                            <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-slate-50 p-2 rounded-xl cursor-pointer hover:bg-blue-50 transition-colors">
+                            <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-white/60 p-2 rounded-xl cursor-pointer hover:bg-white transition-colors">
                               <span className="uppercase font-black text-slate-500">{exp.type} ({exp.person})</span>
                               <div className="text-right">
                                 <span className={`font-black flex items-center justify-end gap-1 ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€ {exp.paymentDate ? <CheckCircle size={10}/> : <Clock size={10}/>}</span>
@@ -1251,11 +1263,11 @@ const App = () => {
                       )}
                       <div className="text-right font-black text-lg">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</div>
                     </div>
-                  ))}
+                  )})}
                 </div>
               </div>
 
-              {/* VUE ORDINATEUR : Liste déroulante indépendante (overscroll-contain) */}
+              {/* VUE ORDINATEUR : Liste déroulante indépendante */}
               <div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden border border-slate-100">
                 <div className="max-h-[70vh] overflow-y-auto custom-scrollbar overscroll-contain relative">
                     <table className="w-full text-left text-xs">
@@ -1263,8 +1275,10 @@ const App = () => {
                         <tr><th className="p-6">Logement</th><th className="p-6">Client</th><th className="p-6 text-center">Dates</th><th className="p-6">Prestations</th><th className="p-6 text-right">Net</th><th className="p-6 text-center">État</th></tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 font-bold">
-                        {(reservationsList || []).map(t => (
-                        <tr key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="hover:bg-slate-50 cursor-pointer">
+                        {(reservationsList || []).map(t => {
+                        const colors = getRowColors(t.propertyId);
+                        return (
+                        <tr key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className={`${colors.bg} ${colors.hover} cursor-pointer transition-colors`}>
                             <td className="p-6 uppercase">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}<div className="text-blue-600 text-[10px]">{t.platform}</div></td>
                             <td className="p-6">
                             <div>{t.name}</div>
@@ -1274,7 +1288,7 @@ const App = () => {
                             <td className="p-6">
                             <div className="space-y-1.5">
                                 {(t.resExpenses || []).map((exp, idx) => (
-                                    <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-slate-50 p-1.5 rounded-lg border border-slate-100 cursor-pointer hover:border-blue-300 hover:shadow-sm transition-all">
+                                    <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-white/50 p-1.5 rounded-lg border border-slate-100/50 cursor-pointer hover:border-blue-300 hover:bg-white hover:shadow-sm transition-all">
                                     <span className="uppercase font-black text-slate-500 leading-none">{exp.type} ({exp.person})</span>
                                     <div className="text-right">
                                         <div className="flex items-center justify-end gap-1.5">
@@ -1298,7 +1312,7 @@ const App = () => {
                             </div>
                             </td>
                         </tr>
-                        ))}
+                        )})}
                     </tbody>
                     </table>
                 </div>
