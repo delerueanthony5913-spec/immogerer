@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc, addDoc, query } from 'firebase/firestore';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc, addDoc } from 'firebase/firestore';
 import { 
   Home, Euro, LayoutDashboard, Plus, Trash2, MapPin, Calendar as CalendarIcon,
   Menu, X, CalendarCheck, CheckCircle, Clock, PieChart as PieChartIcon,
@@ -97,15 +97,11 @@ const DonutChart = ({ data, title }) => {
   );
 };
 
-// GRAPHIQUE MULTI-COURBES INTELLIGENT
 const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) => {
   const currentYear = new Date().getFullYear().toString();
-  
   const [mode, setMode] = useState('years'); 
   const [metric, setMetric] = useState('net'); 
-  
   const [selectedKeys, setSelectedKeys] = useState([]);
-
   const [contextYear, setContextYear] = useState(currentYear);
   const [contextProp, setContextProp] = useState('all');
   const [contextPlat, setContextPlat] = useState('all');
@@ -121,9 +117,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
 
   const toggleKey = (key) => {
     setSelectedKeys(prev => 
-       prev.includes(key) 
-         ? prev.filter(k => k !== key) 
-         : [...prev, key]
+       prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
     );
   };
 
@@ -276,15 +270,12 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
 
   return (
     <div className="w-auto mx-2 md:mx-0 bg-white p-4 md:p-8 rounded-[32px] md:rounded-[48px] shadow-2xl border border-slate-50 animate-in fade-in relative mt-8" style={{ touchAction: 'pan-x pan-y pinch-zoom' }}>
-      
-      {/* 1. SELECTION DU MODE */}
       <div className="flex bg-slate-100 p-1.5 rounded-[20px] w-max mb-6">
          <button onClick={()=>{setMode('years'); setContextProp('all'); setContextPlat('all');}} className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1 md:gap-2 ${mode === 'years' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>📅 Années</button>
          <button onClick={()=>{setMode('properties'); setContextYear(currentYear); setContextPlat('all');}} className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1 md:gap-2 ${mode === 'properties' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>🏠 Logements</button>
          <button onClick={()=>{setMode('platforms'); setContextYear(currentYear); setContextProp('all');}} className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1 md:gap-2 ${mode === 'platforms' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>💻 Platefs.</button>
       </div>
 
-      {/* 2. BOUTONS DE SELECTION MULTIPLE + FILTRES */}
       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 md:gap-6 mb-6 md:mb-8 bg-slate-50 p-3 md:p-6 rounded-[24px] md:rounded-3xl border border-slate-100">
          <div className="flex-1">
             <span className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 mb-2 md:mb-3 block">Que voulez-vous afficher ? (Cochez)</span>
@@ -323,14 +314,12 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
          </div>
       </div>
 
-      {/* 3. LE GRAPHIQUE */}
       {series.length === 0 ? (
           <div className="h-[200px] md:h-[300px] flex items-center justify-center text-slate-300 font-black uppercase text-[9px] md:text-xs text-center">Cochez au moins une option pour voir le graphique</div>
       ) : (
           <div className="overflow-x-auto no-scrollbar no-swipe touch-manipulation" style={{ touchAction: 'pan-x pan-y pinch-zoom' }}>
             <div className="min-w-[450px] md:min-w-[600px] relative">
               <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
-                {/* Lignes de grille horizontales */}
                 {yTicks.map((tick, i) => (
                   <g key={`grid-${i}`}>
                     <line x1={padX} y1={getY(tick)} x2={w - padX} y2={getY(tick)} stroke="#F1F5F9" strokeWidth="2" />
@@ -338,27 +327,21 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
                   </g>
                 ))}
 
-                {/* Highlight vertical line pour le survol */}
                 {hoveredMonth !== null && (
                     <line x1={getX(hoveredMonth)} y1={padY} x2={getX(hoveredMonth)} y2={h - padY} stroke="#CBD5E1" strokeWidth="2" strokeDasharray="4 4" />
                 )}
                 
-                {/* Lignes de mois */}
                 {months.map((m, i) => (
                   <text key={m} x={getX(i)} y={h - 5} fill={hoveredMonth === i ? "#0F172A" : "#94A3B8"} fontSize="12" fontFamily="sans-serif" fontWeight="900" textAnchor="middle" className="transition-colors cursor-pointer" onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)}>{m}</text>
                 ))}
                 
-                {/* Tracer chaque courbe avec pointillé intelligent */}
                 {series.map((s, idx) => (
                    <g key={`series-${s.id}`}>
-                      {/* Ligne Pleine (Réel) */}
                       <path d={buildPath(s.data, 0, Math.max(0, s.splitIndex))} stroke={s.color} strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />
-                      {/* Ligne Pointillée (Prévisionnel) */}
                       <path d={buildPath(s.data, Math.max(0, s.splitIndex), 11)} stroke={s.color} strokeWidth="4" fill="none" strokeDasharray="6 8" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />
                    </g>
                 ))}
 
-                {/* Tracer les points pour le hover */}
                 {months.map((_, i) => (
                   <g key={`points-${i}`} onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)} className="cursor-pointer">
                     <rect x={getX(i) - 20} y={0} width="40" height={h} fill="transparent" />
@@ -369,7 +352,6 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
                 ))}
               </svg>
 
-              {/* TOOLTIP INTERACTIF AU SURVOL */}
               {hoveredMonth !== null && series.length > 0 && (
                 <div 
                   className="absolute z-20 bg-slate-900/95 backdrop-blur-sm text-white p-3 md:p-4 rounded-[16px] md:rounded-2xl shadow-2xl pointer-events-none transition-all duration-200 min-w-[130px] md:min-w-[160px] border border-slate-700"
@@ -394,7 +376,6 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
           </div>
       )}
       
-      {/* 4. TOTAUX GLOBAUX */}
       {series.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mt-4 md:mt-6">
             {series.map(s => (
@@ -412,7 +393,7 @@ const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) =
 
 // --- COMPOSANT PRINCIPAL ---
 const App = () => {
-  // --- NOUVEAU : GESTION DU CODE PIN ---
+  // --- GESTION DU CODE PIN ---
   const [isUnlocked, setIsUnlocked] = useState(() => {
     return localStorage.getItem('cadel_unlocked') === 'true';
   });
@@ -440,7 +421,6 @@ const App = () => {
     let expensesText = '';
     if (res.resExpenses && res.resExpenses.length > 0) {
        expensesText = '\n\nPrestations prévues :\n' + res.resExpenses.map(e => {
-           // Si c'est Dias, on ajoute le détail des heures dans l'agenda
            const isDias = e.person && e.person.toLowerCase().includes('dias');
            if (isDias) {
                let diasDetails = `- ${e.type} (${e.person}) : ${e.amount}€`;
@@ -457,7 +437,6 @@ const App = () => {
     }
     
     const phoneText = res.phone ? `\nContact : ${res.phone}` : '';
-    
     const details = encodeURIComponent(`Client : ${res.name}${phoneText}\nLogement : ${prop?.name || ''}\nPlateforme : ${res.platform}\nNotes : ${res.comment || ''}${expensesText}`);
     
     const endDateObj = new Date(res.endDate);
@@ -832,7 +811,7 @@ const App = () => {
       return groups;
   }, [reservationsList]);
 
-  // NOUVELLE FONCTION DE SCROLL RAPIDE (Bouton et Auto)
+  // NOUVELLE FONCTION DE SCROLL RAPIDE
   const scrollToCurrentRes = (withFlash = false) => {
     if (reservationsList.length === 0) return;
     
@@ -1101,6 +1080,160 @@ const App = () => {
     }).sort((a,b) => (a.startDate||"").localeCompare(b.startDate||""));
   }, [statsDetailConfig, baseTenants, filterYear]);
 
+  const getTenantProfitForFilters = (t) => {
+    let profit = 0;
+    if (t.platform === 'En direct') {
+        const a1 = parseFloat(t.acompte1Amount) || 0;
+        const a2 = parseFloat(t.acompte2Amount) || 0;
+        const s = parseFloat(t.soldeAmount) || 0;
+        
+        if (t.acompte1Date && checkDateFilter(t.acompte1Date)) profit += a1;
+        if (t.acompte2Date && checkDateFilter(t.acompte2Date)) profit += a2;
+        
+        if (t.soldeDate && checkDateFilter(t.soldeDate)) {
+            profit += s;
+            if (t.isUrssaf !== false) profit -= (parseFloat(t.grossAmount) || 0) * 0.077;
+        }
+    } else {
+        if (t.paymentDate && checkDateFilter(t.paymentDate)) {
+            profit += (parseFloat(t.netAmount) || 0);
+            if (t.isUrssaf !== false) profit -= (parseFloat(t.grossAmount) || 0) * 0.077;
+        }
+    }
+
+    (t.resExpenses || []).forEach(exp => {
+        if (exp.paymentDate && checkDateFilter(exp.paymentDate)) {
+            profit -= (parseFloat(exp.amount) || 0);
+        }
+    });
+
+    return profit;
+  };
+
+  const handleMonthChange = (direction) => {
+    let m = filterMonth === 'all' ? new Date().getMonth() : parseInt(filterMonth);
+    let y = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
+    if (direction === 'next') { if (m === 11) { m = 0; y += 1; } else m += 1; }
+    else { if (m === 0) { m = 11; y -= 1; } else m -= 1; }
+    setFilterMonth(m.toString()); setFilterYear(y.toString());
+  };
+
+  const agendaDays = useMemo(() => {
+    const y = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
+    const m = filterMonth === 'all' ? new Date().getMonth() : parseInt(filterMonth);
+    const firstDay = new Date(y, m, 1), lastDay = new Date(y, m + 1, 0), days = [];
+    let offset = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
+    for (let i = 0; i < offset; i++) days.push({ empty: true });
+    for (let i = 1; i <= lastDay.getDate(); i++) days.push({ day: i, dateStr: `${y}-${(m+1).toString().padStart(2, '0')}-${i.toString().padStart(2, '0')}` });
+    return days;
+  }, [filterYear, filterMonth]);
+
+  const yearsAvailable = useMemo(() => {
+    const years = new Set([new Date().getFullYear()]);
+    tenants.forEach(t => {
+      if (t.startDate) years.add(parseInt(t.startDate.split('-')[0], 10));
+      if (t.endDate) years.add(parseInt(t.endDate.split('-')[0], 10));
+      if (t.soldeDate) years.add(parseInt(t.soldeDate.split('-')[0], 10));
+      if (t.paymentDate) years.add(parseInt(t.paymentDate.split('-')[0], 10));
+    });
+    return Array.from(years).filter(y => !isNaN(y)).sort((a, b) => b - a).map(String);
+  }, [tenants]);
+
+  const parseCSVLine = (text) => {
+    const result = []; let current = '', inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        if (char === '"') inQuotes = !inQuotes;
+        else if (char === ',' && !inQuotes) { result.push(current); current = ''; }
+        else current += char;
+    }
+    result.push(current); return result;
+  };
+
+  const startReview = () => {
+    if (!importText.trim()) return;
+    const lines = importText.split('\n').filter(l => l.trim() !== ''); 
+    if (lines.length < 2) return;
+
+    const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim());
+    const voyageurIdx = headers.findIndex(h => h.includes('voyageur') || h.includes('client') || h.includes('nom'));
+    
+    const newList = [];
+    
+    lines.forEach((line, index) => {
+        if (index === 0) return; 
+        const parts = parseCSVLine(line);
+        if (parts.length < 5) return;
+
+        let guestName, startDate, endDate, listingName;
+        let gross = 0, fees = 0, cityTax = 0, bankFees = 0, dispAmount = 0, net = 0;
+
+        if (importSource === 'Airbnb') {
+            const typeIndex = parts.findIndex(p => p.toLowerCase().includes('réservation') || p.toLowerCase().includes('reservation'));
+            if (typeIndex === -1) return;
+            let rawStart, rawEnd, grossStr, serviceFeeStr;
+            if (typeIndex === 2) {
+                rawStart = parts[5]?.trim(); rawEnd = parts[6]?.trim(); guestName = parts[8]?.trim(); listingName = parts[9]?.trim();
+                grossStr = parts[18]?.trim() || parts[13]?.trim(); serviceFeeStr = parts[15]?.trim();
+            } else if (typeIndex === 1) {
+                rawStart = parts[4]?.trim(); rawEnd = parts[5]?.trim(); guestName = parts[7]?.trim(); listingName = parts[8]?.trim();
+                grossStr = parts[15]?.trim() || parts[12]?.trim(); serviceFeeStr = parts[13]?.trim();
+            } else return;
+
+            const formatDateStr = (raw) => { if(!raw) return ''; const [m, d, y] = raw.split('/'); return (m && d && y) ? `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}` : ''; };
+            startDate = formatDateStr(rawStart); endDate = formatDateStr(rawEnd);
+            if (!startDate || !endDate) return;
+
+            gross = parseFloat(grossStr?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
+            fees = Math.abs(parseFloat(serviceFeeStr?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
+            dispAmount = gross;
+            net = gross - fees;
+        } 
+        else if (importSource === 'Booking') {
+            const typeCol = parts[0]?.toLowerCase() || '';
+            if (!typeCol.includes('rã©servation') && !typeCol.includes('réservation') && !typeCol.includes('reservation')) return;
+
+            guestName = voyageurIdx !== -1 && parts[voyageurIdx] ? parts[voyageurIdx].trim() : `Réf: ${parts[2]?.trim()}`; 
+            
+            startDate = parts[3]?.trim(); 
+            endDate = parts[4]?.trim();   
+            listingName = parts[10]?.trim();
+
+            if (!startDate || !endDate) return;
+
+            dispAmount = parseFloat(parts[15]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0;
+            cityTax = Math.abs(parseFloat(parts[16]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
+            fees = Math.abs(parseFloat(parts[17]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
+            bankFees = Math.abs(parseFloat(parts[19]?.replace(/[^\d.,-]/g, '').replace(',', '.')) || 0);
+
+            gross = dispAmount - cityTax;
+            net = gross - fees - bankFees;
+        }
+
+        const matchedProp = properties.find(p => listingName && p.name && (listingName.toLowerCase().includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(listingName.toLowerCase())));
+        const isDuplicate = tenants.some(t => t.startDate === startDate && t.propertyId === (matchedProp?.id || 'none'));
+        const hasProperty = !!matchedProp;
+
+        newList.push({ 
+            id: index, propertyId: matchedProp?.id || '', propertyName: matchedProp?.name || listingName || 'Inconnu', 
+            name: guestName || 'Client Inconnu', startDate, endDate, grossAmount: gross, platformFees: fees, 
+            displayedAmount: dispAmount, cityTax: cityTax, bankFees: bankFees,
+            netAmount: net, isDuplicate, hasProperty, selected: !isDuplicate && hasProperty 
+        });
+    });
+    setReviewList(newList);
+  };
+
+  const confirmImport = async () => {
+      const toImport = reviewList.filter(i => i.selected && i.hasProperty);
+      for (let item of toImport) {
+          const { id, selected, isDuplicate, hasProperty, propertyName, ...cleanItem } = item;
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), { ...cleanItem, platform: importSource, isUrssaf: true, comment: `Importé via CSV ${importSource}`, resExpenses: [], paymentDate: '' });
+      }
+      setReviewList([]); setImportText(''); setImportStatus(`${toImport.length} réservation(s) importée(s) !`);
+      setTimeout(() => setImportStatus(''), 5000);
+  };
+
   // --- ECRAN DE VERROUILLAGE (OPTION 1) ---
   const handlePinSubmit = (e) => {
     e.preventDefault();
@@ -1112,29 +1245,6 @@ const App = () => {
       setPinInput('');
     }
   };
-
-  // NOUVEAU COMPOSANT : Filtres en mode "Sticky" (fixé en haut)
-  const RenderFilters = () => (
-    <div className="sticky top-0 z-30 bg-[#F8FAFC]/95 backdrop-blur-md pt-2 pb-4 mb-2 md:-mx-4 md:px-4">
-      <div className="flex flex-wrap items-center gap-2 bg-white/80 p-3 rounded-[28px] border border-white shadow-lg mx-2 md:mx-0">
-        <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-          <Filter size={12} className="text-slate-400" />
-          <select value={filterYear} onChange={e => {setFilterYear(e.target.value); setHasScrolledToNext(false);}} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer">
-            <option value="all">Toutes Années</option>{(yearsAvailable || []).map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </div>
-        <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-          <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Mois (Tous)</option>{['Janv','Févr','Mars','Avril','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'].map((m,i)=><option key={i} value={i}>{m}</option>)}</select>
-        </div>
-        <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-          <select value={filterProp} onChange={e => setFilterProp(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none max-w-[100px] md:max-w-[130px] cursor-pointer"><option value="all">Logements</option>{(properties || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
-        </div>
-        <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
-          <select value={filterPlat} onChange={e => setFilterPlat(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Plateformes</option>{(availablePlatforms || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
-        </div>
-      </div>
-    </div>
-  );
 
   if (!isUnlocked) {
     return (
@@ -1272,8 +1382,26 @@ const App = () => {
 
         <div className="max-w-7xl mx-auto pb-32">
           
-          {/* LES FILTRES SONT REVENUS ! */}
-          <RenderFilters />
+          {/* LES FILTRES INTÉGRÉS "EN DUR" (C'est ce qui corrige l'erreur) */}
+          <div className="sticky top-0 z-30 bg-[#F8FAFC]/95 backdrop-blur-md pt-2 pb-4 mb-2 md:-mx-4 md:px-4">
+            <div className="flex flex-wrap items-center gap-2 bg-white/80 p-3 rounded-[28px] border border-white shadow-lg mx-2 md:mx-0">
+              <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+                <Filter size={12} className="text-slate-400" />
+                <select value={filterYear} onChange={e => {setFilterYear(e.target.value); setHasScrolledToNext(false);}} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer">
+                  <option value="all">Toutes Années</option>{(yearsAvailable || []).map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
+              <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+                <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Mois (Tous)</option>{['Janv','Févr','Mars','Avril','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'].map((m,i)=><option key={i} value={i}>{m}</option>)}</select>
+              </div>
+              <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+                <select value={filterProp} onChange={e => setFilterProp(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none max-w-[100px] md:max-w-[130px] cursor-pointer"><option value="all">Logements</option>{(properties || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+              </div>
+              <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+                <select value={filterPlat} onChange={e => setFilterPlat(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Plateformes</option>{(availablePlatforms || []).map(p => <option key={p} value={p}>{p}</option>)}</select>
+              </div>
+            </div>
+          </div>
 
           {activeTab === 'reservations' && (
             <div className="space-y-8 animate-in fade-in">
