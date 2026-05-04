@@ -396,7 +396,17 @@ const App = () => {
   const getGoogleCalendarUrl = (res, prop) => {
     if (!res.startDate || !res.endDate) return '#';
     const text = encodeURIComponent(`Réservation : ${res.name} - ${prop?.name || ''}`);
-    const details = encodeURIComponent(`Client : ${res.name}\nLogement : ${prop?.name || ''}\nPlateforme : ${res.platform}\nNotes : ${res.comment || ''}`);
+    
+    // Ajout des prestations au calendrier
+    let expensesText = '';
+    if (res.resExpenses && res.resExpenses.length > 0) {
+       expensesText = '\n\nPrestations prévues :\n' + res.resExpenses.map(e => `- ${e.type} (${e.person}) : ${e.amount}€`).join('\n');
+    }
+    
+    // Ajout du numéro de contact
+    const phoneText = res.phone ? `\nContact : ${res.phone}` : '';
+    
+    const details = encodeURIComponent(`Client : ${res.name}${phoneText}\nLogement : ${prop?.name || ''}\nPlateforme : ${res.platform}\nNotes : ${res.comment || ''}${expensesText}`);
     const dates = `${res.startDate.replace(/-/g, '')}/${res.endDate.replace(/-/g, '')}`;
     return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${details}`;
   };
@@ -430,7 +440,7 @@ const App = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingResId, setEditingResId] = useState(null);
   const [formData, setFormData] = useState({ 
-    propertyId: '', name: '', startDate: '', endDate: '', paymentDate: '', 
+    propertyId: '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', 
     platform: 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', 
     bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '',
     acompte1Amount: '', acompte1Date: '', acompte2Amount: '', acompte2Date: '', soldeAmount: '', soldeDate: ''
@@ -449,70 +459,8 @@ const App = () => {
   const [quickPayConfig, setQuickPayConfig] = useState(null); 
   const [statsDetailConfig, setStatsDetailConfig] = useState(null);
 
-  // LOGIQUE D'INJECTION AUTOMATIQUE DE VOS 10 RESERVATIONS VILLA CADELIA 2025
-  useEffect(() => {
-    if (!user || loading) return;
-    
-    const isAlreadyInjected = sessionStorage.getItem('cadel_injected_2025_auto');
-    if (isAlreadyInjected === 'true') return;
-
-    if (properties.length === 0 && tenants.length === 0) return;
-
-    const runInjection = async () => {
-        sessionStorage.setItem('cadel_injected_2025_auto', 'true');
-        
-        let targetProp = properties.find(p => p.name.toUpperCase().includes('CADELIA'));
-        if (!targetProp) {
-            try {
-                const propRef = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'properties'), { name: 'VILLA CADELIA', address: '' });
-                targetProp = { id: propRef.id, name: 'VILLA CADELIA' };
-            } catch(e) { console.error(e); return; }
-        }
-
-        const hasLola = tenants.some(t => t.name.toUpperCase().includes("LOLA DROIN"));
-        if (!hasLola) {
-            const dataToImport = [
-                { name: "LOLA DROIN", startDate: "2025-03-21", endDate: "2025-03-23", amount: 1450 },
-                { name: "NELLY JEAN-MARIE", startDate: "2025-04-30", endDate: "2025-05-04", amount: 3800 },
-                { name: "WINDED", startDate: "2025-06-06", endDate: "2025-06-09", amount: 3000 },
-                { name: "ANTOINE ET ELODIE", startDate: "2025-07-04", endDate: "2025-07-06", amount: 2700 },
-                { name: "Severine BRISSON", startDate: "2025-07-12", endDate: "2025-08-02", amount: 14000 },
-                { name: "Anais FLORE", startDate: "2025-08-02", endDate: "2025-08-09", amount: 4500 },
-                { name: "MATTHIEU MECHAT", startDate: "2025-08-09", endDate: "2025-08-23", amount: 7500 },
-                { name: "BLANDINE DUHAMEL", startDate: "2025-09-19", endDate: "2025-09-21", amount: 1900 },
-                { name: "PHILIPPE VINCENT", startDate: "2025-12-27", endDate: "2025-12-29", amount: 1800 },
-                { name: "MACIE CLAUDE", startDate: "2025-12-30", endDate: "2026-01-02", amount: 2900 }
-            ];
-            
-            dataToImport.forEach(item => {
-                 addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), {
-                      propertyId: targetProp.id,
-                      name: item.name,
-                      startDate: item.startDate,
-                      endDate: item.endDate,
-                      platform: 'En direct',
-                      isUrssaf: true,
-                      grossAmount: item.amount,
-                      netAmount: item.amount,
-                      platformFees: 0,
-                      bankFees: 0,
-                      cityTax: 0,
-                      displayedAmount: 0,
-                      acompte1Amount: 0,
-                      acompte1Date: '',
-                      acompte2Amount: 0,
-                      acompte2Date: '',
-                      soldeAmount: item.amount,
-                      soldeDate: item.endDate, 
-                      resExpenses: [],
-                      comment: 'Import automatique VILLA CADELIA'
-                 });
-            });
-        }
-    };
-    
-    runInjection();
-  }, [user, loading, properties, tenants, db]);
+  const [hasScrolledToNext, setHasScrolledToNext] = useState(false);
+  const todayStr = new Date().toISOString().split('T')[0];
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
@@ -556,6 +504,72 @@ const App = () => {
     return () => { unsubAuth(); unsubProps(); unsubTenants(); unsubSettings(); };
   }, []);
 
+  // LOGIQUE D'INJECTION AUTOMATIQUE DE VOS 10 RESERVATIONS VILLA CADELIA 2025
+  useEffect(() => {
+    if (!user || loading) return;
+    
+    const isAlreadyInjected = sessionStorage.getItem('cadel_injected_2025_auto');
+    if (isAlreadyInjected === 'true') return;
+
+    if (properties.length === 0 && tenants.length === 0) return;
+
+    const runInjection = async () => {
+        sessionStorage.setItem('cadel_injected_2025_auto', 'true');
+        
+        let targetProp = properties.find(p => p.name.toUpperCase().includes('CADELIA'));
+        if (!targetProp) {
+            try {
+                const propRef = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'properties'), { name: 'VILLA CADELIA', address: '' });
+                targetProp = { id: propRef.id, name: 'VILLA CADELIA' };
+            } catch(e) { console.error(e); return; }
+        }
+
+        const hasLola = tenants.some(t => t.name.toUpperCase().includes("LOLA DROIN"));
+        if (!hasLola) {
+            const dataToImport = [
+                { name: "LOLA DROIN", startDate: "2025-03-21", endDate: "2025-03-23", amount: 1450 },
+                { name: "NELLY JEAN-MARIE", startDate: "2025-04-30", endDate: "2025-05-04", amount: 3800 },
+                { name: "WINDED", startDate: "2025-06-06", endDate: "2025-06-09", amount: 3000 },
+                { name: "ANTOINE ET ELODIE", startDate: "2025-07-04", endDate: "2025-07-06", amount: 2700 },
+                { name: "Severine BRISSON", startDate: "2025-07-12", endDate: "2025-08-02", amount: 14000 },
+                { name: "Anais FLORE", startDate: "2025-08-02", endDate: "2025-08-09", amount: 4500 },
+                { name: "MATTHIEU MECHAT", startDate: "2025-08-09", endDate: "2025-08-23", amount: 7500 },
+                { name: "BLANDINE DUHAMEL", startDate: "2025-09-19", endDate: "2025-09-21", amount: 1900 },
+                { name: "PHILIPPE VINCENT", startDate: "2025-12-27", endDate: "2025-12-29", amount: 1800 },
+                { name: "MACIE CLAUDE", startDate: "2025-12-30", endDate: "2026-01-02", amount: 2900 }
+            ];
+            
+            dataToImport.forEach(item => {
+                 addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), {
+                      propertyId: targetProp.id,
+                      name: item.name,
+                      phone: '',
+                      startDate: item.startDate,
+                      endDate: item.endDate,
+                      platform: 'En direct',
+                      isUrssaf: true,
+                      grossAmount: item.amount,
+                      netAmount: item.amount,
+                      platformFees: 0,
+                      bankFees: 0,
+                      cityTax: 0,
+                      displayedAmount: 0,
+                      acompte1Amount: 0,
+                      acompte1Date: '',
+                      acompte2Amount: 0,
+                      acompte2Date: '',
+                      soldeAmount: item.amount,
+                      soldeDate: item.endDate, 
+                      resExpenses: [],
+                      comment: 'Import automatique VILLA CADELIA'
+                 });
+            });
+        }
+    };
+    
+    runInjection();
+  }, [user, loading, properties, tenants, db]);
+
   const updateSettings = async (n) => {
     if(!user || user.uid === 'local-test-user') return;
     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), n, { merge: true });
@@ -585,6 +599,7 @@ const App = () => {
     
     const d = { 
       ...formData, 
+      phone: formData.phone || '',
       isUrssaf: formData.isUrssaf !== false, 
       grossAmount: g, 
       netAmount: n, 
@@ -690,6 +705,35 @@ const App = () => {
       return true;
     }).sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
   }, [filteredData, filterStatus]);
+
+  // LOGIQUE D'AUTO-SCROLL AU PROCHAIN VOYAGEUR
+  useEffect(() => {
+    if (activeTab !== 'reservations') {
+       setHasScrolledToNext(false);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'reservations' && !hasScrolledToNext && reservationsList.length > 0) {
+        const nextRes = reservationsList.find(t => t.startDate >= todayStr || (t.endDate && t.endDate >= todayStr));
+        if (nextRes) {
+            setTimeout(() => {
+                const els = document.querySelectorAll(`[data-res-id="${nextRes.id}"]`);
+                for (let el of els) {
+                    if (window.getComputedStyle(el).display !== 'none') {
+                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        el.classList.add('ring-4', 'ring-blue-500', 'ring-offset-4', 'transition-all', 'duration-1000');
+                        setTimeout(() => el.classList.remove('ring-4', 'ring-blue-500', 'ring-offset-4'), 3000);
+                        break;
+                    }
+                }
+            }, 300);
+            setHasScrolledToNext(true);
+        } else {
+            setHasScrolledToNext(true); // Aucune réservation future
+        }
+    }
+  }, [activeTab, reservationsList, hasScrolledToNext, todayStr]);
 
   const checkDateFilter = (dateStr) => {
      if (!dateStr) return false;
@@ -917,13 +961,6 @@ const App = () => {
     return days;
   }, [filterYear, filterMonth]);
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  
-  const yearsAvailable = useMemo(() => {
-    const years = tenants.map(t => t.startDate ? new Date(t.startDate).getFullYear() : null).filter(Boolean);
-    return [...new Set([...years, new Date().getFullYear()])].sort((a,b) => b-a);
-  }, [tenants]);
-
   const parseCSVLine = (text) => {
     const result = []; let current = '', inQuotes = false;
     for (let i = 0; i < text.length; i++) {
@@ -1019,7 +1056,6 @@ const App = () => {
       setTimeout(() => setImportStatus(''), 5000);
   };
 
-  // LE BLOC MANQUANT EST ICI : RenderFilters
   const RenderFilters = () => (
     <div className="flex flex-wrap items-center gap-2 bg-white/70 backdrop-blur-md p-3 rounded-[28px] border border-white shadow-xl mb-6 md:mb-8">
       <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
@@ -1136,11 +1172,11 @@ const App = () => {
 
           {activeTab === 'reservations' && (
             <div className="space-y-8 animate-in fade-in">
-              <div className="flex justify-between items-center"><h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2><button onClick={() => { setEditingResId(null); setFormData({ propertyId: properties[0]?.id || '', name: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '', acompte1Amount: '', acompte1Date: '', acompte2Amount: '', acompte2Date: '', soldeAmount: '', soldeDate: '' }); setIsModalOpen(true); }} className="bg-blue-600 text-white px-8 py-4 rounded-[24px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button></div>
+              <div className="flex justify-between items-center"><h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2><button onClick={() => { setEditingResId(null); setFormData({ propertyId: properties[0]?.id || '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '', acompte1Amount: '', acompte1Date: '', acompte2Amount: '', acompte2Date: '', soldeAmount: '', soldeDate: '' }); setIsModalOpen(true); }} className="bg-blue-600 text-white px-8 py-4 rounded-[24px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button></div>
               
               <div className="grid grid-cols-1 gap-4 md:hidden">
                 {(reservationsList || []).map(t => (
-                  <div key={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="bg-white p-6 rounded-[32px] shadow-lg border border-slate-50 cursor-pointer">
+                  <div key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="bg-white p-6 rounded-[32px] shadow-lg border border-slate-50 cursor-pointer">
                     <div className="flex justify-between items-start mb-3">
                       <div>
                         <h3 className="text-base font-black uppercase">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</h3>
@@ -1181,9 +1217,12 @@ const App = () => {
                   </thead>
                   <tbody className="divide-y divide-slate-50 font-bold">
                     {(reservationsList || []).map(t => (
-                      <tr key={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="hover:bg-slate-50 cursor-pointer">
+                      <tr key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className="hover:bg-slate-50 cursor-pointer">
                         <td className="p-6 uppercase">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}<div className="text-blue-600 text-[10px]">{t.platform}</div></td>
-                        <td className="p-6">{t.name}</td>
+                        <td className="p-6">
+                           <div>{t.name}</div>
+                           {t.phone && <div className="text-slate-400 text-[9px] mt-0.5">{t.phone}</div>}
+                        </td>
                         <td className="p-6 text-center text-slate-500">{formatDateFr(t.startDate)} ➔ {formatDateFr(t.endDate)}</td>
                         <td className="p-6">
                            <div className="space-y-1.5">
@@ -1435,12 +1474,14 @@ const App = () => {
             </div>
             <form onSubmit={saveRes} className="p-6 md:p-10 space-y-8 overflow-y-auto flex-1 custom-scrollbar text-xs">
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                  <div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Logement<select value={formData.propertyId || ''} onChange={e => setFormData({ ...formData, propertyId: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900"><option value="">-- Choisir un logement --</option>{(properties || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
                  <div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Voyageur<input value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" placeholder="Nom du client" /></div>
+                 <div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Contact<input value={formData.phone || ''} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" placeholder="Tél / Email" /></div>
                  <div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Début<input type="date" value={formData.startDate || ''} onChange={e => setFormData({ ...formData, startDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div>
                  <div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Fin<input type="date" value={formData.endDate || ''} onChange={e => setFormData({ ...formData, endDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div>
-                 <div className="md:col-span-2 space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">
+                 
+                 <div className="md:col-span-3 space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">
                     Notes / Commentaires
                     <textarea value={formData.comment || ''} onChange={e => setFormData({ ...formData, comment: e.target.value })} placeholder="Nombre de personnes, requêtes spéciales, détails supplémentaires..." className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-bold text-slate-700 outline-none min-h-[100px]" />
                  </div>
