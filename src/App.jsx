@@ -1,27 +1,19 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc, addDoc, query } from 'firebase/firestore';
+import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
+import { collection, doc, onSnapshot } from 'firebase/firestore';
 import { 
-  Home, Euro, LayoutDashboard, Plus, Trash2, MapPin, Calendar as CalendarIcon,
-  Menu, X, CalendarCheck, CheckCircle, Clock, PieChart as PieChartIcon,
-  ChevronLeft, ChevronRight, BarChart3, List, Wallet, Settings, Calculator,
-  UserCheck, PlusCircle, TrendingUp, Info, Filter, Loader2,
-  Building2, CalendarRange, MessageSquare, CreditCard, Activity, ArrowRight,
-  User, Sparkles, Key, UploadCloud, AlertTriangle, Check, TrendingDown, Search, BarChart2,
-  LocateFixed, Lock, Mail
+  // ... tes icônes lucide-react
 } from 'lucide-react';
- 
-// --- CONFIGURATION FIREBASE ---
-const firebaseConfig = {
-  apiKey: "AIzaSyDJYT5L0A9f1YdRGEcvdk4iyoKgcfrBGWw",
-  authDomain: "immogerer-7f706.firebaseapp.com",
-  projectId: "immogerer-7f706",
-  storageBucket: "immogerer-7f706.firebasestorage.app",
-  messagingSenderId: "703084929054",
-  appId: "1:703084929054:web:313fae5f706e4dba4fce0f",
-  measurementId: "G-QQE1Q309TB"
-};
+
+// --- IMPORTS DES FICHIERS CLOISONNÉS ---
+import { auth, db, appId } from './firebaseConfig';
+import { CHART_COLORS, TIME_SLOTS, isSundayOrHoliday } from './utils';
+import DonutChart from './DonutChart';
+import ComparisonChart from './ComparisonChart';
+import ReservationList from './ReservationList';
+import Agenda from './Agenda';
+import Finances from './Finances';
+
  
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
