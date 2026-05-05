@@ -244,13 +244,13 @@ const App = () => {
              </div>
           </div>
 
-          {/* 4. FINANCES */}
-          <div className="flex-none w-full max-w-full snap-center snap-always px-4 md:px-12 py-6">
-            <div className="max-w-7xl mx-auto text-center py-20 bg-white rounded-[40px] shadow-sm">
-               <Calculator size={48} className="mx-auto text-slate-200 mb-4" />
-               <h2 className="text-xl font-black uppercase text-slate-400 tracking-widest">Espace Finances</h2>
-            </div>
-          </div>
+  {/* 4. FINANCES */}
+<div className="flex-none w-full max-w-full snap-center snap-always px-4 md:px-12 py-6">
+  <div className="max-w-7xl mx-auto">
+    <h2 className="text-2xl font-black uppercase mb-6">Comptabilité Réelle</h2>
+    <Finances baseTenants={baseTenants} properties={properties} />
+  </div>
+</div>
 
           {/* 5. PARAMÈTRES */}
           <div className="flex-none w-full max-w-full snap-center snap-always px-4 md:px-12 py-6">
