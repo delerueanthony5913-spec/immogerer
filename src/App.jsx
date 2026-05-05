@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import ReservationList from './ReservationList';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { collection, doc, onSnapshot, deleteDoc, addDoc, setDoc } from 'firebase/firestore';
 import { 
@@ -65,6 +66,40 @@ const App = () => {
         if (d.providerEmails) setProviderEmails(d.providerEmails);
       }
     });
+    // Fonctions pour l'affichage de la liste
+  const getRowColors = (propertyId) => {
+    const prop = (properties || []).find(p => p.id === propertyId);
+    if (!prop || !prop.name) return { bg: 'bg-white' };
+    const name = prop.name.toLowerCase();
+    if (name.includes('cocon')) return { bg: 'bg-emerald-50' };
+    if (name.includes('signes')) return { bg: 'bg-blue-50' };
+    if (name.includes('villa')) return { bg: 'bg-red-50' };
+    return { bg: 'bg-white' };
+  };
+
+  const getStatusProps = (t) => {
+    return t.paymentDate ? { label: 'Payé', color: 'bg-emerald-100 text-emerald-700' } : { label: 'Attente', color: 'bg-orange-100 text-orange-700' };
+  };
+
+  const handleEdit = (t) => {
+    setEditingResId(t.id);
+    setFormData(t);
+    setIsModalOpen(true);
+  };
+
+  const groupedReservations = useMemo(() => {
+    const groups = [];
+    let curM = '';
+    reservationsList.forEach(t => {
+      const label = new Date(t.startDate).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      if (label !== curM) {
+        groups.push({ isSeparator: true, label: label.toUpperCase(), id: label });
+        curM = label;
+      }
+      groups.push(t);
+    });
+    return groups;
+  }, [reservationsList]);
     return () => { unsubAuth(); unsubProps(); unsubTenants(); unsubSettings(); };
   }, []);
 
@@ -175,37 +210,60 @@ const App = () => {
         </div>
 
         {/* CARROUSEL DES ONGLETS */}
-        <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 w-full flex overflow-x-auto snap-x snap-mandatory hide-scroll">
+<div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 w-full flex overflow-x-auto snap-x snap-mandatory hide-scroll">
           
-          {/* SECTION 1: RÉSERVATIONS */}
-          <div className="flex-none w-full max-w-full snap-center snap-always px-2 md:px-12 py-6">
+          {/* 1. RÉSERVATIONS */}
+          <div className="flex-none w-full max-w-full snap-center snap-always px-4 md:px-12 py-6">
             <div className="max-w-7xl mx-auto">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2>
-                <button onClick={() => { setEditingResId(null); setIsModalOpen(true); }} className="bg-blue-600 text-white px-6 py-3 rounded-[20px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button>
+                <h2 className="text-2xl font-black uppercase">Réservations</h2>
+                <button onClick={() => { setEditingResId(null); setIsModalOpen(true); }} className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-black text-[10px] uppercase">+ Nouvelle</button>
               </div>
-              
-              {/* TABLEAU RÉSERVATIONS (SIMPLIFIÉ POUR LA DÉCOUPE) */}
-              <div className="bg-white rounded-[40px] shadow-2xl overflow-hidden border border-slate-100 p-6 text-center text-slate-400 font-bold uppercase text-xs">
-                {reservationsList.length} réservations trouvées. Utilisez les filtres pour affiner.
-              </div>
+              <ReservationList 
+                groupedList={groupedReservations} 
+                properties={properties} 
+                getRowColors={getRowColors} 
+                getStatusProps={getStatusProps} 
+                onEdit={handleEdit}
+                onQuickPay={() => {}} // On l'activera plus tard
+              />
             </div>
           </div>
 
-          {/* SECTION 3: STATISTIQUES (AVEC GRAPHIQUES CLOISONNÉS) */}
-          <div className="flex-none w-full max-w-full snap-center snap-always px-2 md:px-12 py-6">
+          {/* 2. AGENDA (En attente de son fichier) */}
+          <div className="flex-none w-full max-w-full snap-center snap-always px-4 md:px-12 py-6">
+            <div className="max-w-7xl mx-auto text-center py-20 bg-white rounded-[40px]">
+               <CalendarRange size={48} className="mx-auto text-slate-200 mb-4" />
+               <h2 className="text-xl font-black uppercase text-slate-400">Espace Agenda</h2>
+            </div>
+          </div>
+
+          {/* 3. STATISTIQUES */}
+          <div className="flex-none w-full max-w-full snap-center snap-always px-4 md:px-12 py-6">
              <div className="max-w-7xl mx-auto space-y-8">
-                <h2 className="text-3xl font-black uppercase">Statistiques</h2>
+                <h2 className="text-2xl font-black uppercase">Statistiques</h2>
                 <ComparisonChart data={baseTenants} properties={properties} platforms={availablePlatforms} yearsAvailable={yearsAvailable} />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                   <DonutChart title="Net / Logement" data={properties.map((p,idx)=>({label:p.name, value:idx+100, color:CHART_COLORS[idx%CHART_COLORS.length]}))} />
-                </div>
+                <DonutChart title="Net / Logement" data={properties.map((p,idx)=>({label:p.name, value: 100, color:CHART_COLORS[idx%CHART_COLORS.length]}))} />
              </div>
           </div>
 
+          {/* 4. FINANCES (En attente) */}
+          <div className="flex-none w-full max-w-full snap-center snap-always px-4 md:px-12 py-6">
+            <div className="max-w-7xl mx-auto text-center py-20 bg-white rounded-[40px]">
+               <Calculator size={48} className="mx-auto text-slate-200 mb-4" />
+               <h2 className="text-xl font-black uppercase text-slate-400">Espace Finances</h2>
+            </div>
+          </div>
+
+          {/* 5. PARAMÈTRES (En attente) */}
+          <div className="flex-none w-full max-w-full snap-center snap-always px-4 md:px-12 py-6">
+            <div className="max-w-7xl mx-auto text-center py-20 bg-white rounded-[40px]">
+               <Settings size={48} className="mx-auto text-slate-200 mb-4" />
+               <h2 className="text-xl font-black uppercase text-slate-400">Espace Paramètres</h2>
+            </div>
+          </div>
+
         </div>
-      </main>
-    </div>
   );
 };
 
