@@ -185,6 +185,12 @@ const App = () => {
                 <option value="all">Logements</option>{properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             </div>
+            <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+  <select value={filterPlat} onChange={e => setFilterPlat(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer">
+    <option value="all">Plateformes</option>
+    {(availablePlatforms || []).map(p => <option key={p} value={p}>{p}</option>)}
+  </select>
+</div>
           </div>
         </div>
 
