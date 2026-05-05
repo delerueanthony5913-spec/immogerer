@@ -1,426 +1,18 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
-import { collection, doc, onSnapshot } from 'firebase/firestore';
-import { 
-  // ... tes icônes lucide-react
+import { collection, doc, onSnapshot, addDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import {
+  Key, Lock, Loader2, Filter, List, CalendarRange, BarChart2, Calculator, Settings,
+  Menu, X, Euro, Search, ArrowRight, LocateFixed, ChevronLeft, ChevronRight,
+  Mail, CheckCircle, Clock, TrendingUp, TrendingDown, UploadCloud, AlertTriangle,
+  Check, Trash2, CalendarCheck, Calendar as CalendarIcon
 } from 'lucide-react';
 
-// --- IMPORTS DES FICHIERS CLOISONNÉS ---
 import { auth, db, appId } from './firebaseConfig';
 import { CHART_COLORS, TIME_SLOTS, isSundayOrHoliday } from './utils';
 import DonutChart from './DonutChart';
 import ComparisonChart from './ComparisonChart';
-import ReservationList from './ReservationList';
-import Agenda from './Agenda';
-import Finances from './Finances';
-
- 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = 'immogerer-prod-final';
- 
-const CHART_COLORS = ['#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#6366F1', '#F43F5E', '#06B6D4'];
- 
-// --- LISTE DES CRENEAUX HORAIRES (Toutes les 30 min) ---
-const TIME_SLOTS = [];
-for (let h = 0; h <= 23; h++) {
-  const hour = h.toString().padStart(2, '0');
-  TIME_SLOTS.push(`${hour}:00`);
-  TIME_SLOTS.push(`${hour}:30`);
-}
- 
-// --- UTILITAIRE : CALCULATEUR DE DIMANCHES ET JOURS FERIES FRANCAIS ---
-const isSundayOrHoliday = (dateStr) => {
-  if (!dateStr) return false;
-  const [y, m, d] = dateStr.split('-');
-  const date = new Date(y, m - 1, d);
-  if (date.getDay() === 0) return true;
-  
-  const year = parseInt(y, 10);
-  const holidays = [
-      `${year}-01-01`, `${year}-05-01`, `${year}-05-08`, `${year}-07-14`, 
-      `${year}-08-15`, `${year}-11-01`, `${year}-11-11`, `${year}-12-25`
-  ];
-  
-  const a = year % 19, b = Math.floor(year / 100), c = year % 100,
-        d1 = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25),
-        g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d1 - g + 15) % 30,
-        i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7,
-        m1 = Math.floor((a + 11 * h + 22 * l) / 451), n0 = h + l - 7 * m1 + 114,
-        month = Math.floor(n0 / 31), day = (n0 % 31) + 1;
-        
-  const paques = new Date(year, month - 1, day);
-  const formatLocal = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
-  
-  const lundiPaques = new Date(paques); lundiPaques.setDate(paques.getDate() + 1);
-  const ascension = new Date(paques); ascension.setDate(paques.getDate() + 39);
-  const lundiPentecote = new Date(paques); lundiPentecote.setDate(paques.getDate() + 50);
-  
-  holidays.push(formatLocal(lundiPaques), formatLocal(ascension), formatLocal(lundiPentecote));
-  return holidays.includes(dateStr);
-};
- 
-// --- COMPOSANTS GRAPHIQUES ---
-const VillaIcon = ({ size = 24, className = "" }) => (
-  <svg width={size} height={size} viewBox="0 0 512 512" fill="currentColor" className={className} xmlns="http://www.w3.org/2000/svg">
-    <g transform="translate(6, -10)">
-      <rect x="120" y="160" width="140" height="120" rx="8" fill="currentColor" opacity="0.6" />
-      <rect x="220" y="100" width="160" height="180" rx="8" fill="currentColor" />
-      <rect x="100" y="150" width="180" height="16" rx="8" fill="currentColor" opacity="0.9" />
-      <rect x="200" y="90" width="200" height="16" rx="8" fill="currentColor" opacity="0.9" />
-      <rect x="140" y="200" width="60" height="80" rx="6" fill="#fff" opacity="0.3" />
-      <rect x="260" y="140" width="80" height="140" rx="6" fill="#fff" opacity="0.3" />
-      <rect x="100" y="280" width="300" height="12" rx="6" fill="currentColor" opacity="0.4" />
-    </g>
-  </svg>
-);
- 
-const DonutChart = ({ data, title }) => {
-  const visibleData = (data || []).filter(d => d && d.value > 0);
-  const displayTotal = visibleData.reduce((acc, curr) => acc + curr.value, 0);
-  let cumulativePercent = 0;
- 
-  if (!displayTotal) {
-    return (
-      <div className="bg-white p-4 md:p-6 rounded-[24px] md:rounded-[40px] border border-gray-100 flex flex-col items-center justify-center min-h-[150px] md:min-h-[300px] shadow-sm">
-        <PieChartIcon size={24} className="text-gray-200 mb-2" />
-        <p className="text-gray-400 font-black text-[8px] md:text-[10px] uppercase tracking-widest text-center">{title}</p>
-      </div>
-    );
-  }
- 
-  return (
-    <div className="bg-white p-4 md:p-10 rounded-[24px] md:rounded-[48px] border border-gray-50 flex flex-col md:flex-row items-center gap-4 md:gap-10 animate-in fade-in shadow-xl shadow-slate-200/50 mx-2 md:mx-0">
-      <div className="relative w-24 h-24 md:w-48 md:h-48 flex-shrink-0">
-        <svg viewBox="0 0 32 32" className="w-full h-full transform -rotate-90">
-          {visibleData.map((slice, i) => {
-            const percent = (slice.value / displayTotal) * 100;
-            const strokeDasharray = `${percent} ${100 - percent}`;
-            const strokeDashoffset = -cumulativePercent;
-            cumulativePercent += percent;
-            return (
-              <circle key={i} r="15.9155" cx="16" cy="16" fill="transparent" stroke={slice.color} strokeWidth="5" strokeDasharray={strokeDasharray} strokeDashoffset={strokeDashoffset} className="transition-all duration-1000" />
-            );
-          })}
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-          <span className="text-[7px] md:text-[9px] text-slate-400 font-black uppercase tracking-widest leading-none mb-0.5 md:mb-1">Total Net</span>
-          <span className="text-sm md:text-xl font-black text-slate-900">{Math.round(displayTotal).toLocaleString('fr-FR')}€</span>
-        </div>
-      </div>
-      <div className="flex-1 w-full space-y-1.5 md:space-y-3">
-        <h3 className="text-[9px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-2 md:mb-4 text-center md:text-left">{title}</h3>
-        <div className="space-y-1 md:space-y-2">
-          {visibleData.map((slice, i) => (
-            <div key={i} className="flex items-center justify-between text-[9px] md:text-[11px] group">
-              <div className="flex items-center gap-1.5 md:gap-3">
-                <div className="w-1.5 h-1.5 md:w-3 md:h-3 rounded-full shadow-sm" style={{ backgroundColor: slice.color }}></div>
-                <span className="font-bold text-slate-600 truncate max-w-[120px] md:max-w-[140px]">{slice.label}</span>
-              </div>
-              <span className="font-black text-slate-900 tabular-nums">{Math.round(slice.value).toLocaleString('fr-FR')} €</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
- 
-const ComparisonChart = ({ data, properties, platforms, yearsAvailable = [] }) => {
-  const currentYear = new Date().getFullYear().toString();
-  const [mode, setMode] = useState('years'); 
-  const [metric, setMetric] = useState('net'); 
-  const [selectedKeys, setSelectedKeys] = useState([]);
-  const [contextYear, setContextYear] = useState(currentYear);
-  const [contextProp, setContextProp] = useState('all');
-  const [contextPlat, setContextPlat] = useState('all');
- 
-  const safeData = Array.isArray(data) ? data : [];
-  const safeYears = yearsAvailable.length > 0 ? yearsAvailable : [currentYear];
- 
-  useEffect(() => {
-    if (mode === 'years') setSelectedKeys(safeYears.slice(0, 3)); 
-    if (mode === 'properties') setSelectedKeys(properties.map(p => p.id).slice(0, 4)); 
-    if (mode === 'platforms') setSelectedKeys(platforms.slice(0, 4)); 
-  }, [mode, properties, platforms, safeYears]);
- 
-  const toggleKey = (key) => {
-    setSelectedKeys(prev => 
-       prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
-    );
-  };
- 
-  const buildSeriesFor = (targetYear, targetProp, targetPlat) => {
-      const res = Array(12).fill(0);
-      const prov = Array(12).fill(false);
- 
-      const processItem = (dateStr, amount, isProv) => {
-          if (!dateStr || !dateStr.startsWith(targetYear)) return;
-          const m = parseInt(dateStr.split('-')[1], 10) - 1;
-          if (m >= 0 && m <= 11) {
-              res[m] += amount;
-              if (isProv) prov[m] = true;
-          }
-      };
- 
-      safeData.forEach(t => {
-          if (targetProp !== 'all' && t.propertyId !== targetProp) return;
-          if (targetPlat !== 'all' && t.platform !== targetPlat) return;
- 
-          const isDirect = t.platform === 'En direct';
-          const expectedDate = t.endDate || t.startDate || `${targetYear}-12-31`;
- 
-          const g = parseFloat(t.grossAmount) || 0;
-          const n = parseFloat(t.netAmount) || 0;
-          const tax = t.isUrssaf !== false ? g * 0.077 : 0;
- 
-          let totalPaidGross = 0;
- 
-          if (metric === 'net' || metric === 'gross') {
-              if (isDirect) {
-                  const a1 = parseFloat(t.acompte1Amount) || 0;
-                  const a2 = parseFloat(t.acompte2Amount) || 0;
-                  const s = parseFloat(t.soldeAmount) || 0;
- 
-                  if (t.acompte1Date) { processItem(t.acompte1Date, a1, false); totalPaidGross += a1; }
-                  if (t.acompte2Date) { processItem(t.acompte2Date, a2, false); totalPaidGross += a2; }
-                  
-                  if (t.soldeDate) {
-                      processItem(t.soldeDate, s, false);
-                      if (metric === 'net' && tax > 0) processItem(t.soldeDate, -tax, false);
-                      totalPaidGross += s;
-                  }
- 
-                  if (!t.soldeDate) {
-                      const remaining = g - totalPaidGross;
-                      if (remaining > 0) {
-                          processItem(expectedDate, remaining, true); 
-                      }
-                      if (metric === 'net' && tax > 0) processItem(expectedDate, -tax, true);
-                  }
- 
-              } else {
-                  if (t.paymentDate) {
-                      processItem(t.paymentDate, metric === 'gross' ? g : n, false);
-                      if (metric === 'net' && tax > 0) processItem(t.paymentDate, -tax, false);
-                  } else {
-                      processItem(expectedDate, metric === 'gross' ? g : n, true); 
-                      if (metric === 'net' && tax > 0) processItem(expectedDate, -tax, true);
-                  }
-              }
-          }
- 
-          if (metric === 'net' || metric === 'expenses') {
-              (t.resExpenses || []).forEach(exp => {
-                  const amt = parseFloat(exp.amount) || 0;
-                  if (exp.paymentDate) {
-                      processItem(exp.paymentDate, metric === 'expenses' ? amt : -amt, false);
-                  } else {
-                      processItem(expectedDate, metric === 'expenses' ? amt : -amt, true);
-                  }
-              });
-          }
-      });
- 
-      let splitIndex = 11; 
-      for (let i = 0; i < 12; i++) {
-          if (prov[i]) {
-              splitIndex = i - 1; 
-              break;
-          }
-      }
- 
-      return { data: res.map(val => isNaN(val) ? 0 : val), splitIndex };
-  };
- 
-  const series = selectedKeys.map((key, index) => {
-      let result;
-      let label = '';
- 
-      if (mode === 'years') {
-          result = buildSeriesFor(key, contextProp, contextPlat);
-          label = key;
-      } else if (mode === 'properties') {
-          result = buildSeriesFor(contextYear, key, contextPlat);
-          label = properties.find(p=>p.id===key)?.name || 'Inconnu';
-      } else if (mode === 'platforms') {
-          result = buildSeriesFor(contextYear, contextProp, key);
-          label = key;
-      }
- 
-      return {
-          id: key,
-          label,
-          data: result.data,
-          color: CHART_COLORS[index % CHART_COLORS.length],
-          total: result.data.reduce((acc, val) => acc + val, 0),
-          splitIndex: result.splitIndex
-      };
-  });
- 
-  const [hoveredMonth, setHoveredMonth] = useState(null);
-  const months = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
- 
-  const allDataValues = series.reduce((acc, currentSeries) => {
-      return acc.concat(currentSeries.data);
-  }, []);
- 
-  const maxValRaw = Math.max(...allDataValues, 100);
-  const maxVal = (!isFinite(maxValRaw) || maxValRaw <= 0) ? 100 : maxValRaw * 1.15;
- 
-  const w = 900, h = 300, padX = 60, padY = 30; 
-  
-  const getX = (i) => padX + (i * (w - 2 * padX) / 11);
-  const getY = (val) => {
-     if (isNaN(val) || !maxVal || maxVal === 0) return h - padY;
-     return h - padY - ((val / maxVal) * (h - 2 * padY));
-  };
- 
-  const buildPath = (dArr, start, end) => {
-    if (start > end || start < 0) return '';
-    const points = [];
-    for (let i = start; i <= end; i++) {
-        const x = getX(i);
-        const y = getY(dArr[i]);
-        if (!isNaN(x) && !isNaN(y)) points.push(`${x},${y}`);
-    }
-    if (points.length === 0) return '';
-    if (points.length === 1) return `M ${points[0]} L ${points[0]}`;
-    return `M ${points[0]} ` + points.slice(1).map(p => `L ${p}`).join(' ');
-  };
- 
-  const yTicks = [0, maxVal * 0.33, maxVal * 0.66, maxVal];
- 
-  const availableOptions = mode === 'years' 
-     ? safeYears.map(y => ({ id: y, label: y }))
-     : mode === 'properties'
-        ? properties.map(p => ({ id: p.id, label: p.name }))
-        : platforms.map(p => ({ id: p, label: p }));
- 
-  return (
-    <div className="w-auto mx-2 md:mx-0 bg-white p-4 md:p-8 rounded-[32px] md:rounded-[48px] shadow-2xl border border-slate-50 animate-in fade-in relative mt-8">
-      <div className="flex bg-slate-100 p-1.5 rounded-[20px] w-max mb-6">
-         <button onClick={()=>{setMode('years'); setContextProp('all'); setContextPlat('all');}} className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1 md:gap-2 ${mode === 'years' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>📅 Années</button>
-         <button onClick={()=>{setMode('properties'); setContextYear(currentYear); setContextPlat('all');}} className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1 md:gap-2 ${mode === 'properties' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>🏠 Logements</button>
-         <button onClick={()=>{setMode('platforms'); setContextYear(currentYear); setContextProp('all');}} className={`px-3 md:px-4 py-1.5 md:py-2 rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-1 md:gap-2 ${mode === 'platforms' ? 'bg-white shadow text-blue-600' : 'text-slate-400 hover:text-slate-900'}`}>💻 Platefs.</button>
-      </div>
- 
-      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 md:gap-6 mb-6 md:mb-8 bg-slate-50 p-3 md:p-6 rounded-[24px] md:rounded-3xl border border-slate-100">
-         <div className="flex-1">
-            <span className="text-[9px] md:text-[10px] font-black uppercase text-slate-400 mb-2 md:mb-3 block">Que voulez-vous afficher ? (Cochez)</span>
-            <div className="flex flex-wrap gap-1.5 md:gap-2">
-               {availableOptions.map((opt, i) => {
-                  const isSelected = selectedKeys.includes(opt.id);
-                  const color = isSelected ? CHART_COLORS[selectedKeys.indexOf(opt.id) % CHART_COLORS.length] : '#CBD5E1';
-                  return (
-                     <button key={opt.id} onClick={() => toggleKey(opt.id)} className={`px-2.5 md:px-3 py-1 md:py-1.5 rounded-full text-[8px] md:text-[10px] font-black uppercase transition-all flex items-center gap-1.5 md:gap-2 border ${isSelected ? 'bg-white shadow-sm border-transparent' : 'bg-transparent border-slate-200 text-slate-400 hover:border-slate-400'}`} style={{ color: isSelected ? color : undefined }}>
-                        <div className="w-1.5 h-1.5 md:w-2.5 md:h-2.5 rounded-full shadow-inner" style={{ backgroundColor: color }}></div>
-                        {opt.label}
-                     </button>
-                  );
-               })}
-            </div>
-         </div>
-         <div className="w-full lg:w-px h-px lg:h-auto bg-slate-200"></div>
-         <div className="flex flex-col gap-2 md:gap-3 min-w-full md:min-w-[200px]">
-             <div className="flex items-center gap-2">
-                 <span className="text-[8px] md:text-[10px] font-black uppercase text-slate-400 w-12 md:w-16">Analyser:</span>
-                 <select value={metric} onChange={e=>setMetric(e.target.value)} className="flex-1 bg-slate-900 text-white border-none rounded-xl px-2 py-1.5 md:px-3 md:py-2 text-[8px] md:text-[10px] font-black uppercase outline-none shadow-md cursor-pointer hover:bg-blue-600 transition-colors">
-                    <option value="net">Profit Net Réel</option>
-                    <option value="gross">CA Brut</option>
-                    <option value="expenses">Coût Prestations</option>
-                 </select>
-             </div>
-             <div className="flex items-center gap-2">
-                 <Filter size={10} className="text-slate-400 md:w-[12px] md:h-[12px]" />
-                 <span className="text-[8px] md:text-[10px] font-black uppercase text-slate-400">Filtres :</span>
-             </div>
-             <div className="flex flex-col gap-1.5 md:gap-2 pl-4 md:pl-5">
-                 {mode !== 'years' && <select value={contextYear} onChange={e=>setContextYear(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[8px] md:text-[10px] font-bold outline-none cursor-pointer text-slate-700">{safeYears.map(y=><option key={y} value={y}>Année {y}</option>)}</select>}
-                 {mode !== 'properties' && <select value={contextProp} onChange={e=>setContextProp(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[8px] md:text-[10px] font-bold outline-none cursor-pointer text-slate-700 truncate"><option value="all">Tous Logements</option>{properties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>}
-                 {mode !== 'platforms' && <select value={contextPlat} onChange={e=>setContextPlat(e.target.value)} className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[8px] md:text-[10px] font-bold outline-none cursor-pointer text-slate-700 truncate"><option value="all">Toutes Plateformes</option>{platforms.map(p=><option key={p} value={p}>{p}</option>)}</select>}
-             </div>
-         </div>
-      </div>
- 
-      {series.length === 0 ? (
-          <div className="h-[200px] md:h-[300px] flex items-center justify-center text-slate-300 font-black uppercase text-[9px] md:text-xs text-center">Cochez au moins une option pour voir le graphique</div>
-      ) : (
-          <div className="overflow-x-auto hide-scroll touch-manipulation">
-            <div className="min-w-[450px] md:min-w-[600px] relative">
-              <svg width="100%" height="100%" viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
-                {yTicks.map((tick, i) => (
-                  <g key={`grid-${i}`}>
-                    <line x1={padX} y1={getY(tick)} x2={w - padX} y2={getY(tick)} stroke="#F1F5F9" strokeWidth="2" />
-                    <text x={w - padX + 8} y={getY(tick) + 4} fill="#475569" fontSize="11" fontFamily="sans-serif" fontWeight="900">{tick >= 1000 ? (tick / 1000).toFixed(1) + 'k€' : Math.round(tick) + '€'}</text>
-                  </g>
-                ))}
- 
-                {hoveredMonth !== null && (
-                    <line x1={getX(hoveredMonth)} y1={padY} x2={getX(hoveredMonth)} y2={h - padY} stroke="#CBD5E1" strokeWidth="2" strokeDasharray="4 4" />
-                )}
-                
-                {months.map((m, i) => (
-                  <text key={m} x={getX(i)} y={h - 5} fill={hoveredMonth === i ? "#0F172A" : "#94A3B8"} fontSize="12" fontFamily="sans-serif" fontWeight="900" textAnchor="middle" className="transition-colors cursor-pointer" onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)}>{m}</text>
-                ))}
-                
-                {series.map((s, idx) => (
-                   <g key={`series-${s.id}`}>
-                      <path d={buildPath(s.data, 0, Math.max(0, s.splitIndex))} stroke={s.color} strokeWidth="4" fill="none" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />
-                      <path d={buildPath(s.data, Math.max(0, s.splitIndex), 11)} stroke={s.color} strokeWidth="4" fill="none" strokeDasharray="6 8" strokeLinecap="round" strokeLinejoin="round" className="transition-all duration-500" />
-                   </g>
-                ))}
- 
-                {months.map((_, i) => (
-                  <g key={`points-${i}`} onMouseEnter={() => setHoveredMonth(i)} onMouseLeave={() => setHoveredMonth(null)} className="cursor-pointer">
-                    <rect x={getX(i) - 20} y={0} width="40" height={h} fill="transparent" />
-                    {series.map(s => (
-                       <circle key={`dot-${s.id}-${i}`} cx={getX(i)} cy={getY(s.data[i])} r={hoveredMonth === i ? 7 : 4} fill={hoveredMonth === i ? s.color : "white"} stroke={s.color} strokeWidth="3" className="transition-all duration-200" />
-                    ))}
-                  </g>
-                ))}
-              </svg>
- 
-              {hoveredMonth !== null && series.length > 0 && (
-                <div 
-                  className="absolute z-20 bg-slate-900/95 backdrop-blur-sm text-white p-3 md:p-4 rounded-[16px] md:rounded-2xl shadow-2xl pointer-events-none transition-all duration-200 min-w-[130px] md:min-w-[160px] border border-slate-700"
-                  style={{ 
-                    left: `${(getX(hoveredMonth) / w) * 100}%`, 
-                    top: '15%', 
-                    transform: hoveredMonth > 7 ? 'translateX(calc(-100% - 15px))' : hoveredMonth < 4 ? 'translateX(15px)' : 'translateX(-50%)' 
-                  }}
-                >
-                   <div className="text-[8px] md:text-[10px] text-slate-400 font-black uppercase tracking-widest mb-2 md:mb-3 border-b border-slate-700 pb-1.5 md:pb-2">{months[hoveredMonth]}</div>
-                   <div className="flex flex-col gap-1.5 md:gap-2.5">
-                      {series.map(s => (
-                         <div key={`tt-${s.id}`} className="flex justify-between items-center gap-4 md:gap-6">
-                            <div className="text-[8px] md:text-[10px] font-black uppercase flex items-center gap-1.5 md:gap-2 truncate max-w-[90px] md:max-w-[120px]"><div className="w-1.5 h-1.5 md:w-2.5 md:h-2.5 rounded-full shadow-sm" style={{backgroundColor: s.color}}></div>{s.label}</div>
-                            <div className="font-black text-[10px] md:text-sm">{s.data[hoveredMonth].toFixed(0)}€</div>
-                         </div>
-                      ))}
-                   </div>
-                </div>
-              )}
-            </div>
-          </div>
-      )}
-      
-      {series.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mt-4 md:mt-6">
-            {series.map(s => (
-                <div key={`total-${s.id}`} className="bg-white border border-slate-100 p-3 md:p-5 rounded-[16px] md:rounded-[24px] shadow-sm flex flex-col justify-center relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-full h-1" style={{backgroundColor: s.color}}></div>
-                  <p className="text-[7px] md:text-[9px] font-black uppercase text-slate-400 tracking-widest mb-0.5 md:mb-1 truncate" title={s.label}>Total {s.label}</p>
-                  <p className="text-xs md:text-xl font-black text-slate-800 tracking-tighter">{s.total.toLocaleString('fr-FR')}€</p>
-                </div>
-            ))}
-          </div>
-      )}
-    </div>
-  );
-};
- 
+import { getAccessToken, setAccessToken, clearAccessToken, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, createDiasEvent, updateDiasEvent, deleteDiasEvent } from './googleCalendar';
 // --- COMPOSANT PRINCIPAL ---
 const App = () => {
   // 1. ETATS GLOBAUX & HOOKS
@@ -470,9 +62,14 @@ const App = () => {
   const [quickPayConfig, setQuickPayConfig] = useState(null); 
   const [statsDetailConfig, setStatsDetailConfig] = useState(null);
   const [hasScrolledToNext, setHasScrolledToNext] = useState(false);
-  
+
+  const [googleConnected, setGoogleConnected] = useState(!!sessionStorage.getItem('gcal_token'));
+  const [diasCalendarId, setDiasCalendarId] = useState('8f2fa53e3d419a4a2be45ea9c4f1e19a4fa6ad09ce1f73e80d7960374a6a7767@group.calendar.google.com');
+  const [diasColorId, setDiasColorId] = useState('11');
+  const tokenClientRef = useRef(null);
+
   const todayStr = new Date().toISOString().split('T')[0];
- 
+
   // --- REFS POUR LE CARROUSEL NATIF ---
   const scrollContainerRef = useRef(null);
   const isScrollingRef = useRef(false);
@@ -510,11 +107,38 @@ const App = () => {
         if (d.providers) setAvailableProviders(d.providers);
         if (d.services) setAvailableServiceTypes(d.services);
         if (d.providerEmails) setProviderEmails(d.providerEmails);
+        if (d.diasCalendarId) setDiasCalendarId(d.diasCalendarId);
+        if (d.diasColorId) setDiasColorId(d.diasColorId);
       }
     });
  
     return () => { unsubAuth(); unsubProps(); unsubTenants(); unsubSettings(); };
   }, []);
+
+  useEffect(() => {
+    const initGIS = () => {
+      if (!window.google?.accounts?.oauth2) return;
+      tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
+        client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
+        scope: 'https://www.googleapis.com/auth/calendar.events',
+        callback: (response) => {
+          if (response.access_token) {
+            setAccessToken(response.access_token);
+            setGoogleConnected(true);
+          }
+        },
+      });
+    };
+    const script = document.getElementById('gis-script');
+    if (window.google?.accounts?.oauth2) initGIS();
+    else if (script) script.addEventListener('load', initGIS);
+  }, []);
+
+  const signInGoogle = () => tokenClientRef.current?.requestAccessToken();
+  const signOutGoogle = () => { clearAccessToken(); setGoogleConnected(false); };
+  const updatePropCalendar = async (propId, data) => {
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId), data, { merge: true });
+  };
  
   useEffect(() => {
     if (!user || loading) return;
@@ -957,14 +581,75 @@ const App = () => {
     delete d.id;
  
     try {
-      if (editingResId) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', editingResId), d); } 
-      else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), d); }
+      let savedId = editingResId;
+      if (editingResId) {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', editingResId), d);
+      } else {
+        const ref = await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), d);
+        savedId = ref.id;
+      }
+      const prop = (properties || []).find(p => p.id === d.propertyId);
+      if (prop?.calendarId && getAccessToken()) {
+        try {
+          if (editingResId && formData.googleEventId) {
+            await updateCalendarEvent(prop.calendarId, formData.googleEventId, d, prop.name, providerEmails, prop.colorId || null);
+          } else {
+            const evt = await createCalendarEvent(prop.calendarId, d, prop.name, providerEmails, prop.colorId || null);
+            if (evt?.id && savedId) {
+              await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', savedId), { googleEventId: evt.id }, { merge: true });
+            }
+          }
+        } catch (calErr) {
+          if (calErr.message === 'TOKEN_EXPIRED') setGoogleConnected(false);
+        }
+      }
+      if (diasCalendarId && getAccessToken() && prop) {
+        let updatedExpenses = [...(d.resExpenses || [])];
+        let needsExpUpdate = false;
+        for (const exp of (d.resExpenses || []).filter(x => x.person?.toLowerCase().includes('dias'))) {
+          const diasEmail = providerEmails[exp.person] || null;
+          try {
+            if (exp.dateEntry && parseFloat(exp.hoursEntry) > 0) {
+              if (exp.googleDiasEntryId) {
+                await updateDiasEvent(diasCalendarId, exp.googleDiasEntryId, exp, prop.name, 'ENTREE', diasEmail, diasColorId);
+              } else {
+                const evt = await createDiasEvent(diasCalendarId, exp, prop.name, 'ENTREE', diasEmail, diasColorId);
+                if (evt?.id) { updatedExpenses = updatedExpenses.map(x => x.id === exp.id ? { ...x, googleDiasEntryId: evt.id } : x); needsExpUpdate = true; }
+              }
+            }
+            if (exp.dateExit && parseFloat(exp.hoursExit) > 0) {
+              if (exp.googleDiasExitId) {
+                await updateDiasEvent(diasCalendarId, exp.googleDiasExitId, exp, prop.name, 'SORTIE', diasEmail, diasColorId);
+              } else {
+                const evt = await createDiasEvent(diasCalendarId, exp, prop.name, 'SORTIE', diasEmail, diasColorId);
+                if (evt?.id) { updatedExpenses = updatedExpenses.map(x => x.id === exp.id ? { ...x, googleDiasExitId: evt.id } : x); needsExpUpdate = true; }
+              }
+            }
+          } catch (diasErr) { if (diasErr.message === 'TOKEN_EXPIRED') setGoogleConnected(false); }
+        }
+        if (needsExpUpdate && savedId) {
+          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', savedId), { resExpenses: updatedExpenses }, { merge: true });
+        }
+      }
       setIsModalOpen(false);
     } catch (error) { alert("Erreur technique : " + error.message); }
   };
  
   const deleteRes = async (id) => {
-    if(window.confirm("Supprimer définitivement ?")) {
+    if (window.confirm("Supprimer définitivement ?")) {
+      const tenant = (tenants || []).find(t => t.id === id);
+      if (tenant?.googleEventId) {
+        const prop = (properties || []).find(p => p.id === tenant.propertyId);
+        if (prop?.calendarId && getAccessToken()) {
+          try { await deleteCalendarEvent(prop.calendarId, tenant.googleEventId); } catch (e) {}
+        }
+      }
+      if (diasCalendarId && getAccessToken()) {
+        for (const exp of (tenant?.resExpenses || []).filter(x => x.person?.toLowerCase().includes('dias'))) {
+          if (exp.googleDiasEntryId) try { await deleteDiasEvent(diasCalendarId, exp.googleDiasEntryId); } catch (e) {}
+          if (exp.googleDiasExitId) try { await deleteDiasEvent(diasCalendarId, exp.googleDiasExitId); } catch (e) {}
+        }
+      }
       await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', id));
       setIsModalOpen(false);
     }
@@ -1447,7 +1132,7 @@ const App = () => {
                 <div className="max-h-[60vh] overflow-y-auto overflow-x-auto custom-scrollbar relative">
                   <table className="w-full text-left min-w-[280px] md:min-w-[700px]">
                     <thead className="bg-slate-50 uppercase text-slate-400 border-b sticky top-0 z-10 shadow-sm text-[6px] md:text-xs tracking-tighter md:tracking-normal">
-                      <tr><th className="p-1 md:p-6">Période</th><th className="p-1 md:p-6 text-right">Brut URSSAF</th><th className="p-1 md:p-6 text-right text-emerald-600">Direct (hors)</th><th className="p-1 md:p-6 text-right text-indigo-600">Virement</th><th className="p-1 md:p-6 text-right text-slate-500">Prest.</th><th className="p-1 md:p-6 text-right text-rose-500">Cotis.</th><th className="p-1 md:p-6 text-right font-black">Profit</th></tr>
+                      <tr><th className="p-1 md:p-6">Période</th><th className="p-1 md:p-6 text-right">Brut URSSAF</th><th className="p-1 md:p-6 text-right text-emerald-600">Direct (hors URSSAF)</th><th className="p-1 md:p-6 text-right text-indigo-600">Virement</th><th className="p-1 md:p-6 text-right text-slate-500">Prest.</th><th className="p-1 md:p-6 text-right text-rose-500">Cotis.</th><th className="p-1 md:p-6 text-right font-black">Profit</th></tr>
                     </thead>
                     <tbody className="divide-y font-bold">
                       {(monthlyRecapData || []).map(([m, d]) => (
@@ -1539,6 +1224,60 @@ const App = () => {
                 </div>
               </div>
               
+              {/* GOOGLE AGENDA */}
+              <div className="bg-white p-6 rounded-[32px] shadow-lg mx-2 md:mx-0 mt-4 border-2 border-blue-50">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                  <div>
+                    <h3 className="text-[10px] font-black uppercase text-blue-600 mb-1">Google Agenda</h3>
+                    <p className="text-[9px] text-slate-400 font-bold">{googleConnected ? "✅ Connecté — synchronisation automatique active" : "❌ Non connecté — cliquez pour autoriser"}</p>
+                  </div>
+                  <button onClick={googleConnected ? signOutGoogle : signInGoogle} className={"px-5 py-3 rounded-2xl font-black text-[10px] uppercase shadow-md transition-colors " + (googleConnected ? "bg-slate-100 text-slate-500 hover:bg-rose-100 hover:text-rose-600" : "bg-blue-600 text-white hover:bg-blue-700")}>
+                    {googleConnected ? "Déconnecter" : "Connecter Google"}
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  <p className="text-[9px] font-black uppercase text-slate-400">ID Calendrier par logement</p>
+                  <div className="flex flex-col md:flex-row md:items-center gap-2 bg-blue-50 p-3 rounded-2xl border border-blue-200">
+                    <span className="text-[10px] font-black uppercase text-blue-700 min-w-[140px]">Ménage Dias</span>
+                    <input defaultValue={diasCalendarId} onBlur={e => { const v = e.target.value.trim(); if (v !== diasCalendarId) { setDiasCalendarId(v); updateSettings({ diasCalendarId: v }); } }} placeholder="Collez l ID du calendrier Dias" className="flex-1 p-2 bg-white border border-blue-200 rounded-xl text-[9px] font-mono outline-none focus:border-blue-400" />
+                    <select defaultValue={diasColorId} onChange={e => { const v = e.target.value; setDiasColorId(v); updateSettings({ diasColorId: v }); }} className="p-2 bg-white border border-blue-200 rounded-xl text-[9px] font-black outline-none focus:border-blue-400">
+                      <option value="">Couleur défaut</option>
+                      <option value="11">🍅 Rouge foncé (Tomate)</option>
+                      <option value="4">🔴 Rouge clair (Flamingo)</option>
+                      <option value="2">🟢 Vert clair (Sauge)</option>
+                      <option value="7">🔵 Bleu clair (Paon)</option>
+                      <option value="1">🩵 Bleu lavande</option>
+                      <option value="3">🟣 Mauve (Raisin)</option>
+                      <option value="5">🍌 Banane (Jaune)</option>
+                      <option value="6">🟠 Orange (Mandarine)</option>
+                      <option value="8">🩶 Graphite</option>
+                      <option value="9">🫐 Myrtille</option>
+                      <option value="10">🌿 Basilic (Vert foncé)</option>
+                    </select>
+                  </div>
+                  {(properties || []).map(p => (
+                    <div key={p.id} className="flex flex-col md:flex-row md:items-center gap-2 bg-slate-50 p-3 rounded-2xl">
+                      <span className="text-[10px] font-black uppercase text-slate-700 min-w-[140px]">{p.name}</span>
+                      <input defaultValue={p.calendarId || ""} onBlur={e => { if (e.target.value !== (p.calendarId || "")) updatePropCalendar(p.id, { calendarId: e.target.value.trim() }); }} placeholder="Collez l ID du calendrier Google" className="flex-1 p-2 bg-white border border-slate-200 rounded-xl text-[9px] font-mono outline-none focus:border-blue-400" />
+                      <select defaultValue={p.colorId || ""} onChange={e => updatePropCalendar(p.id, { colorId: e.target.value || null })} className="p-2 bg-white border border-slate-200 rounded-xl text-[9px] font-black outline-none focus:border-blue-400">
+                        <option value="">Couleur défaut</option>
+                        <option value="4">🔴 Rouge clair (Flamingo)</option>
+                        <option value="2">🟢 Vert clair (Sauge)</option>
+                        <option value="7">🔵 Bleu clair (Paon)</option>
+                        <option value="1">🩵 Bleu lavande</option>
+                        <option value="3">🟣 Mauve (Raisin)</option>
+                        <option value="5">🍌 Banane (Jaune)</option>
+                        <option value="6">🟠 Orange (Mandarine)</option>
+                        <option value="8">🩶 Graphite</option>
+                        <option value="9">🫐 Myrtille</option>
+                        <option value="10">🌿 Basilic (Vert foncé)</option>
+                        <option value="11">🦚 Paon foncé</option>
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-8 mx-2 md:mx-0">
                 <div className="bg-white p-6 rounded-[32px] shadow-lg flex flex-col h-full">
                   <h3 className="text-[10px] font-black uppercase text-slate-400 mb-4">Plateformes</h3>
@@ -1784,10 +1523,7 @@ const App = () => {
                                       <textarea value={exp.providerNote || ''} onChange={e => updateDiasField(exp.id, 'providerNote', e.target.value)} placeholder="Note pour le prestataire (code d'accès, infos...)" className="w-full p-3 border border-blue-200 rounded-[16px] text-xs font-medium text-slate-700 outline-none bg-white min-h-[60px]" />
                                   </div>
  
-                                  <div className="flex gap-2 mt-1 relative z-10">
-                                      <a href={getProviderCalendarUrl(exp, (properties || []).find(p => p.id === formData.propertyId), 'ENTREE')} target="_blank" rel="noopener noreferrer" className="flex-1 bg-white border border-blue-200 text-blue-600 p-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest text-center shadow-sm hover:bg-blue-50 transition-colors flex items-center justify-center gap-1"><CalendarIcon size={12}/> RDV Entrée</a>
-                                      <a href={getProviderCalendarUrl(exp, (properties || []).find(p => p.id === formData.propertyId), 'SORTIE')} target="_blank" rel="noopener noreferrer" className="flex-1 bg-white border border-blue-200 text-blue-600 p-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest text-center shadow-sm hover:bg-blue-50 transition-colors flex items-center justify-center gap-1"><CalendarIcon size={12}/> RDV Sortie</a>
-                                  </div>
+
  
                                   <div className="flex justify-between items-center bg-blue-600 text-white p-4 rounded-[18px] shadow-sm relative z-10 mt-2">
                                       <span className="text-[10px] font-black uppercase tracking-widest text-blue-200">Total Automatique Bloqué</span>

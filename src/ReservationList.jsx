@@ -1,6 +1,6 @@
 import React from 'react';
 import { ArrowRight, Mail, CheckCircle, Clock } from 'lucide-react';
-import { formatDateFr } from './dateUtils';
+import { formatDateFr } from './utils';
 
 const ReservationList = ({ groupedList, properties, getRowColors, getStatusProps, onEdit, onQuickPay, providerEmails }) => {
   return (

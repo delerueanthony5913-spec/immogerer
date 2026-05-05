@@ -1,5 +1,5 @@
 import React from 'react';
-import { CHART_COLORS } from './dateUtils';
+import { CHART_COLORS } from './utils';
 
 const Agenda = ({ agendaDays, reservationsList, todayStr, properties, onEdit }) => {
   return (

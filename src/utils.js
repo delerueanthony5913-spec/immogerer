@@ -1,5 +1,19 @@
 export const CHART_COLORS = ['#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#6366F1', '#F43F5E', '#06B6D4'];
 
+export const formatDateFr = (dateString) => {
+  if (!dateString) return '';
+  const parts = dateString.split('-');
+  if (parts.length !== 3) return dateString;
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+};
+
+export const formatMonthYear = (m) => {
+  if (!m) return '';
+  const [year, month] = m.split('-');
+  const date = new Date(parseInt(year), parseInt(month) - 1);
+  return date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }).replace(/^\w/, c => c.toUpperCase());
+};
+
 export const TIME_SLOTS = [];
 for (let h = 0; h <= 23; h++) {
   const hour = h.toString().padStart(2, '0');
