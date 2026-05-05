@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import Agenda from './Agenda';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { collection, doc, onSnapshot, deleteDoc, addDoc, setDoc } from 'firebase/firestore';
 import { 
