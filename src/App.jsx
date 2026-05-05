@@ -261,9 +261,9 @@ const App = () => {
                <Settings size={48} className="mx-auto text-slate-200 mb-4" />
                <h2 className="text-xl font-black uppercase text-slate-400">Espace Paramètres</h2>
             </div>
-          </div>
-
         </div>
+      </main>
+    </div>
   );
 };
 
