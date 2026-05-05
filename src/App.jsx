@@ -63,7 +63,7 @@ const App = () => {
   const [statsDetailConfig, setStatsDetailConfig] = useState(null);
   const [hasScrolledToNext, setHasScrolledToNext] = useState(false);
 
-  const [googleConnected, setGoogleConnected] = useState(!!sessionStorage.getItem('gcal_token'));
+  const [googleConnected, setGoogleConnected] = useState(!!localStorage.getItem('gcal_token'));
   const [diasCalendarId, setDiasCalendarId] = useState('8f2fa53e3d419a4a2be45ea9c4f1e19a4fa6ad09ce1f73e80d7960374a6a7767@group.calendar.google.com');
   const [diasColorId, setDiasColorId] = useState('11');
   const tokenClientRef = useRef(null);
@@ -127,6 +127,7 @@ const App = () => {
             setGoogleConnected(true);
           }
         },
+        prompt: '',
       });
     };
     const script = document.getElementById('gis-script');
@@ -136,6 +137,7 @@ const App = () => {
 
   const signInGoogle = () => tokenClientRef.current?.requestAccessToken();
   const signOutGoogle = () => { clearAccessToken(); setGoogleConnected(false); };
+  const silentRenew = () => tokenClientRef.current?.requestAccessToken({ prompt: '' });
   const updatePropCalendar = async (propId, data) => {
     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId), data, { merge: true });
   };
@@ -600,7 +602,7 @@ const App = () => {
             }
           }
         } catch (calErr) {
-          if (calErr.message === 'TOKEN_EXPIRED') setGoogleConnected(false);
+          if (calErr.message === 'TOKEN_EXPIRED') silentRenew();
         }
       }
       if (diasCalendarId && getAccessToken() && prop) {
@@ -625,7 +627,7 @@ const App = () => {
                 if (evt?.id) { updatedExpenses = updatedExpenses.map(x => x.id === exp.id ? { ...x, googleDiasExitId: evt.id } : x); needsExpUpdate = true; }
               }
             }
-          } catch (diasErr) { if (diasErr.message === 'TOKEN_EXPIRED') setGoogleConnected(false); }
+          } catch (diasErr) { if (diasErr.message === 'TOKEN_EXPIRED') silentRenew(); }
         }
         if (needsExpUpdate && savedId) {
           await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', savedId), { resExpenses: updatedExpenses }, { merge: true });
