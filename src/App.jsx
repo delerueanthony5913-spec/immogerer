@@ -30,16 +30,14 @@ const CHART_COLORS = ['#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#6
 const TIME_SLOTS = [];
 for (let h = 0; h <= 23; h++) {
   const hour = h.toString().padStart(2, '0');
-  TIME_SLOTS.push(`${hour}:00`);
-  TIME_SLOTS.push(`${hour}:30`);
+  TIME_SLOTS.push(`${hour}:00`, `${hour}:30`);
 }
 
 // --- UTILITAIRES ---
 const formatDateFr = (dateString) => {
   if (!dateString) return '';
   const parts = dateString.split('-');
-  if (parts.length !== 3) return dateString;
-  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dateString;
 };
 
 const isSundayOrHoliday = (dateStr) => {
@@ -59,7 +57,7 @@ const isSundayOrHoliday = (dateStr) => {
   return holidays.includes(dateStr);
 };
 
-// --- COMPOSANTS GRAPHIQUES ---
+// --- COMPOSANT GRAPHIQUE ---
 const DonutChart = ({ data, title }) => {
   const visibleData = (data || []).filter(d => d && d.value > 0);
   const displayTotal = visibleData.reduce((acc, curr) => acc + curr.value, 0);
@@ -78,71 +76,21 @@ const DonutChart = ({ data, title }) => {
           })}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-          <span className="text-[7px] md:text-[9px] text-slate-400 font-black uppercase leading-none mb-0.5 md:mb-1">Total Net</span>
+          <span className="text-[7px] md:text-[9px] text-slate-400 font-black uppercase tracking-widest leading-none mb-0.5 md:mb-1">Total Net</span>
           <span className="text-sm md:text-xl font-black text-slate-900">{Math.round(displayTotal).toLocaleString('fr-FR')}€</span>
         </div>
       </div>
-      <div className="flex-1 w-full space-y-1.5 md:space-y-3">
-        <h3 className="text-[9px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-2 md:mb-4 text-center md:text-left">{title}</h3>
-        <div className="space-y-1 md:space-y-2">
-          {visibleData.map((slice, i) => (
-            <div key={i} className="flex items-center justify-between text-[9px] md:text-[11px] group">
-              <div className="flex items-center gap-1.5 md:gap-3">
-                <div className="w-1.5 h-1.5 md:w-3 md:h-3 rounded-full shadow-sm" style={{ backgroundColor: slice.color }}></div>
-                <span className="font-bold text-slate-600 truncate max-w-[120px] md:max-w-[140px]">{slice.label}</span>
-              </div>
-              <span className="font-black text-slate-900 tabular-nums">{Math.round(slice.value).toLocaleString('fr-FR')} €</span>
+      <div className="flex-1 w-full space-y-1.5">
+        <h3 className="text-[9px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-2 text-center md:text-left">{title}</h3>
+        {visibleData.map((slice, i) => (
+          <div key={i} className="flex items-center justify-between text-[9px] md:text-[11px] group">
+            <div className="flex items-center gap-1.5 md:gap-3">
+              <div className="w-1.5 h-1.5 rounded-full shadow-sm" style={{ backgroundColor: slice.color }}></div>
+              <span className="font-bold text-slate-600 truncate max-w-[120px]">{slice.label}</span>
             </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const ComparisonChart = ({ data, yearsAvailable = [] }) => {
-  const currentYear = new Date().getFullYear().toString();
-  const safeData = Array.isArray(data) ? data : [];
-  const safeYears = yearsAvailable.length > 0 ? yearsAvailable : [currentYear];
-
-  const buildSeriesFor = (targetYear) => {
-      const res = Array(12).fill(0);
-      safeData.forEach(t => {
-          if (!t.startDate || !t.startDate.startsWith(targetYear)) return;
-          const m = parseInt(t.startDate.split('-')[1], 10) - 1;
-          const gross = parseFloat(t.grossAmount) || 0;
-          if (m >= 0 && m <= 11) res[m] += gross;
-      });
-      return res;
-  };
-
-  const series = safeYears.slice(0, 2).map((year, index) => ({
-      id: year,
-      data: buildSeriesFor(year),
-      color: CHART_COLORS[index % CHART_COLORS.length]
-  }));
-
-  const w = 900, h = 250, padX = 60, padY = 30; 
-  const maxV = Math.max(...series.flatMap(s => s.data), 100) * 1.1;
-  const getY = (val) => h - padY - ((val / maxV) * (h - 2 * padY));
-  const getX = (i) => padX + (i * (w - 2 * padX) / 11);
-
-  return (
-    <div className="bg-white p-6 rounded-[32px] shadow-xl border border-slate-50 mt-8 overflow-hidden">
-      <div className="flex gap-4 mb-6">
-        {series.map(s => (
-          <div key={s.id} className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full" style={{backgroundColor: s.color}}></div>
-            <span className="text-[10px] font-black uppercase">{s.id}</span>
+            <span className="font-black text-slate-900">{Math.round(slice.value).toLocaleString('fr-FR')} €</span>
           </div>
         ))}
-      </div>
-      <div className="overflow-x-auto hide-scroll">
-        <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="overflow-visible">
-          {series.map(s => (
-            <path key={s.id} d={`M ${s.data.map((v, i) => `${getX(i)},${getY(v)}`).join(' L ')}`} fill="none" stroke={s.color} strokeWidth="4" strokeLinecap="round" />
-          ))}
-        </svg>
       </div>
     </div>
   );
@@ -168,15 +116,9 @@ const App = () => {
   const [filterProp, setFilterProp] = useState('all');
   const [filterPlat, setFilterPlat] = useState('all');
   const [filterProv, setFilterProv] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingResId, setEditingResId] = useState(null);
   const [formData, setFormData] = useState({ propertyId: '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', platform: 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '', acompte1Amount: '', acompte1Date: '', acompte2Amount: '', acompte2Date: '', soldeAmount: '', soldeDate: '' });
-  const [inputPlat, setInputPlat] = useState('');
-  const [inputProv, setInputProv] = useState('');
-  const [inputProvEmail, setInputProvEmail] = useState(''); 
-  const [inputSvc, setInputSvc] = useState('');
-  const [inputProp, setInputProp] = useState({ name: '', address: '' });
   const [quickPayConfig, setQuickPayConfig] = useState(null); 
   const [hasScrolledToNext, setHasScrolledToNext] = useState(false);
   const scrollContainerRef = useRef(null);
@@ -198,6 +140,33 @@ const App = () => {
     return Array.from(years).sort((a, b) => b - a);
   }, [tenants]);
 
+  const checkDateFilter = (dateStr) => {
+    if (!dateStr) return false;
+    const [y, mo] = dateStr.split('-');
+    if (filterYear !== 'all' && y !== filterYear) return false;
+    if (filterMonth !== 'all' && parseInt(mo)-1 !== parseInt(filterMonth)) return false;
+    return true;
+  };
+
+  const handleScroll = () => {
+    if (!scrollContainerRef.current || isScrollingRef.current) return;
+    const scrollLeft = scrollContainerRef.current.scrollLeft;
+    const width = scrollContainerRef.current.clientWidth;
+    const newIndex = Math.round(scrollLeft / width);
+    if (TABS_ORDER[newIndex] && TABS_ORDER[newIndex] !== activeTab) setActiveTab(TABS_ORDER[newIndex]);
+  };
+
+  const changeTab = (tabId) => {
+    setActiveTab(tabId);
+    setIsMobileMenuOpen(false);
+    const index = TABS_ORDER.indexOf(tabId);
+    if (scrollContainerRef.current) {
+      isScrollingRef.current = true;
+      scrollContainerRef.current.scrollTo({ left: index * scrollContainerRef.current.clientWidth, behavior: 'smooth' });
+      setTimeout(() => { isScrollingRef.current = false; }, 600);
+    }
+  };
+
   const agendaDays = useMemo(() => {
     const y = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
     const m = filterMonth === 'all' ? new Date().getMonth() : parseInt(filterMonth);
@@ -208,23 +177,7 @@ const App = () => {
     return days;
   }, [filterYear, filterMonth]);
 
-  const checkDateFilter = (dateStr) => {
-    if (!dateStr) return false;
-    const [y, mo] = dateStr.split('-');
-    if (filterYear !== 'all' && y !== filterYear) return false;
-    if (filterMonth !== 'all' && parseInt(mo)-1 !== parseInt(filterMonth)) return false;
-    return true;
-  };
-
-  const getTenantProfitForStats = (t) => {
-    let p = 0;
-    if (t.paymentDate && checkDateFilter(t.paymentDate)) { p += (parseFloat(t.netAmount)||0); if(t.isUrssaf!==false) p -= (parseFloat(t.grossAmount)||0)*0.077; }
-    (t.resExpenses || []).forEach(e => { if (e.paymentDate && checkDateFilter(e.paymentDate)) p -= (parseFloat(e.amount)||0); });
-    return p;
-  };
-
   const baseTenants = useMemo(() => tenants.filter(t => (filterProp === 'all' || t.propertyId === filterProp) && (filterPlat === 'all' || t.platform === filterPlat)), [tenants, filterProp, filterPlat]);
-  
   const reservationsList = useMemo(() => baseTenants.filter(t => {
       const dateRef = t.startDate ? new Date(t.startDate) : new Date();
       return (filterYear === 'all' || dateRef.getFullYear() === parseInt(filterYear)) && (filterMonth === 'all' || dateRef.getMonth() === parseInt(filterMonth)) && (filterProv === 'all' || (t.resExpenses && t.resExpenses.some(e => e.person === filterProv)));
@@ -244,27 +197,20 @@ const App = () => {
 
   const monthlyRecapData = useMemo(() => {
     const stats = {}; const init = (m) => { if(!stats[m]) stats[m] = { totalBank: 0, urssafGross: 0, charges: 0, taxes: 0 }; };
-    tenants.forEach(t => {
+    baseTenants.forEach(t => {
       if (t.paymentDate && checkDateFilter(t.paymentDate)) { const m = t.paymentDate.substring(0,7); init(m); stats[m].totalBank += (parseFloat(t.netAmount)||0); if (t.isUrssaf !== false) { stats[m].urssafGross += (parseFloat(t.grossAmount)||0); stats[m].taxes += (parseFloat(t.grossAmount)||0)*0.077; } }
       (t.resExpenses || []).forEach(exp => { if (exp.paymentDate && checkDateFilter(exp.paymentDate)) { const m = exp.paymentDate.substring(0,7); init(m); stats[m].charges += (parseFloat(exp.amount)||0); } });
     });
     return Object.entries(stats).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [tenants, filterYear, filterMonth]);
+  }, [baseTenants, filterYear, filterMonth]);
 
-  const statsCalculations = useMemo(() => {
-    const year = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
-    let gross = 0, exp = 0, nights = 0;
-    baseTenants.forEach(t => {
-       if (t.startDate && t.startDate.startsWith(year.toString())) {
-           gross += (parseFloat(t.grossAmount)||0);
-           exp += (t.resExpenses||[]).reduce((s, e) => s + (parseFloat(e.amount)||0), 0);
-           if (t.endDate) nights += Math.max(1, Math.round((new Date(t.endDate)-new Date(t.startDate))/86400000));
-       }
-    });
-    return { year, currentYearGross: gross, currentYearExp: exp, currentYearNights: nights, revPerNight: nights > 0 ? (gross/nights).toFixed(2) : 0, upcomingGross: baseTenants.filter(t => !t.paymentDate).reduce((s,t)=>s+(parseFloat(t.grossAmount)||0),0) };
-  }, [baseTenants, filterYear]);
+  const getTenantProfitForStats = (t) => {
+    let p = 0;
+    if (t.paymentDate && checkDateFilter(t.paymentDate)) { p += (parseFloat(t.netAmount)||0); if(t.isUrssaf!==false) p -= (parseFloat(t.grossAmount)||0)*0.077; }
+    (t.resExpenses || []).forEach(e => { if (e.paymentDate && checkDateFilter(e.paymentDate)) p -= (parseFloat(e.amount)||0); });
+    return p;
+  };
 
-  const changeTab = (tabId) => { setActiveTab(tabId); setIsMobileMenuOpen(false); const index = TABS_ORDER.indexOf(tabId); if (scrollContainerRef.current) { isScrollingRef.current = true; scrollContainerRef.current.scrollTo({ left: index * scrollContainerRef.current.clientWidth, behavior: 'smooth' }); setTimeout(() => { isScrollingRef.current = false; }, 600); } };
   const scrollToCurrentRes = (withFlash = false) => {
     if (reservationsList.length === 0) return; let targetRes = reservationsList.find(t => t.startDate >= todayStr || (t.endDate && t.endDate >= todayStr)) || reservationsList[reservationsList.length - 1];
     if (targetRes) { document.querySelectorAll(`[data-res-id="${targetRes.id}"]`).forEach(el => { const container = el.closest('.overflow-y-auto'); if (container) { container.scrollTo({ top: el.offsetTop - 100, behavior: 'smooth' }); if (withFlash) { const bg = el.style.backgroundColor; el.style.backgroundColor = '#FEF9C3'; setTimeout(() => el.style.backgroundColor = bg, 2500); } } }); }
@@ -289,33 +235,7 @@ const App = () => {
     setQuickPayConfig(null);
   };
 
-  const updateDiasField = (expId, field, value) => {
-    setFormData(prev => {
-        const nE = (prev.resExpenses || []).map(x => {
-            if (x.id === expId) {
-                const u = { ...x, [field]: value };
-                if (field === 'dateEntry' || field === 'dateExit') { u.rateEntry = isSundayOrHoliday(u.dateEntry) ? 25 : 15; u.rateExit = isSundayOrHoliday(u.dateExit) ? 25 : 15; }
-                u.amount = (parseFloat(u.hoursEntry||0)*(parseFloat(u.rateEntry)||0)) + (parseFloat(u.hoursExit||0)*(parseFloat(u.rateExit)||0));
-                return u;
-            }
-            return x;
-        });
-        return { ...prev, resExpenses: nE };
-    });
-  };
-
-  const updateSettings = async (n) => { if(!user) return; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), n, { merge: true }); };
-  const saveRes = async (e) => {
-    e.preventDefault(); if (!formData.propertyId || !formData.name || !formData.startDate || !formData.endDate) { alert("Champs obligatoires."); return; }
-    const isDirect = formData.platform === 'En direct'; const isC = formData.platform === 'Booking' || formData.platform === 'Abritel';
-    const disp = parseFloat(formData.displayedAmount) || 0; const city = parseFloat(formData.cityTax) || 0; const plat = parseFloat(formData.platformFees) || 0; const bank = parseFloat(formData.bankFees) || 0; const gross = parseFloat(formData.grossAmount) || 0;
-    const g = isDirect ? gross : (isC ? (disp - city) : gross);
-    const n = isDirect ? gross : (isC ? (g - plat - bank) : (g - plat));
-    const d = { ...formData, isUrssaf: formData.isUrssaf !== false, grossAmount: g, netAmount: n, platformFees: plat, bankFees: bank, cityTax: city, displayedAmount: disp, resExpenses: (formData.resExpenses || []).map(r => ({ ...r, amount: parseFloat(r.amount) || 0 })) };
-    delete d.id; if (editingResId) { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', editingResId), d); } else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'), d); }
-    setIsModalOpen(false);
-  };
-  const deleteRes = async (id) => { if(window.confirm("Supprimer ?")) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', id)); setIsModalOpen(false); } };
+  const generateICalLInk = (id) => `${window.location.origin}${window.location.pathname}?ical=${id}`;
 
   if (!isUnlocked) return <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-4 font-sans text-center overflow-hidden relative"><div className="bg-white p-8 md:p-12 rounded-[40px] shadow-2xl max-w-sm w-full border border-slate-100 flex flex-col items-center animate-in zoom-in-95 relative z-10"><div className="bg-slate-50 p-4 rounded-3xl mb-6 shadow-inner border border-slate-100"><Key size={48} className="text-blue-600" /></div><h1 className="font-black text-2xl uppercase tracking-tighter text-slate-900 mb-1">Cadel Manager</h1><p className="text-[10px] uppercase tracking-widest text-slate-400 mb-8 font-bold">Espace Sécurisé</p><form onSubmit={handlePinSubmit} className="w-full flex flex-col gap-4"><div><input type="password" value={pinInput} onChange={(e) => { setPinInput(e.target.value); setPinError(false); }} placeholder="Mot de passe" className={`w-full p-4 bg-slate-50 border rounded-2xl font-black text-center text-lg outline-none transition-all ${pinError ? 'border-rose-500 text-rose-500' : 'border-slate-200'}`} autoFocus /></div><button type="submit" className="w-full bg-blue-600 text-white p-4 rounded-2xl font-black uppercase text-sm shadow-xl shadow-blue-200">Déverrouiller</button></form></div></div>;
   if (loading) return <div className="h-screen w-full flex items-center justify-center bg-slate-50 font-black uppercase text-xs"><Loader2 className="animate-spin text-blue-600 mr-2" /> CADEL MANAGER...</div>;
@@ -334,12 +254,13 @@ const App = () => {
       <div className="md:hidden flex justify-between p-5 bg-white border-b sticky top-0 z-40 shadow-sm"><div className="flex items-center gap-3"><img src="/icon.svg" className="w-10 h-10 rounded-[12px] object-contain" /><h1 className="font-black text-sm uppercase">CADEL MANAGER</h1></div><button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2">{isMobileMenuOpen ? <X /> : <Menu />}</button></div>
       <main className="flex-1 w-full min-w-0 min-h-screen relative flex flex-col overflow-x-hidden">
         {quickPayConfig && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"><div className="bg-white p-8 rounded-[40px] shadow-2xl max-w-sm w-full border border-slate-100 flex flex-col gap-6 animate-in zoom-in-95 text-center"><h3 className="font-black text-xl uppercase">Valider paiement</h3><input type="date" value={quickPayConfig.date} onChange={e => setQuickPayConfig({...quickPayConfig, date: e.target.value})} className="w-full p-4 bg-slate-50 border rounded-2xl font-black text-center" /><div className="flex gap-3"><button onClick={() => setQuickPayConfig(null)} className="flex-1 p-4 rounded-2xl text-slate-400">Annuler</button><button onClick={submitQuickPay} className="flex-1 p-4 rounded-2xl bg-emerald-500 text-white font-black">Encaisser</button></div></div></div>
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4"><div className="bg-white p-8 rounded-[40px] shadow-2xl max-w-sm w-full border border-slate-100 flex flex-col gap-6 animate-in zoom-in-95 text-center"><h3 className="font-black text-xl uppercase">Valider le paiement</h3><input type="date" value={quickPayConfig.date} onChange={e => setQuickPayConfig({...quickPayConfig, date: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-black text-center text-lg outline-none" /><div className="flex gap-3"><button onClick={() => setQuickPayConfig(null)} className="flex-1 p-4 rounded-2xl font-black uppercase text-[10px] text-slate-400 bg-slate-50">Annuler</button><button onClick={submitQuickPay} className="flex-1 p-4 rounded-2xl font-black uppercase text-[10px] text-white bg-emerald-500 shadow-xl shadow-emerald-200">Encaisser</button></div></div></div>
         )}
         <div className="sticky top-0 z-30 bg-[#F8FAFC]/95 backdrop-blur-md pt-2 pb-4 px-2 md:px-0"><div className="flex flex-wrap items-center gap-2 bg-white/80 p-3 rounded-[28px] border border-white shadow-lg mx-auto max-w-7xl"><div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100"><Filter size={12} className="text-slate-400" /><select value={filterYear} onChange={e => {setFilterYear(e.target.value); setHasScrolledToNext(false);}} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Toutes Années</option>{yearsAvailable.map(y => <option key={y} value={y}>{y}</option>)}</select></div><div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100"><select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer"><option value="all">Mois (Tous)</option>{['Janv','Févr','Mars','Avril','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'].map((m,i)=><option key={i} value={i}>{m}</option>)}</select></div><div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100"><select value={filterProp} onChange={e => setFilterProp(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none max-w-[100px] md:max-w-[130px] cursor-pointer"><option value="all">Logements</option>{properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div></div></div>
         <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 w-full flex overflow-x-auto snap-x snap-mandatory hide-scroll">
+          
           {/* 1. RÉSERVATIONS */}
-          <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border" style={{ scrollSnapStop: 'always' }}><div className="max-w-7xl mx-auto pb-32"><div className="flex justify-between items-center mx-2 md:mx-0 mb-6"><h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2><div className="flex items-center gap-2 md:gap-4"><button onClick={() => scrollToCurrentRes(true)} className="p-3 md:px-4 md:py-3 bg-white text-blue-600 rounded-full md:rounded-[20px] shadow-lg border border-slate-100 flex items-center justify-center gap-2"><LocateFixed size={18} /><span className="hidden md:inline font-black text-[10px] uppercase">Aujourd'hui</span></button><button onClick={() => { setEditingResId(null); setFormData({ propertyId: properties[0]?.id || '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '', acompte1Amount: '', acompte1Date: '', acompte2Amount: '', acompte2Date: '', soldeAmount: '', soldeDate: '' }); setIsModalOpen(true); }} className="bg-blue-600 text-white px-6 py-3 md:px-8 md:py-4 rounded-[20px] md:rounded-[24px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button></div></div><div className="md:hidden max-h-[70vh] overflow-y-auto custom-scrollbar p-1 rounded-[20px] border border-slate-100 bg-slate-50/50 shadow-inner mx-2 relative"><div className="grid grid-cols-1 gap-2.5">{(groupedReservationsList || []).map(item => { if (item.isSeparator) return <div key={item.id} className="flex items-center justify-center mt-2 mb-0.5"><span className="bg-slate-800 text-white px-4 py-1.5 rounded-[10px] text-[8px] font-black uppercase tracking-[0.2em] shadow-sm">{item.label}</span></div>; const t = item; const c = getRowColors(t.propertyId); return <div key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className={`${c.bg} p-3 rounded-[16px] shadow-sm border border-slate-50 cursor-pointer transition-colors`}><div className="flex justify-between items-start mb-1.5"><div><h3 className="text-sm font-black uppercase leading-tight">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</h3><div className="flex items-center gap-1.5 mt-1 leading-tight"><span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{t.platform}</span><span className="text-[11px] font-black text-slate-700">{t.name}</span></div></div><div className="flex flex-col items-end"><span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase cursor-pointer inline-block ${getStatusProps(t).color}`}>{getStatusProps(t).label}</span>{t.paymentDate && <span className="text-[7px] text-slate-400 mt-1 font-bold">{formatDateFr(t.paymentDate)}</span>}</div></div><div className="bg-white/60 p-2 rounded-[12px] flex justify-between font-black text-[9px] mb-1.5 items-center"><span>{formatDateFr(t.startDate)}</span><ArrowRight size={10} className="text-slate-300"/><span>{formatDateFr(t.endDate)}</span></div>{t.comment && <div className="text-[9px] italic text-slate-600 mb-1.5 px-1 leading-tight whitespace-pre-wrap">📝 {t.comment}</div>}<div className="text-right font-black text-sm">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</div></div>; })}</div></div><div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden border border-slate-100"><div className="max-h-[70vh] overflow-y-auto custom-scrollbar relative"><table className="w-full text-left text-xs"><thead className="bg-slate-50 font-black uppercase border-b text-slate-400 sticky top-0 z-20 shadow-sm"><tr><th className="p-4 w-[15%]">Logement</th><th className="p-4 w-[15%]">Client</th><th className="p-4 w-[12%] text-center">Dates</th><th className="p-4 w-[25%]">Notes</th><th className="p-4 w-[18%]">Prestations</th><th className="p-4 text-right">Net</th><th className="p-4 text-center">État</th></tr></thead><tbody className="divide-y divide-slate-50 font-bold">{(groupedReservationsList || []).map(item => { if (item.isSeparator) return <tr key={item.id} className="bg-slate-100/50"><td colSpan="7" className="p-3 text-center"><span className="bg-slate-800 text-white px-5 py-2 rounded-[14px] text-[10px] font-black uppercase tracking-[0.2em] shadow-md inline-block">{item.label}</span></td></tr>; const t = item; const c = getRowColors(t.propertyId); return <tr key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className={`${c.bg} cursor-pointer hover:bg-slate-50`}><td className="p-4 uppercase"><div className="font-black">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</div><div className="text-blue-600 text-xs font-black mt-0.5">{t.platform}</div></td><td className="p-4"><div className="text-sm font-black">{t.name}</div></td><td className="p-4 text-center text-slate-500 whitespace-nowrap">{formatDateFr(t.startDate)} <ArrowRight size={10} className="inline" /> {formatDateFr(t.endDate)}</td><td className="p-4 text-[11px] text-slate-600 font-medium">{t.comment ? <div className="bg-slate-50/50 p-2 rounded-xl italic">📝 {t.comment}</div> : ''}</td><td className="p-4"><div className="space-y-1.5">{(t.resExpenses || []).map((exp, idx) => (<div key={idx} className="flex items-center justify-between text-[10px] bg-white/50 p-1.5 rounded-lg border border-slate-100/50"><span className="uppercase font-black text-slate-500 leading-none">{exp.type} ({exp.person})</span><div className="text-right"><div className="flex items-center justify-end gap-1.5"><span className={`font-black ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€</span>{exp.paymentDate ? <CheckCircle size={10} /> : <Clock size={10} />}</div></div></div>))}</div></td><td className="p-4 text-right font-black">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</td><td className="p-4 text-center"><span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-4 py-2 rounded-full text-[9px] uppercase cursor-pointer inline-block ${getStatusProps(t).color}`}>{getStatusProps(t).label}</span></td></tr>; })}</tbody></table></div></div></div></div>
+          <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border" style={{ scrollSnapStop: 'always' }}><div className="max-w-7xl mx-auto pb-32"><div className="flex justify-between items-center mx-2 md:mx-0 mb-6"><h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2><div className="flex items-center gap-2 md:gap-4"><button onClick={() => scrollToCurrentRes(true)} className="p-3 md:px-4 md:py-3 bg-white text-blue-600 rounded-full md:rounded-[20px] shadow-lg border border-slate-100 hover:bg-blue-50 transition-all flex items-center justify-center gap-2"><LocateFixed size={18} /><span className="hidden md:inline font-black text-[10px] uppercase">Aujourd'hui</span></button><button onClick={() => { setEditingResId(null); setIsModalOpen(true); }} className="bg-blue-600 text-white px-6 py-3 md:px-8 md:py-4 rounded-[20px] md:rounded-[24px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button></div></div><div className="md:hidden max-h-[70vh] overflow-y-auto custom-scrollbar p-1 rounded-[20px] border border-slate-100 bg-slate-50/50 shadow-inner mx-2 relative"><div className="grid grid-cols-1 gap-2.5">{(groupedReservationsList || []).map(item => { if (item.isSeparator) return <div key={item.id} className="flex items-center justify-center mt-2 mb-0.5"><span className="bg-slate-800 text-white px-4 py-1.5 rounded-[10px] text-[8px] font-black uppercase tracking-[0.2em] shadow-sm">{item.label}</span></div>; const t = item; const c = getRowColors(t.propertyId); return <div key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className={`${c.bg} p-3 rounded-[16px] shadow-sm border border-slate-50 cursor-pointer transition-colors`}><div className="flex justify-between items-start mb-1.5"><div><h3 className="text-sm font-black uppercase leading-tight">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</h3><div className="flex items-center gap-1.5 mt-1 leading-tight"><span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{t.platform}</span><span className="text-[11px] font-black text-slate-700">{t.name}</span></div></div><div className="flex flex-col items-end"><span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase cursor-pointer inline-block ${getStatusProps(t).color}`}>{getStatusProps(t).label}</span>{t.paymentDate && <span className="text-[7px] text-slate-400 mt-1 font-bold">{formatDateFr(t.paymentDate)}</span>}</div></div><div className="bg-white/60 p-2 rounded-[12px] flex justify-between font-black text-[9px] mb-1.5 items-center"><span>{formatDateFr(t.startDate)}</span><ArrowRight size={10} className="text-slate-300"/><span>{formatDateFr(t.endDate)}</span></div>{t.comment && <div className="text-[9px] italic text-slate-600 mb-1.5 px-1 leading-tight whitespace-pre-wrap">📝 {t.comment}</div>}<div className="text-right font-black text-sm">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</div></div>; })}</div></div><div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden border border-slate-100"><div className="max-h-[70vh] overflow-y-auto custom-scrollbar relative"><table className="w-full text-left text-xs"><thead className="bg-slate-50 font-black uppercase border-b text-slate-400 sticky top-0 z-20 shadow-sm"><tr><th className="p-4 w-[15%]">Logement</th><th className="p-4 w-[15%]">Client</th><th className="p-4 w-[12%] text-center">Dates</th><th className="p-4 w-[25%]">Notes</th><th className="p-4 w-[18%]">Prestations</th><th className="p-4 text-right">Net</th><th className="p-4 text-center">État</th></tr></thead><tbody className="divide-y divide-slate-50 font-bold">{(groupedReservationsList || []).map(item => { if (item.isSeparator) return <tr key={item.id} className="bg-slate-100/50"><td colSpan="7" className="p-3 text-center"><span className="bg-slate-800 text-white px-5 py-2 rounded-[14px] text-[10px] font-black uppercase tracking-[0.2em] shadow-md inline-block">{item.label}</span></td></tr>; const t = item; const c = getRowColors(t.propertyId); return <tr key={t.id} data-res-id={t.id} onClick={() => { setEditingResId(t.id); setFormData(t); setIsModalOpen(true); }} className={`${c.bg} cursor-pointer hover:bg-slate-50`}><td className="p-4 uppercase"><div className="font-black">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</div><div className="text-blue-600 text-xs font-black mt-0.5">{t.platform}</div></td><td className="p-4"><div className="text-sm font-black">{t.name}</div></td><td className="p-4 text-center text-slate-500 whitespace-nowrap">{formatDateFr(t.startDate)} <ArrowRight size={10} className="inline" /> {formatDateFr(t.endDate)}</td><td className="p-4 text-[11px] text-slate-600 font-medium">{t.comment ? <div className="bg-slate-50/50 p-2 rounded-xl italic">📝 {t.comment}</div> : ''}</td><td className="p-4"><div className="space-y-1.5">{(t.resExpenses || []).map((exp, idx) => (<div key={idx} className="flex items-center justify-between text-[10px] bg-white/50 p-1.5 rounded-lg border border-slate-100/50"><span className="uppercase font-black text-slate-500 leading-none">{exp.type} ({exp.person})</span><div className="text-right"><div className="flex items-center justify-end gap-1.5"><span className={`font-black ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€</span>{exp.paymentDate ? <CheckCircle size={10} /> : <Clock size={10} />}</div></div></div>))}</div></td><td className="p-4 text-right font-black">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</td><td className="p-4 text-center"><span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-4 py-2 rounded-full text-[9px] uppercase cursor-pointer inline-block ${getStatusProps(t).color}`}>{getStatusProps(t).label}</span></td></tr>; })}</tbody></table></div></div></div></div>
 
           {/* 2. AGENDA */}
           <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border" style={{ scrollSnapStop: 'always' }}><div className="max-w-7xl mx-auto pb-32"><h2 className="text-2xl md:text-3xl font-black uppercase mb-6 mx-2">Agenda</h2><div className="bg-white p-4 md:p-6 rounded-[32px] md:rounded-[40px] shadow-2xl overflow-x-auto mx-2 md:mx-0"><div className="min-w-[320px] md:min-w-[700px]"><div className="grid grid-cols-7 text-center font-black text-slate-300 text-[8px] md:text-[10px] uppercase mb-4">{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d=><div key={d}>{d}</div>)}</div><div className="grid grid-cols-7 gap-1 md:gap-2">{(agendaDays || []).map((item,idx)=>{ if(item.empty) return <div key={idx} className="h-16 md:h-32 bg-slate-50/30 rounded-xl md:rounded-2xl"></div>; const dayRes = (reservationsList || []).filter(r=>item.dateStr>=r.startDate && item.dateStr<=r.endDate); return (<div key={item.dateStr} className={`h-16 md:h-32 border rounded-xl md:rounded-2xl p-1 md:p-2 flex flex-col ${item.dateStr===todayStr?'border-blue-500 bg-blue-50/10':'border-slate-100'}`}><span className="text-[8px] md:text-[10px] font-black text-slate-300">{item.day}</span><div className="flex-1 space-y-0.5 overflow-y-auto no-scrollbar">{dayRes.map(r=>(<div key={r.id} onClick={()=> {setEditingResId(r.id); setFormData(r); setIsModalOpen(true);}} className="text-[6px] md:text-[8px] font-black text-white p-0.5 rounded truncate" style={{backgroundColor: CHART_COLORS[(properties || []).findIndex(p=>p.id===r.propertyId)%CHART_COLORS.length]}}>{r.name?.split(' ')[0]}</div>))}</div></div>);})}</div></div></div></div></div>
@@ -351,7 +272,7 @@ const App = () => {
           <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border" style={{ scrollSnapStop: 'always' }}><div className="max-w-7xl mx-auto pb-32 space-y-10 px-2"><h2 className="text-3xl font-black uppercase">Comptabilité</h2><div className="bg-white rounded-[24px] shadow-2xl overflow-hidden border border-slate-100"><div className="p-3 md:p-8 bg-slate-900 text-white font-black text-[10px] uppercase">Bilan Global</div><div className="max-h-[60vh] overflow-y-auto overflow-x-auto custom-scrollbar relative"><table className="w-full text-left min-w-[500px]"><thead className="bg-slate-50 uppercase text-slate-400 border-b text-[10px]"><tr><th className="p-4">Période</th><th className="p-4 text-right">Brut URSSAF</th><th className="p-4 text-right text-indigo-600">Virement</th><th className="p-4 text-right font-black">Profit</th></tr></thead><tbody className="divide-y font-bold">{(monthlyRecapData || []).map(([m, d]) => (<tr key={m} className="text-xs group hover:bg-slate-50/50"><td className="p-4 capitalize">{m}</td><td className="p-4 text-right text-slate-500">{d.urssafGross.toLocaleString('fr-FR')}€</td><td className="p-4 text-right text-indigo-600 font-black">{d.totalBank.toLocaleString('fr-FR')}€</td><td className={`p-4 text-right font-black ${d.totalBank - d.taxes - d.charges >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{(d.totalBank - d.taxes - d.charges).toLocaleString('fr-FR')}€</td></tr>))}</tbody></table></div></div></div></div>
 
           {/* 5. PARAMÈTRES */}
-          <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border" style={{ scrollSnapStop: 'always' }}><div className="max-w-7xl mx-auto pb-32 space-y-10 px-2"><h2 className="text-3xl font-black uppercase">Paramètres</h2><div className="bg-white p-8 rounded-[40px] border-2 border-dashed shadow-xl flex flex-col items-center justify-center text-center mx-2 md:mx-0"><UploadCloud size={40} className="text-blue-600 mb-4"/><h3 className="text-xl font-black uppercase">Importation de Réservations (CSV)</h3><textarea placeholder={`Collez les lignes ici...`} className="w-full mt-6 p-4 bg-slate-50 border rounded-3xl min-h-[150px] font-mono text-[10px] outline-none" /><div className="flex gap-4 w-full mt-8"><button className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase shadow-xl hover:bg-blue-600 transition-colors">Analyser</button></div></div><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"><div className="bg-white p-6 rounded-[32px] shadow-lg border-2 border-blue-50"><h3 className="text-[10px] font-black uppercase text-blue-600 mb-4">Logements & iCal</h3><div className="space-y-2">{(properties || []).map(p=>(<div key={p.id} className="flex flex-col gap-2 p-3 bg-blue-50 rounded-xl"><div className="flex justify-between items-center text-[10px] font-black uppercase"><span>{p.name}</span><button onClick={async()=>{if(window.confirm('Supprimer ?'))await deleteDoc(doc(db,'artifacts',appId,'public', 'data', 'properties', p.id))}} className="text-slate-300 hover:text-rose-50"><Trash2 size={14}/></button></div><button onClick={()=>{navigator.clipboard.writeText(generateICalLInk(p.id)); alert('Lien copié !');}} className="w-full bg-white text-blue-600 text-[9px] font-black py-2 rounded-lg border border-blue-200"><Link size={12}/> Copier iCal</button></div>))}</div></div></div></div></div>
+          <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border" style={{ scrollSnapStop: 'always' }}><div className="max-w-7xl mx-auto pb-32 space-y-10 px-2"><h2 className="text-3xl font-black uppercase">Paramètres</h2><div className="bg-white p-8 rounded-[40px] border-2 border-dashed shadow-xl flex flex-col items-center justify-center text-center mx-2 md:mx-0"><UploadCloud size={40} className="text-blue-600 mb-4"/><h3 className="text-xl font-black uppercase">Fichiers Calendriers (iCal)</h3><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 w-full text-left">{(properties || []).map(p=>(<div key={p.id} className="p-3 bg-blue-50 rounded-xl flex flex-col gap-2"><div className="flex justify-between items-center text-[10px] font-black uppercase"><span>{p.name}</span><button onClick={async()=>{if(window.confirm('Supprimer ?'))await deleteDoc(doc(db,'artifacts',appId,'public', 'data', 'properties', p.id))}} className="text-slate-300 hover:text-rose-500"><Trash2 size={14}/></button></div><button onClick={()=>{navigator.clipboard.writeText(generateICalLInk(p.id)); alert('Lien copié !');}} className="w-full bg-white text-blue-600 text-[9px] font-black py-2 rounded-lg flex items-center justify-center gap-2 border border-blue-200"><Link size={12}/> Copier iCal</button></div>))}</div></div></div></div>
         </div>
       </main>
       {isModalOpen && formData && (
