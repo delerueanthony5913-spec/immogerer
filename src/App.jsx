@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
+import Finances from './Finances';
 import { collection, doc, onSnapshot } from 'firebase/firestore';
 import { 
   Euro, Plus, Trash2, Calendar as CalendarIcon, Menu, X, CalendarCheck, CheckCircle, Clock,
