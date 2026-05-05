@@ -260,10 +260,9 @@ const App = () => {
             <div className="max-w-7xl mx-auto text-center py-20 bg-white rounded-[40px]">
                <Settings size={48} className="mx-auto text-slate-200 mb-4" />
                <h2 className="text-xl font-black uppercase text-slate-400">Espace Paramètres</h2>
-            </div>
-        </div>
-      </main>
-    </div>
+          </div> {/* Ferme le carrousel (scrollContainerRef) */}
+      </main> {/* Ferme le tag main */}
+    </div> {/* Ferme le div global (min-h-screen) */}
   );
 };
 
