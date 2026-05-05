@@ -76,6 +76,15 @@ const App = () => {
     if (name.includes('cocon')) return { bg: 'bg-emerald-50' };
     if (name.includes('signes')) return { bg: 'bg-blue-50' };
     if (name.includes('villa')) return { bg: 'bg-red-50' };
+    const agendaDays = useMemo(() => {
+     const y = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
+     const m = filterMonth === 'all' ? new Date().getMonth() : parseInt(filterMonth);
+     const firstDay = new Date(y, m, 1), lastDay = new Date(y, m + 1, 0), days = [];
+     let offset = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
+     for (let i = 0; i < offset; i++) days.push({ empty: true });
+     for (let i = 1; i <= lastDay.getDate(); i++) days.push({ day: i, dateStr: `${y}-${(m+1).toString().padStart(2, '0')}-${i.toString().padStart(2, '0')}` });
+     return days;
+   }, [filterYear, filterMonth]);
     return { bg: 'bg-white' };
   };
 
@@ -216,24 +225,26 @@ const App = () => {
             </div>
           </div>
 
-          {/* 2. AGENDA */}
-          <div className="flex-none w-full max-w-full snap-center snap-always px-4 md:px-12 py-6">
-            <div className="max-w-7xl mx-auto text-center py-20 bg-white rounded-[40px]">
-               <CalendarRange size={48} className="mx-auto text-slate-200 mb-4" />
-               <h2 className="text-xl font-black uppercase text-slate-400">Espace Agenda</h2>
-            </div>
-          </div>
-
-          {/* 3. STATISTIQUES */}
-          <div className="flex-none w-full max-w-full snap-center snap-always px-4 md:px-12 py-6">
-             <div className="max-w-7xl mx-auto space-y-8">
-                <h2 className="text-2xl font-black uppercase">Statistiques</h2>
-                <ComparisonChart data={baseTenants} properties={properties} platforms={availablePlatforms} yearsAvailable={yearsAvailable} />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                   <DonutChart title="Net / Logement" data={properties.map((p,idx)=>({label:p.name, value: 100, color:CHART_COLORS[idx%CHART_COLORS.length]}))} />
-                </div>
-             </div>
-          </div>
+    {/* 2. AGENDA */}
+<div className="flex-none w-full max-w-full snap-center snap-always px-4 md:px-12 py-6">
+  <div className="max-w-7xl mx-auto">
+    <div className="flex justify-between items-center mb-6">
+      <h2 className="text-2xl font-black uppercase">Agenda</h2>
+      <div className="flex items-center gap-4 bg-white px-4 py-2 rounded-2xl shadow-sm">
+         <button onClick={() => {/* Fonction mois précédent */}}><ChevronLeft size={18}/></button>
+         <span className="text-xs font-black uppercase">Mois</span>
+         <button onClick={() => {/* Fonction mois suivant */}}><ChevronRight size={18}/></button>
+      </div>
+    </div>
+    <Agenda 
+      agendaDays={agendaDays} 
+      reservationsList={reservationsList} 
+      todayStr={todayStr} 
+      properties={properties} 
+      onEdit={handleEdit} 
+    />
+  </div>
+</div>
 
           {/* 4. FINANCES */}
           <div className="flex-none w-full max-w-full snap-center snap-always px-4 md:px-12 py-6">
