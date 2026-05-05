@@ -8,7 +8,7 @@ import {
 
 // --- IMPORTS DES FICHIERS CLOISONNÉS ---
 import { auth, db, appId } from './firebaseConfig';
-import { TIME_SLOTS, formatDateFr, isSundayOrHoliday } from './dateUtils';
+import { TIME_SLOTS, formatDateFr, isSundayOrHoliday, CHART_COLORS } from './dateUtils';
 import DonutChart from './DonutChart';
 import ComparisonChart from './ComparisonChart';
 
