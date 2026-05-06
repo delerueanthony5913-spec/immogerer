@@ -101,6 +101,15 @@ const getPropBreakdown = (tenants, properties, year, platform) => {
   return Object.entries(m).map(([id,val])=>[properties.find(p=>p.id===id)?.name||id, val]).sort((a,b)=>b[1]-a[1]);
 };
 
+const getForecastByMonth = (tenants, year, propId, platform) => {
+  const data = Array(12).fill(0);
+  tenants.filter(t => matchFilters(t, year, propId, platform)).forEach(t => {
+    const m = parseInt(t.startDate.slice(5,7)) - 1;
+    data[m] += parseFloat(t.grossAmount) || 0;
+  });
+  return data;
+};
+
 const trend = (curr, prev) => prev>0 ? Math.round(((curr-prev)/prev)*100) : null;
 
 // ─── SVG Line Chart ────────────────────────────────────────────────────────────
@@ -109,7 +118,7 @@ const LineChart = ({ series, labels, unit='€' }) => {
   const [tooltip, setTooltip] = useState(null);
   const W=760, H=260, PL=58, PR=20, PT=16, PB=28;
   const plotW=W-PL-PR, plotH=H-PT-PB;
-  const allVals = series.flatMap(s=>s.data);
+  const allVals = series.flatMap(s=>s.data).filter(v=>v!=null);
   const maxVal  = Math.max(...allVals, 1);
   const GRIDS   = 5;
 
@@ -117,16 +126,24 @@ const LineChart = ({ series, labels, unit='€' }) => {
   const yS = v => PT + plotH - (v/maxVal)*plotH;
 
   const smooth = data => {
-    const pts = data.map((v,i)=>[xS(i), yS(v)]);
-    if (!pts.length) return '';
-    let d = `M ${pts[0][0]} ${pts[0][1]}`;
-    for (let i=1;i<pts.length;i++) {
-      const cpx=(pts[i][0]-pts[i-1][0])/2.8;
-      d+=` C ${pts[i-1][0]+cpx} ${pts[i-1][1]}, ${pts[i][0]-cpx} ${pts[i][1]}, ${pts[i][0]} ${pts[i][1]}`;
-    }
+    let d = '', last = null;
+    data.forEach((v, i) => {
+      if (v == null) { last = null; return; }
+      const pt = [xS(i), yS(v)];
+      if (!last) { d += `M ${pt[0]} ${pt[1]}`; }
+      else {
+        const cpx = (pt[0] - last[0]) / 2.8;
+        d += ` C ${last[0]+cpx} ${last[1]}, ${pt[0]-cpx} ${pt[1]}, ${pt[0]} ${pt[1]}`;
+      }
+      last = pt;
+    });
     return d;
   };
-  const area = data => `${smooth(data)} L ${xS(data.length-1)} ${PT+plotH} L ${xS(0)} ${PT+plotH} Z`;
+  const area = data => {
+    const valid = data.map((v,i) => v!=null ? i : -1).filter(i=>i>=0);
+    if (!valid.length) return '';
+    return `${smooth(data)} L ${xS(valid[valid.length-1])} ${PT+plotH} L ${xS(valid[0])} ${PT+plotH} Z`;
+  };
 
   const fmt = v => unit==='€'
     ? (v>=1000?`${(v/1000).toFixed(v>=10000?0:1)}k€`:`${Math.round(v)}€`)
@@ -160,11 +177,15 @@ const LineChart = ({ series, labels, unit='€' }) => {
 
       {series.map((s,si)=>(
         <g key={si}>
-          <path d={area(s.data)} fill={`url(#lg${si})`}/>
-          <path d={smooth(s.data)} fill="none" stroke={s.color} strokeWidth="2.5" strokeLinecap="round"/>
-          {s.data.map((v,i)=>(
-            <circle key={i} cx={xS(i)} cy={yS(v)} r="4.5" fill={s.color} stroke="white" strokeWidth="2"
-              onMouseEnter={()=>setTooltip({x:xS(i),y:yS(v),name:s.name,label:labels[i],value:v,color:s.color})}
+          {!s.dashed && <path d={area(s.data)} fill={`url(#lg${si})`}/>}
+          <path d={smooth(s.data)} fill="none" stroke={s.color}
+            strokeWidth={s.dashed ? 2 : 2.5}
+            strokeDasharray={s.dashed ? '7 4' : undefined}
+            strokeLinecap="round" opacity={s.dashed ? 0.7 : 1}/>
+          {s.data.map((v,i) => v==null ? null : (
+            <circle key={i} cx={xS(i)} cy={yS(v)} r={s.dashed ? 3 : 4.5}
+              fill={s.dashed ? 'white' : s.color} stroke={s.color} strokeWidth="2"
+              onMouseEnter={()=>setTooltip({x:xS(i),y:yS(v),name:s.name,label:labels[i],value:v,color:s.color,dashed:s.dashed})}
               onMouseLeave={()=>setTooltip(null)} style={{cursor:'pointer'}}/>
           ))}
         </g>
@@ -177,7 +198,7 @@ const LineChart = ({ series, labels, unit='€' }) => {
           <g>
             <line x1={tooltip.x} y1={PT} x2={tooltip.x} y2={PT+plotH} stroke={tooltip.color} strokeWidth="1" strokeDasharray="4 2" opacity="0.4"/>
             <rect x={tx} y={ty} width="130" height="36" rx="8" fill="white" stroke={tooltip.color} strokeWidth="1.5" style={{filter:'drop-shadow(0 4px 8px rgba(0,0,0,0.12))'}}/>
-            <text x={tx+65} y={ty+13} textAnchor="middle" fontSize="8.5" fill="#64748b" fontFamily="system-ui">{tooltip.name} · {tooltip.label}</text>
+            <text x={tx+65} y={ty+13} textAnchor="middle" fontSize="8.5" fill="#64748b" fontFamily="system-ui">{tooltip.name}{tooltip.dashed?' (prév.)':''} · {tooltip.label}</text>
             <text x={tx+65} y={ty+28} textAnchor="middle" fontSize="13" fontWeight="bold" fill={tooltip.color} fontFamily="system-ui">{fmt(tooltip.value)}</text>
           </g>
         );
@@ -344,11 +365,32 @@ const Statistiques = ({ tenants, properties, availablePlatforms }) => {
   };
 
   // chart series
+  const curMonth = new Date().getMonth(); // 0-indexed
+
   const chartSeries = useMemo(()=>{
-    if (mode==='years') return selYears.map((y,i)=>({
-      name:y, color:SERIES_COLORS[i],
-      data:getRevByMonth(tenants,y,filterProp,filterPlatform),
-    }));
+    if (mode==='years') {
+      const result = [];
+      selYears.forEach((y, i) => {
+        const color = SERIES_COLORS[i % 5];
+        const paid  = getRevByMonth(tenants, y, filterProp, filterPlatform);
+        if (String(y) === String(curYear) && curMonth < 11) {
+          const forecast = getForecastByMonth(tenants, y, filterProp, filterPlatform);
+          // solid: paid months 0..curMonth-1, null after
+          const solidData = paid.map((v, m) => m < curMonth ? v : null);
+          // dashed: null before curMonth-1, connection point at curMonth-1, forecast after
+          const dottedData = forecast.map((v, m) => {
+            if (m < curMonth - 1) return null;
+            if (m === curMonth - 1) return paid[m] || 0;
+            return v;
+          });
+          result.push({ name: String(y), color, data: solidData });
+          result.push({ name: String(y), color, data: dottedData, dashed: true, hideLegend: true });
+        } else {
+          result.push({ name: String(y), color, data: paid });
+        }
+      });
+      return result;
+    }
     if (mode==='properties') return selProps.map((pid,i)=>({
       name:properties.find(p=>p.id===pid)?.name||pid, color:SERIES_COLORS[i],
       data:getRevByMonth(tenants,filterYear,pid,filterPlatform),
@@ -464,13 +506,19 @@ const Statistiques = ({ tenants, properties, availablePlatforms }) => {
       <div className="bg-white rounded-[28px] shadow-lg p-5">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Évolution mensuelle</h3>
-          <div className="flex flex-wrap gap-3">
-            {chartSeries.map(s=>(
+          <div className="flex flex-wrap gap-3 items-center">
+            {chartSeries.filter(s=>!s.hideLegend).map(s=>(
               <div key={s.name} className="flex items-center gap-1.5">
                 <div className="w-6 h-1.5 rounded-full" style={{background:s.color}}/>
                 <span className="text-[8px] font-black text-slate-600 uppercase">{s.name}</span>
               </div>
             ))}
+            {chartSeries.some(s=>s.dashed) && (
+              <div className="flex items-center gap-1.5">
+                <svg width="24" height="6"><line x1="0" y1="3" x2="24" y2="3" stroke="#94a3b8" strokeWidth="2" strokeDasharray="5 3"/></svg>
+                <span className="text-[8px] font-bold text-slate-400 uppercase">Prévisionnel</span>
+              </div>
+            )}
           </div>
         </div>
         <LineChart series={chartSeries} labels={MONTHS} unit={chartUnit}/>
