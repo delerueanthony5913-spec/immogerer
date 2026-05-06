@@ -13,6 +13,7 @@ import { CHART_COLORS, TIME_SLOTS, isSundayOrHoliday } from './utils';
 import DonutChart from './DonutChart';
 import ComparisonChart from './ComparisonChart';
 import { getAccessToken, setAccessToken, clearAccessToken, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, createDiasEvent, updateDiasEvent, deleteDiasEvent } from './googleCalendar';
+import Statistiques from './Statistiques';
 // --- COMPOSANT PRINCIPAL ---
 const App = () => {
   // 1. ETATS GLOBAUX & HOOKS
@@ -1091,37 +1092,11 @@ const App = () => {
  
           {/* 3. ONGLET STATISTIQUES */}
           <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border">
-             <div className="max-w-7xl mx-auto pb-32 space-y-10">
-                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mx-2 md:mx-0">
-                   <div><h2 className="text-3xl md:text-4xl font-black uppercase text-slate-900 tracking-tighter leading-none mb-2">Statistiques</h2><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tableau de bord et croisements dynamiques</p></div>
+             <div className="max-w-7xl mx-auto">
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mx-2 md:mx-0 mb-6">
+                   <div><h2 className="text-3xl md:text-4xl font-black uppercase text-slate-900 tracking-tighter leading-none mb-2">Statistiques</h2><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tableau de bord interactif</p></div>
                 </div>
- 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mx-2 md:mx-0">
-                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `CA Généré Brut (${statsCalculations.year})` })} className="bg-white p-3 md:p-6 rounded-[20px] md:rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-24 md:h-40 relative overflow-hidden group hover:scale-[1.03] transition-transform cursor-pointer hover:ring-2 ring-blue-500 ring-offset-4">
-                    <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 md:mb-2 z-10">CA Brut ({statsCalculations.year})</p><p className="text-xl md:text-3xl font-black text-indigo-600 z-10">{Math.round(statsCalculations.currentYearGross).toLocaleString('fr-FR')}€</p>
-                    <div className={`mt-1 md:mt-2 flex items-center gap-1 text-[8px] md:text-[10px] font-black px-2 py-0.5 md:py-1 rounded-full z-10 ${statsCalculations.grossGrowth >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>{statsCalculations.grossGrowth >= 0 ? <TrendingUp size={10}/> : <TrendingDown size={10}/>} {statsCalculations.grossGrowth}% vs {statsCalculations.prevYear}</div>
-                  </div>
-                  <div onClick={() => setStatsDetailConfig({ type: 'upcoming', title: `CA à venir (Impayés)` })} className="bg-white p-3 md:p-6 rounded-[20px] md:rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-24 md:h-40 relative group hover:scale-[1.03] transition-transform cursor-pointer hover:ring-2 ring-blue-500 ring-offset-4">
-                    <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 md:mb-2">CA à venir (Impayés)</p><p className="text-xl md:text-3xl font-black text-blue-600">{Math.round(statsCalculations.upcomingGross).toLocaleString('fr-FR')}€</p><p className="text-[7px] md:text-[9px] text-blue-400 mt-1 md:mt-2 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">👉 Clic pour voir</p>
-                  </div>
-                  <div onClick={() => setStatsDetailConfig({ type: 'expenses', title: `Réservations avec Prestations (${statsCalculations.year})` })} className="bg-white p-3 md:p-6 rounded-[20px] md:rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-24 md:h-40 group hover:scale-[1.03] transition-transform cursor-pointer hover:ring-2 ring-blue-500 ring-offset-4">
-                    <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Coût des Prestations</p><p className="text-xl md:text-3xl font-black text-rose-500">-{Math.round(statsCalculations.currentYearExp).toLocaleString('fr-FR')}€</p><p className="text-[7px] md:text-[9px] text-blue-400 mt-1 md:mt-2 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">👉 Clic pour voir</p>
-                  </div>
-                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-white p-3 md:p-6 rounded-[20px] md:rounded-[32px] shadow-xl border border-slate-50 flex flex-col justify-center items-center text-center h-24 md:h-40 group hover:scale-[1.03] transition-transform cursor-pointer hover:ring-2 ring-blue-500 ring-offset-4">
-                    <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 md:mb-2">Revenu Brut / Nuit</p><p className="text-xl md:text-3xl font-black text-emerald-600">{statsCalculations.revPerNight}€</p><p className="text-[7px] md:text-[9px] text-blue-400 mt-1 md:mt-2 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">👉 Clic pour voir</p>
-                  </div>
-                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-slate-50 p-3 md:p-6 rounded-[20px] md:rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-16 md:h-32 hover:bg-slate-100 cursor-pointer transition-colors group"><p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 md:mb-1">Nuitées Louées</p><p className="text-lg md:text-2xl font-black text-slate-700">{statsCalculations.currentYearNights}</p></div>
-                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-slate-50 p-3 md:p-6 rounded-[20px] md:rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-16 md:h-32 hover:bg-slate-100 cursor-pointer transition-colors group"><p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 md:mb-1">Durée Moyenne</p><p className="text-lg md:text-2xl font-black text-slate-700">{statsCalculations.avgStay} <span className="text-xs md:text-sm">j</span></p></div>
-                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-slate-50 p-3 md:p-6 rounded-[20px] md:rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-16 md:h-32 hover:bg-slate-100 cursor-pointer transition-colors group"><p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 md:mb-1">Panier Moyen</p><p className="text-lg md:text-2xl font-black text-slate-700">{statsCalculations.avgGrossPerRes}€</p></div>
-                  <div onClick={() => setStatsDetailConfig({ type: 'year_current', title: `Toutes les réservations (${statsCalculations.year})` })} className="bg-slate-50 p-3 md:p-6 rounded-[20px] md:rounded-[32px] border border-slate-100 flex flex-col justify-center items-center text-center h-16 md:h-32 hover:bg-slate-100 cursor-pointer transition-colors group"><p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 md:mb-1">Nb. Réservations</p><p className="text-lg md:text-2xl font-black text-slate-700">{baseTenants.filter(t => t.startDate && t.startDate.startsWith(statsCalculations.year.toString())).length}</p></div>
-                </div>
- 
-                <ComparisonChart data={baseTenants} properties={properties} platforms={availablePlatforms} yearsAvailable={yearsAvailable} />
- 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-10 mx-2 md:mx-0">
-                   <DonutChart title={"Net Reçu (Banque) par Logement (" + (filterYear === 'all' ? 'Toutes années' : filterYear) + ")"} data={(properties || []).map((p,idx)=>({label:p.name,value:(baseTenants || []).reduce((acc,t) => t.propertyId===p.id ? acc + getTenantProfitForFilters(t) : acc, 0),color:CHART_COLORS[idx%CHART_COLORS.length]}))} />
-                   <DonutChart title={"Net Reçu (Banque) par Plateforme (" + (filterYear === 'all' ? 'Toutes années' : filterYear) + ")"} data={(availablePlatforms || []).map((p,idx)=>({label:p,value:(baseTenants || []).reduce((acc,t) => t.platform===p ? acc + getTenantProfitForFilters(t) : acc, 0),color:CHART_COLORS[(idx+4)%CHART_COLORS.length]}))} />
-                </div>
+                <Statistiques tenants={tenants} properties={properties} availablePlatforms={availablePlatforms}/>
              </div>
           </div>
  
