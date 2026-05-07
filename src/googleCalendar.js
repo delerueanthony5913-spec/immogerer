@@ -64,11 +64,11 @@ const buildEvent = (reservation, propertyName, providerEmails = {}, colorId = nu
 
 export const createCalendarEvent = (calendarId, reservation, propertyName, providerEmails, colorId) =>
   call('POST', `${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events`,
-    buildEvent(reservation, propertyName, providerEmails, colorId));
+    buildEvent(reservation, propertyName, providerEmails, colorId), 'all');
 
 export const updateCalendarEvent = (calendarId, eventId, reservation, propertyName, providerEmails, colorId) =>
   call('PUT', `${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
-    buildEvent(reservation, propertyName, providerEmails, colorId));
+    buildEvent(reservation, propertyName, providerEmails, colorId), 'all');
 
 export const deleteCalendarEvent = (calendarId, eventId) =>
   call('DELETE', `${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`);
