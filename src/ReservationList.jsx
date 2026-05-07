@@ -37,9 +37,12 @@ const ReservationList = ({ groupedList, properties, getRowColors, getStatusProps
               const status = getStatusProps(t);
 
               return (
-                <tr key={t.id} onClick={() => onEdit(t)} className={`${colors.bg} cursor-pointer hover:bg-slate-50 transition-colors`}>
+                <tr key={t.id} data-res-id={t.id} onClick={() => onEdit(t)} className={`${colors.bg} cursor-pointer hover:bg-slate-50 transition-colors`}>
                   <td className="p-4 uppercase">
-                    <div className="font-black">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</div>
+                    <div className="font-black flex items-center gap-1.5">
+                      {(properties || []).find(p => p.id === t.propertyId)?.name || '--'}
+                      {(properties || []).find(p => p.id === t.propertyId)?.calendarId && !t.googleEventId && <span title="Non synchronisé Google Agenda"><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-orange-400 inline"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>}
+                    </div>
                     <div className="text-blue-600 text-xs font-black mt-0.5">{t.platform}</div>
                   </td>
                   <td className="p-4"><div className="text-sm font-black">{t.name}</div></td>
@@ -51,15 +54,21 @@ const ReservationList = ({ groupedList, properties, getRowColors, getStatusProps
                   </td>
                   <td className="p-4">
                     <div className="space-y-1.5">
-                      {(t.resExpenses || []).map((exp, idx) => (
+                      {(t.resExpenses || []).map((exp, idx) => {
+                        const hasEmail = exp.sendEmail !== false && providerEmails[exp.person] && !exp.person.toLowerCase().includes('dias');
+                        return (
                         <div key={idx} onClick={(e) => onQuickPay(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-white/50 p-1.5 rounded-lg border border-slate-100/50">
-                          <span className="uppercase font-black text-slate-500">{exp.type} ({exp.person})</span>
+                          <span className="uppercase font-black text-slate-500 flex items-center gap-1">
+                            {exp.type} ({exp.person})
+                            {hasEmail && (t.googleEventId ? <CheckCircle size={10} className="text-emerald-500 flex-shrink-0" title="Invitation envoyée"/> : <Mail size={10} className="text-orange-400 flex-shrink-0" title="Invitation non encore synchronisée"/>)}
+                          </span>
                           <div className="flex items-center gap-1.5">
                             <span className={exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}>{exp.amount}€</span>
                             {exp.paymentDate ? <CheckCircle size={10} className="text-emerald-500" /> : <Clock size={10} className="text-orange-400" />}
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </td>
                   <td className="p-4 text-right font-black">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</td>

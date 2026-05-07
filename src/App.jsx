@@ -73,8 +73,12 @@ const App = () => {
   });
   const [diasCalendarId, setDiasCalendarId] = useState('8f2fa53e3d419a4a2be45ea9c4f1e19a4fa6ad09ce1f73e80d7960374a6a7767@group.calendar.google.com');
   const [diasColorId, setDiasColorId] = useState('11');
+  const [syncWarning, setSyncWarning] = useState(false);
   const tokenClientRef = useRef(null);
   const renewTimerRef  = useRef(null);
+  const tenantsRef = useRef([]);
+  const propertiesRef = useRef([]);
+  const providerEmailsRef = useRef({});
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -133,6 +137,7 @@ const App = () => {
           if (response.access_token) {
             setAccessToken(response.access_token);
             setGoogleConnected(true);
+            syncMissingEvents();
             // renouvellement proactif 55 min après réception du token
             clearTimeout(renewTimerRef.current);
             renewTimerRef.current = setTimeout(() => {
@@ -161,6 +166,22 @@ const App = () => {
     if (window.google?.accounts?.oauth2) { initGIS(); scheduleRenew(); }
     else if (script) script.addEventListener('load', () => { initGIS(); scheduleRenew(); });
   }, []);
+
+  useEffect(() => { tenantsRef.current = tenants; }, [tenants]);
+  useEffect(() => { propertiesRef.current = properties; }, [properties]);
+  useEffect(() => { providerEmailsRef.current = providerEmails; }, [providerEmails]);
+
+  const syncMissingEvents = async () => {
+    const missing = tenantsRef.current.filter(t => !t.googleEventId && t.startDate && t.endDate);
+    for (const t of missing) {
+      const prop = propertiesRef.current.find(p => p.id === t.propertyId);
+      if (!prop?.calendarId) continue;
+      try {
+        const evt = await createCalendarEvent(prop.calendarId, t, prop.name, providerEmailsRef.current, prop.colorId || null);
+        if (evt?.id) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', t.id), { googleEventId: evt.id }, { merge: true });
+      } catch (e) {}
+    }
+  };
 
   const signInGoogle = () => tokenClientRef.current?.requestAccessToken();
   const signOutGoogle = () => { clearAccessToken(); setGoogleConnected(false); };
@@ -632,6 +653,9 @@ const App = () => {
         } catch (calErr) {
           if (calErr.message === 'TOKEN_EXPIRED') { setGoogleConnected(false); silentRenew(); }
         }
+      } else if (prop?.calendarId && !getAccessToken()) {
+        setSyncWarning(true);
+        setTimeout(() => setSyncWarning(false), 8000);
       }
       if (diasCalendarId && getAccessToken() && prop) {
         let updatedExpenses = [...(d.resExpenses || [])];
@@ -1006,6 +1030,12 @@ const App = () => {
           {/* 1. ONGLETS RESERVATIONS */}
           <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border">
             <div className="max-w-7xl mx-auto pb-32">
+                {syncWarning && (
+                  <div className="mx-2 md:mx-0 mb-4 bg-orange-50 border border-orange-200 text-orange-700 rounded-[16px] px-4 py-3 text-xs font-black uppercase tracking-wide flex items-center gap-2">
+                    <AlertTriangle size={16} className="flex-shrink-0" />
+                    Google Agenda non connecté — réservation sauvegardée mais non synchronisée. Reconnectez-vous pour synchroniser automatiquement.
+                  </div>
+                )}
                 <div className="flex justify-between items-center mx-2 md:mx-0 mb-6">
                    <h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2>
                    <div className="flex items-center gap-2 md:gap-4">
@@ -1030,10 +1060,11 @@ const App = () => {
                             <h3 className="text-sm font-black uppercase leading-tight">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</h3>
                             <div className="flex items-center gap-1.5 mt-1 leading-tight"><span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{t.platform}</span><span className="text-[11px] font-black text-slate-700">{t.name}</span></div>
                           </div>
-                          <div className="flex flex-col items-end">
+                          <div className="flex flex-col items-end gap-1">
                             <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>{getStatusProps(t).label}</span>
-                            {t.paymentDate && t.platform !== 'En direct' && <span className="text-[7px] text-slate-400 mt-1 font-bold">{formatDateFr(t.paymentDate)}</span>}
-                            {t.platform === 'En direct' && t.soldeDate && <span className="text-[7px] text-slate-400 mt-1 font-bold">{formatDateFr(t.soldeDate)}</span>}
+                            {t.paymentDate && t.platform !== 'En direct' && <span className="text-[7px] text-slate-400 font-bold">{formatDateFr(t.paymentDate)}</span>}
+                            {t.platform === 'En direct' && t.soldeDate && <span className="text-[7px] text-slate-400 font-bold">{formatDateFr(t.soldeDate)}</span>}
+                            {(properties || []).find(p => p.id === t.propertyId)?.calendarId && !t.googleEventId && <span title="Non synchronisé avec Google Agenda"><AlertTriangle size={10} className="text-orange-400"/></span>}
                           </div>
                         </div>
                         
@@ -1045,7 +1076,7 @@ const App = () => {
                           <div className="space-y-1 border-t border-slate-100 pt-1.5 mb-1.5">
                             {(t.resExpenses || []).map((exp, idx) => (
                               <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[8px] bg-white/60 p-1.5 rounded-xl cursor-pointer hover:bg-white transition-colors leading-tight">
-                                <span className="uppercase font-black text-slate-500 min-w-0 truncate pr-2">{exp.type} ({exp.person}) {exp.sendEmail !== false && providerEmails[exp.person] && !exp.person.toLowerCase().includes('dias') && <Mail size={8} className="inline text-blue-500 flex-shrink-0"/>}</span>
+                                <span className="uppercase font-black text-slate-500 min-w-0 truncate pr-2">{exp.type} ({exp.person}) {exp.sendEmail !== false && providerEmails[exp.person] && !exp.person.toLowerCase().includes('dias') && (t.googleEventId ? <CheckCircle size={8} className="inline text-emerald-500 flex-shrink-0" title="Invitation envoyée"/> : <Mail size={8} className="inline text-orange-400 flex-shrink-0" title="Invitation non encore synchronisée"/>)}</span>
                                 <div className="text-right flex-shrink-0">
                                   <span className={`font-black flex items-center justify-end gap-1 ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€ {exp.paymentDate ? <CheckCircle size={8}/> : <Clock size={8}/>}</span>
                                   {exp.paymentDate && <div className="text-[7px] text-slate-400 mt-0.5">{formatDateFr(exp.paymentDate)}</div>}
@@ -1083,7 +1114,7 @@ const App = () => {
                               <div className="space-y-1.5">
                                   {(t.resExpenses || []).map((exp, idx) => (
                                       <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-white/50 p-1.5 rounded-lg border border-slate-100/50 cursor-pointer hover:border-blue-300 hover:bg-white hover:shadow-sm transition-all">
-                                      <span className="uppercase font-black text-slate-500 leading-none">{exp.type} ({exp.person}) {exp.sendEmail !== false && providerEmails[exp.person] && !exp.person.toLowerCase().includes('dias') && <Mail size={10} className="inline text-blue-500 ml-1"/>}</span>
+                                      <span className="uppercase font-black text-slate-500 leading-none">{exp.type} ({exp.person}) {exp.sendEmail !== false && providerEmails[exp.person] && !exp.person.toLowerCase().includes('dias') && (t.googleEventId ? <CheckCircle size={10} className="inline text-emerald-500 ml-1" title="Invitation envoyée"/> : <Mail size={10} className="inline text-orange-400 ml-1" title="Invitation non encore synchronisée"/>)}</span>
                                       <div className="text-right">
                                           <div className="flex items-center justify-end gap-1.5"><span className={`font-black ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€</span>{exp.paymentDate ? <CheckCircle size={10} className="text-emerald-500" /> : <Clock size={10} className="text-orange-400" />}</div>
                                           {exp.paymentDate && <div className="text-[8px] text-slate-400 mt-0.5 leading-none">{formatDateFr(exp.paymentDate)}</div>}
