@@ -147,9 +147,19 @@ const App = () => {
         prompt: '',
       });
     };
+    const scheduleRenew = () => {
+      const expiry = parseInt(localStorage.getItem('gcal_token_expiry') || '0', 10);
+      if (!expiry) return;
+      const msLeft = expiry - Date.now() - 4 * 60 * 1000; // renouvelle 4 min avant expiry
+      clearTimeout(renewTimerRef.current);
+      renewTimerRef.current = setTimeout(() => {
+        tokenClientRef.current?.requestAccessToken({ prompt: '' });
+      }, Math.max(msLeft, 0));
+    };
+
     const script = document.getElementById('gis-script');
-    if (window.google?.accounts?.oauth2) initGIS();
-    else if (script) script.addEventListener('load', initGIS);
+    if (window.google?.accounts?.oauth2) { initGIS(); scheduleRenew(); }
+    else if (script) script.addEventListener('load', () => { initGIS(); scheduleRenew(); });
   }, []);
 
   const signInGoogle = () => tokenClientRef.current?.requestAccessToken();
