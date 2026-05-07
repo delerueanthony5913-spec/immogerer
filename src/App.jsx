@@ -64,10 +64,17 @@ const App = () => {
   const [statsDetailConfig, setStatsDetailConfig] = useState(null);
   const [hasScrolledToNext, setHasScrolledToNext] = useState(false);
 
-  const [googleConnected, setGoogleConnected] = useState(!!localStorage.getItem('gcal_token'));
+  const [googleConnected, setGoogleConnected] = useState(() => {
+    const token   = localStorage.getItem('gcal_token');
+    const expiry  = parseInt(localStorage.getItem('gcal_token_expiry') || '0', 10);
+    if (token && expiry && Date.now() < expiry) return true;
+    if (token) { localStorage.removeItem('gcal_token'); localStorage.removeItem('gcal_token_expiry'); }
+    return false;
+  });
   const [diasCalendarId, setDiasCalendarId] = useState('8f2fa53e3d419a4a2be45ea9c4f1e19a4fa6ad09ce1f73e80d7960374a6a7767@group.calendar.google.com');
   const [diasColorId, setDiasColorId] = useState('11');
   const tokenClientRef = useRef(null);
+  const renewTimerRef  = useRef(null);
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -126,6 +133,15 @@ const App = () => {
           if (response.access_token) {
             setAccessToken(response.access_token);
             setGoogleConnected(true);
+            // renouvellement proactif 55 min après réception du token
+            clearTimeout(renewTimerRef.current);
+            renewTimerRef.current = setTimeout(() => {
+              tokenClientRef.current?.requestAccessToken({ prompt: '' });
+            }, 55 * 60 * 1000);
+          } else {
+            // renouvellement silencieux échoué (session Google expirée)
+            clearAccessToken();
+            setGoogleConnected(false);
           }
         },
         prompt: '',
@@ -603,7 +619,7 @@ const App = () => {
             }
           }
         } catch (calErr) {
-          if (calErr.message === 'TOKEN_EXPIRED') silentRenew();
+          if (calErr.message === 'TOKEN_EXPIRED') { setGoogleConnected(false); silentRenew(); }
         }
       }
       if (diasCalendarId && getAccessToken() && prop) {
@@ -628,7 +644,7 @@ const App = () => {
                 if (evt?.id) { updatedExpenses = updatedExpenses.map(x => x.id === exp.id ? { ...x, googleDiasExitId: evt.id } : x); needsExpUpdate = true; }
               }
             }
-          } catch (diasErr) { if (diasErr.message === 'TOKEN_EXPIRED') silentRenew(); }
+          } catch (diasErr) { if (diasErr.message === 'TOKEN_EXPIRED') { setGoogleConnected(false); silentRenew(); } }
         }
         if (needsExpUpdate && savedId) {
           await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', savedId), { resExpenses: updatedExpenses }, { merge: true });

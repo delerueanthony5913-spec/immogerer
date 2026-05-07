@@ -1,8 +1,14 @@
 const CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
 
 export const getAccessToken = () => localStorage.getItem('gcal_token');
-export const setAccessToken = (token) => localStorage.setItem('gcal_token', token);
-export const clearAccessToken = () => localStorage.removeItem('gcal_token');
+export const setAccessToken = (token) => {
+  localStorage.setItem('gcal_token', token);
+  localStorage.setItem('gcal_token_expiry', String(Date.now() + 3590 * 1000)); // ~59 min
+};
+export const clearAccessToken = () => {
+  localStorage.removeItem('gcal_token');
+  localStorage.removeItem('gcal_token_expiry');
+};
 
 const call = async (method, url, body = null, sendUpdates = null) => {
   const token = getAccessToken();

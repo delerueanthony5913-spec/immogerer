@@ -1,150 +1,143 @@
 import React, { useState, useMemo } from 'react';
-import { TrendingUp, TrendingDown, Euro, Calendar, Home, BarChart2 } from 'lucide-react';
+import { TrendingUp, TrendingDown } from 'lucide-react';
 
-const SERIES_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
-const DONUT_COLORS  = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f43f5e','#84cc16'];
-const MONTHS        = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
-
+const SC = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f43f5e','#84cc16'];
+const DC = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f43f5e','#84cc16'];
+const MONTHS = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
 const METRICS = [
-  { id:'gross',    label:'CA Brut',     unit:'€' },
-  { id:'profit',   label:'Profit Net',  unit:'€' },
-  { id:'charges',  label:'Charges',     unit:'€' },
-  { id:'nights',   label:'Nuits',       unit:'nuits' },
-  { id:'count',    label:'Réservations',unit:'' },
+  { id:'gross',   label:'CA Brut',      u:'€' },
+  { id:'profit',  label:'Profit Net',   u:'€' },
+  { id:'charges', label:'Charges',      u:'€' },
+  { id:'nights',  label:'Nuits',        u:'nuits' },
+  { id:'count',   label:'Réservations', u:'' },
 ];
 
-// ─── helpers ──────────────────────────────────────────────────────────────────
+/* ── filtres ── */
 
-const addPayments = (t, data, year) => {
-  const add = (date, amt) => {
-    if (!date || !amt) return;
-    if (year !== 'all' && date.slice(0,4) !== String(year)) return;
-    data[parseInt(date.slice(5,7))-1] += amt;
-  };
-  if (t.platform === 'En direct') {
-    add(t.acompte1Date, parseFloat(t.acompte1Amount)||0);
-    add(t.acompte2Date, parseFloat(t.acompte2Amount)||0);
-    add(t.soldeDate,    parseFloat(t.soldeAmount)||0);
-  } else {
-    add(t.paymentDate, parseFloat(t.grossAmount)||0);
-  }
-};
-
-const matchFilters = (t, year, propId, platform) => {
+const matchMulti = (t, selY, selP, selPl) => {
   if (!t.startDate) return false;
-  if (year     !== 'all' && t.startDate.slice(0,4) !== String(year))  return false;
-  if (propId   !== 'all' && t.propertyId !== propId)                   return false;
-  if (platform !== 'all' && t.platform   !== platform)                 return false;
+  if (selY.length  > 0 && !selY.includes(t.startDate.slice(0,4))) return false;
+  if (selP.length  > 0 && !selP.includes(t.propertyId))           return false;
+  if (selPl.length > 0 && !selPl.includes(t.platform))            return false;
   return true;
 };
 
-const getRevByMonth = (tenants, year, propId, platform) => {
+/* ── données mensuelles (générique) ── */
+
+const getMonthly = (tenants, selY, selP, selPl, metric, chargeType = 'all') => {
   const data = Array(12).fill(0);
-  tenants.filter(t => matchFilters(t, year, propId, platform)).forEach(t => addPayments(t, data, year));
+  tenants.filter(t => matchMulti(t, selY, selP, selPl)).forEach(t => {
+    const sm  = t.startDate ? parseInt(t.startDate.slice(5,7))-1 : -1;
+    const g   = parseFloat(t.grossAmount)||0;
+
+    const addDate = (date, amt) => {
+      if (!date || !amt) return;
+      if (selY.length === 1 && date.slice(0,4) !== selY[0]) return;
+      data[parseInt(date.slice(5,7))-1] += amt;
+    };
+
+    if (metric === 'nights') {
+      if (sm >= 0) data[sm] += Math.max(0, Math.round((new Date(t.endDate)-new Date(t.startDate))/86400000));
+    } else if (metric === 'count') {
+      if (sm >= 0) data[sm]++;
+    } else {
+      if (metric === 'gross' || metric === 'profit') {
+        if (t.platform === 'En direct') {
+          addDate(t.acompte1Date, parseFloat(t.acompte1Amount)||0);
+          addDate(t.acompte2Date, parseFloat(t.acompte2Amount)||0);
+          addDate(t.soldeDate,    parseFloat(t.soldeAmount)||0);
+        } else {
+          addDate(t.paymentDate, g);
+        }
+      }
+      if (metric === 'charges' || metric === 'profit') {
+        const sign = metric === 'profit' ? -1 : 1;
+        if (chargeType !== 'urssaf') {
+          (t.resExpenses||[]).forEach(e => addDate(e.paymentDate, sign*(parseFloat(e.amount)||0)));
+        }
+        if (chargeType !== 'prestataires' && t.isUrssaf !== false && sm >= 0) {
+          if (!selY.length || selY.includes(t.startDate.slice(0,4))) data[sm] += sign * g * 0.077;
+        }
+      }
+    }
+  });
+  if (metric === 'profit') return data.map(v => Math.max(0, v));
   return data;
 };
 
-const getChargesByMonth = (tenants, year, propId) => {
+/* Prévisionnel basé sur la date de début de séjour */
+const getForecast = (tenants, year, selP, selPl, metric) => {
   const data = Array(12).fill(0);
-  tenants.forEach(t => {
-    if (propId !== 'all' && t.propertyId !== propId) return;
-    (t.resExpenses||[]).forEach(exp => {
-      if (!exp.paymentDate) return;
-      if (year !== 'all' && exp.paymentDate.slice(0,4) !== String(year)) return;
-      data[parseInt(exp.paymentDate.slice(5,7))-1] += parseFloat(exp.amount)||0;
-    });
+  tenants.filter(t => matchMulti(t, [year], selP, selPl)).forEach(t => {
+    const m = parseInt(t.startDate.slice(5,7))-1;
+    if (metric === 'nights') data[m] += Math.max(0, Math.round((new Date(t.endDate)-new Date(t.startDate))/86400000));
+    else if (metric === 'count') data[m]++;
+    else data[m] += parseFloat(t.grossAmount)||0;
   });
   return data;
 };
 
-const getNightsByMonth = (tenants, year, propId, platform) => {
-  const data = Array(12).fill(0);
-  tenants.filter(t => matchFilters(t, year, propId, platform)).forEach(t => {
-    const n = Math.max(0, Math.round((new Date(t.endDate)-new Date(t.startDate))/86400000));
-    data[parseInt(t.startDate.slice(5,7))-1] += n;
-  });
-  return data;
-};
+/* ── KPI ── */
 
-const getCountByMonth = (tenants, year, propId, platform) => {
-  const data = Array(12).fill(0);
-  tenants.filter(t => matchFilters(t, year, propId, platform)).forEach(t => {
-    data[parseInt(t.startDate.slice(5,7))-1]++;
-  });
-  return data;
-};
-
-const computeKPIs = (tenants, year, propId, platform) => {
+const computeKPIs = (tenants, selY, selP, selPl, chargeType = 'all') => {
   let gross=0, nights=0, charges=0, count=0;
-  tenants.filter(t => matchFilters(t, year, propId, platform)).forEach(t => {
+  tenants.filter(t => matchMulti(t, selY, selP, selPl)).forEach(t => {
     count++;
-    gross   += parseFloat(t.grossAmount)||0;
-    nights  += Math.max(0, Math.round((new Date(t.endDate)-new Date(t.startDate))/86400000));
-    (t.resExpenses||[]).forEach(e => { charges += parseFloat(e.amount)||0; });
+    gross  += parseFloat(t.grossAmount)||0;
+    nights += Math.max(0, Math.round((new Date(t.endDate)-new Date(t.startDate))/86400000));
+    if (chargeType !== 'urssaf')
+      (t.resExpenses||[]).forEach(e => { charges += parseFloat(e.amount)||0; });
+    if (chargeType !== 'prestataires' && t.isUrssaf !== false)
+      charges += (parseFloat(t.grossAmount)||0)*0.077;
   });
-  return { gross, nights, charges, profit: gross-charges, count, revPerNight: nights>0?gross/nights:0 };
+  return { gross, nights, charges, profit: gross-charges, count, rpn: nights>0?gross/nights:0 };
 };
 
-const getPlatformBreakdown = (tenants, year, propId) => {
-  const m = {};
-  tenants.filter(t => matchFilters(t, year, propId, 'all')).forEach(t => {
-    m[t.platform] = (m[t.platform]||0) + (parseFloat(t.grossAmount)||0);
-  });
-  return Object.entries(m).sort((a,b)=>b[1]-a[1]);
-};
+const trend = (a, b) => b > 0 ? Math.round(((a-b)/b)*100) : null;
 
-const getPropBreakdown = (tenants, properties, year, platform) => {
-  const m = {};
-  tenants.filter(t => matchFilters(t, year, 'all', platform)).forEach(t => {
-    m[t.propertyId] = (m[t.propertyId]||0) + (parseFloat(t.grossAmount)||0);
-  });
-  return Object.entries(m).map(([id,val])=>[properties.find(p=>p.id===id)?.name||id, val]).sort((a,b)=>b[1]-a[1]);
-};
+/* ── Répartitions ── */
 
-const getForecastByMonth = (tenants, year, propId, platform) => {
-  const data = Array(12).fill(0);
-  tenants.filter(t => matchFilters(t, year, propId, platform)).forEach(t => {
-    const m = parseInt(t.startDate.slice(5,7)) - 1;
-    data[m] += parseFloat(t.grossAmount) || 0;
-  });
-  return data;
-};
+const getPlatBreak = (tenants, selY, selP) =>
+  Object.entries(
+    tenants.filter(t => matchMulti(t, selY, selP, [])).reduce((m,t) => {
+      m[t.platform] = (m[t.platform]||0)+(parseFloat(t.grossAmount)||0); return m;
+    }, {})
+  ).sort((a,b)=>b[1]-a[1]);
 
-const trend = (curr, prev) => prev>0 ? Math.round(((curr-prev)/prev)*100) : null;
+const getPropBreak = (tenants, props, selY, selPl) =>
+  Object.entries(
+    tenants.filter(t => matchMulti(t, selY, [], selPl)).reduce((m,t) => {
+      m[t.propertyId] = (m[t.propertyId]||0)+(parseFloat(t.grossAmount)||0); return m;
+    }, {})
+  ).map(([id,v])=>[props.find(p=>p.id===id)?.name||id, v]).sort((a,b)=>b[1]-a[1]);
 
-// ─── SVG Line Chart ────────────────────────────────────────────────────────────
+/* ── Graphique SVG ── */
 
 const LineChart = ({ series, labels, unit='€' }) => {
-  const [tooltip, setTooltip] = useState(null);
-  const W=760, H=260, PL=58, PR=20, PT=16, PB=28;
-  const plotW=W-PL-PR, plotH=H-PT-PB;
-  const allVals = series.flatMap(s=>s.data).filter(v=>v!=null);
-  const maxVal  = Math.max(...allVals, 1);
-  const GRIDS   = 5;
+  const [tip, setTip] = useState(null);
+  const W=720, H=260, PL=58, PR=16, PT=16, PB=28;
+  const pW=W-PL-PR, pH=H-PT-PB;
+  const all = series.flatMap(s=>s.data).filter(v=>v!=null&&v>0);
+  const mx  = Math.max(...all, 1);
+  const xS  = i => PL+(i/Math.max(labels.length-1,1))*pW;
+  const yS  = v => PT+pH-(Math.max(v,0)/mx)*pH;
 
-  const xS = i => PL + (i/Math.max(labels.length-1,1))*plotW;
-  const yS = v => PT + plotH - (v/maxVal)*plotH;
-
-  const smooth = data => {
-    let d = '', last = null;
-    data.forEach((v, i) => {
-      if (v == null) { last = null; return; }
-      const pt = [xS(i), yS(v)];
-      if (!last) { d += `M ${pt[0]} ${pt[1]}`; }
-      else {
-        const cpx = (pt[0] - last[0]) / 2.8;
-        d += ` C ${last[0]+cpx} ${last[1]}, ${pt[0]-cpx} ${pt[1]}, ${pt[0]} ${pt[1]}`;
-      }
-      last = pt;
+  const smooth = d => {
+    let path='', last=null;
+    d.forEach((v,i)=>{
+      if (v==null){last=null;return;}
+      const pt=[xS(i),yS(v)];
+      if (!last) path+=`M${pt[0]} ${pt[1]}`;
+      else { const c=(pt[0]-last[0])/2.8; path+=` C${last[0]+c} ${last[1]},${pt[0]-c} ${pt[1]},${pt[0]} ${pt[1]}`; }
+      last=pt;
     });
-    return d;
+    return path;
   };
-  const area = data => {
-    const valid = data.map((v,i) => v!=null ? i : -1).filter(i=>i>=0);
-    if (!valid.length) return '';
-    return `${smooth(data)} L ${xS(valid[valid.length-1])} ${PT+plotH} L ${xS(valid[0])} ${PT+plotH} Z`;
+  const areaD = d => {
+    const v=d.map((v,i)=>v!=null?i:-1).filter(i=>i>=0);
+    if (!v.length) return '';
+    return `${smooth(d)} L${xS(v[v.length-1])} ${PT+pH} L${xS(v[0])} ${PT+pH}Z`;
   };
-
   const fmt = v => unit==='€'
     ? (v>=1000?`${(v/1000).toFixed(v>=10000?0:1)}k€`:`${Math.round(v)}€`)
     : Math.round(v).toString();
@@ -160,46 +153,46 @@ const LineChart = ({ series, labels, unit='€' }) => {
         ))}
       </defs>
 
-      {Array.from({length:GRIDS+1}).map((_,i)=>{
-        const y=PT+(i/GRIDS)*plotH;
-        const v=maxVal*(1-i/GRIDS);
+      {/* grille */}
+      {Array.from({length:6}).map((_,i)=>{
+        const y=PT+(i/5)*pH, v=mx*(1-i/5);
         return (
           <g key={i}>
             <line x1={PL} y1={y} x2={W-PR} y2={y} stroke="#f1f5f9" strokeWidth="1"/>
-            <text x={PL-5} y={y+4} textAnchor="end" fontSize="9" fill="#94a3b8" fontFamily="system-ui">{fmt(v)}</text>
+            <text x={PL-5} y={y+4} textAnchor="end" fontSize="8" fill="#94a3b8" fontFamily="system-ui">{fmt(v)}</text>
           </g>
         );
       })}
-
-      {labels.map((lbl,i)=>(
-        <text key={i} x={xS(i)} y={H-5} textAnchor="middle" fontSize="9" fill="#94a3b8" fontFamily="system-ui">{lbl}</text>
+      {labels.map((l,i)=>(
+        <text key={i} x={xS(i)} y={H-5} textAnchor="middle" fontSize="9" fill="#94a3b8" fontFamily="system-ui">{l}</text>
       ))}
 
+      {/* courbes */}
       {series.map((s,si)=>(
         <g key={si}>
-          {!s.dashed && <path d={area(s.data)} fill={`url(#lg${si})`}/>}
+          {!s.dashed && <path d={areaD(s.data)} fill={`url(#lg${si})`}/>}
           <path d={smooth(s.data)} fill="none" stroke={s.color}
-            strokeWidth={s.dashed ? 2 : 2.5}
-            strokeDasharray={s.dashed ? '7 4' : undefined}
-            strokeLinecap="round" opacity={s.dashed ? 0.7 : 1}/>
-          {s.data.map((v,i) => v==null ? null : (
-            <circle key={i} cx={xS(i)} cy={yS(v)} r={s.dashed ? 3 : 4.5}
-              fill={s.dashed ? 'white' : s.color} stroke={s.color} strokeWidth="2"
-              onMouseEnter={()=>setTooltip({x:xS(i),y:yS(v),name:s.name,label:labels[i],value:v,color:s.color,dashed:s.dashed})}
-              onMouseLeave={()=>setTooltip(null)} style={{cursor:'pointer'}}/>
+            strokeWidth={s.dashed?2:2.5} strokeDasharray={s.dashed?'7 4':undefined}
+            strokeLinecap="round" opacity={s.dashed?0.7:1}/>
+          {s.data.map((v,i)=>v==null?null:(
+            <circle key={i} cx={xS(i)} cy={yS(v)} r={s.dashed?3:4.5}
+              fill={s.dashed?'white':s.color} stroke={s.color} strokeWidth="2"
+              onMouseEnter={()=>setTip({x:xS(i),y:yS(v),name:s.name,lbl:labels[i],val:v,color:s.color,dashed:s.dashed})}
+              onMouseLeave={()=>setTip(null)} style={{cursor:'pointer'}}/>
           ))}
         </g>
       ))}
 
-      {tooltip&&(()=>{
-        const tx = tooltip.x > W-140 ? tooltip.x-145 : tooltip.x+12;
-        const ty = tooltip.y < 50    ? tooltip.y+8   : tooltip.y-42;
+
+      {/* tooltip */}
+      {tip&&(()=>{
+        const tx=tip.x>W-148?tip.x-152:tip.x+12, ty=tip.y<52?tip.y+8:tip.y-44;
         return (
           <g>
-            <line x1={tooltip.x} y1={PT} x2={tooltip.x} y2={PT+plotH} stroke={tooltip.color} strokeWidth="1" strokeDasharray="4 2" opacity="0.4"/>
-            <rect x={tx} y={ty} width="130" height="36" rx="8" fill="white" stroke={tooltip.color} strokeWidth="1.5" style={{filter:'drop-shadow(0 4px 8px rgba(0,0,0,0.12))'}}/>
-            <text x={tx+65} y={ty+13} textAnchor="middle" fontSize="8.5" fill="#64748b" fontFamily="system-ui">{tooltip.name}{tooltip.dashed?' (prév.)':''} · {tooltip.label}</text>
-            <text x={tx+65} y={ty+28} textAnchor="middle" fontSize="13" fontWeight="bold" fill={tooltip.color} fontFamily="system-ui">{fmt(tooltip.value)}</text>
+            <line x1={tip.x} y1={PT} x2={tip.x} y2={PT+pH} stroke={tip.color} strokeWidth="1" strokeDasharray="4 2" opacity="0.4"/>
+            <rect x={tx} y={ty} width="134" height="38" rx="8" fill="white" stroke={tip.color} strokeWidth="1.5" style={{filter:'drop-shadow(0 4px 8px rgba(0,0,0,0.12))'}}/>
+            <text x={tx+67} y={ty+13} textAnchor="middle" fontSize="8.5" fill="#64748b" fontFamily="system-ui">{tip.name}{tip.dashed?' (prév.)':''} · {tip.lbl}</text>
+            <text x={tx+67} y={ty+28} textAnchor="middle" fontSize="13" fontWeight="bold" fill={tip.color} fontFamily="system-ui">{fmt(tip.val)}</text>
           </g>
         );
       })()}
@@ -207,43 +200,42 @@ const LineChart = ({ series, labels, unit='€' }) => {
   );
 };
 
-// ─── Donut ─────────────────────────────────────────────────────────────────────
+/* ── Donut ── */
 
-const Donut = ({ data, colors }) => {
+const Donut = ({ data, colors, title }) => {
   const [hov, setHov] = useState(null);
-  const total = data.reduce((s,[,v])=>s+v,0);
-  const r=38, cx=50, cy=50, circ=2*Math.PI*r;
+  const total=data.reduce((s,[,v])=>s+v,0);
+  const r=38,cx=50,cy=50,circ=2*Math.PI*r;
   let cum=0;
-  const segs = data.slice(0,7).map(([name,value],i)=>{
+  const segs=data.slice(0,8).map(([name,value],i)=>{
     const pct=total>0?value/total:0;
-    const da=pct*circ, doff=circ*(1-cum);
-    cum+=pct;
+    const da=pct*circ,doff=circ*(1-cum); cum+=pct;
     return {name,value,pct,da,doff,color:colors[i%colors.length],i};
   });
-  const disp = hov!==null ? data[hov] : null;
+  const disp=hov!==null?data[hov]:null;
   return (
     <div>
+      {title && <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-3">{title}</p>}
       <svg viewBox="0 0 100 100" className="w-32 h-32 mx-auto">
         {segs.map(s=>(
           <circle key={s.i} cx={cx} cy={cy} r={r} fill="none" stroke={s.color}
-            strokeWidth={hov===s.i?20:15}
-            strokeDasharray={`${s.da} ${circ-s.da}`}
-            strokeDashoffset={s.doff}
-            transform={`rotate(-90 ${cx} ${cy})`}
+            strokeWidth={hov===s.i?20:15} strokeDasharray={`${s.da} ${circ-s.da}`}
+            strokeDashoffset={s.doff} transform={`rotate(-90 ${cx} ${cy})`}
             style={{cursor:'pointer',transition:'stroke-width 0.15s'}}
             onMouseEnter={()=>setHov(s.i)} onMouseLeave={()=>setHov(null)}/>
         ))}
         <circle cx={cx} cy={cy} r="24" fill="white"/>
         <text x={cx} y={cy-4} textAnchor="middle" fontSize="6" fill="#94a3b8" fontFamily="system-ui">
-          {disp ? (disp[0].length>12?disp[0].slice(0,12)+'…':disp[0]) : 'Total'}
+          {disp?(disp[0].length>12?disp[0].slice(0,12)+'…':disp[0]):'Total'}
         </text>
         <text x={cx} y={cy+7} textAnchor="middle" fontSize="10" fontWeight="bold" fill="#1e293b" fontFamily="system-ui">
-          {disp ? `${Math.round(disp[1]/1000)}k€` : `${Math.round(total/1000)}k€`}
+          {disp?`${Math.round(disp[1]/1000)}k€`:`${Math.round(total/1000)}k€`}
         </text>
       </svg>
       <div className="space-y-1 mt-2">
         {segs.map(s=>(
-          <div key={s.i} className={`flex items-center justify-between text-[8px] px-1.5 py-1 rounded-xl cursor-default transition-colors ${hov===s.i?'bg-slate-50':''}`}
+          <div key={s.i}
+            className={`flex items-center justify-between text-[8px] px-1.5 py-1 rounded-xl cursor-default transition-colors ${hov===s.i?'bg-slate-50':''}`}
             onMouseEnter={()=>setHov(s.i)} onMouseLeave={()=>setHov(null)}>
             <div className="flex items-center gap-1.5 min-w-0">
               <div className="w-2 h-2 rounded-full flex-shrink-0" style={{background:s.color}}/>
@@ -260,17 +252,17 @@ const Donut = ({ data, colors }) => {
   );
 };
 
-// ─── Bars ──────────────────────────────────────────────────────────────────────
+/* ── MiniBar ── */
 
 const MiniBar = ({ data, labels, color, unit='nuits' }) => {
-  const [hov, setHov] = useState(null);
-  const max = Math.max(...data, 1);
+  const [hov,setHov]=useState(null);
+  const max=Math.max(...data,1);
   return (
     <div className="flex items-end gap-0.5" style={{height:100}}>
       {data.map((v,i)=>(
         <div key={i} className="flex-1 flex flex-col items-center justify-end relative"
           onMouseEnter={()=>setHov(i)} onMouseLeave={()=>setHov(null)}>
-          {hov===i && v>0 && (
+          {hov===i&&v>0&&(
             <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[7px] font-black px-1.5 py-0.5 rounded-lg whitespace-nowrap z-10">
               {v} {unit}
             </div>
@@ -284,44 +276,16 @@ const MiniBar = ({ data, labels, color, unit='nuits' }) => {
   );
 };
 
-const GroupBar = ({ data, labels }) => {
-  const [hov, setHov] = useState(null);
-  const max = Math.max(...data.map(([g])=>g), 1);
-  return (
-    <div className="flex items-end gap-1" style={{height:100}}>
-      {data.map(([gross, charges],i)=>(
-        <div key={i} className="flex-1 flex items-end gap-0.5"
-          onMouseEnter={()=>setHov(i)} onMouseLeave={()=>setHov(null)}>
-          <div className="relative flex-1">
-            {hov===i && (
-              <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[7px] font-black px-1.5 py-0.5 rounded-lg whitespace-nowrap z-10">
-                {Math.round(gross).toLocaleString('fr-FR')}€
-              </div>
-            )}
-            <div className="w-full rounded-t-sm" style={{height:`${(gross/max)*88}px`,background:'#3b82f6',minHeight:gross>0?2:0}}/>
-          </div>
-          <div className="w-2 rounded-t-sm" style={{height:`${(charges/max)*88}px`,background:'#f43f5e',minHeight:charges>0?1:0}}/>
-        </div>
-      ))}
-      <div className="absolute bottom-0 flex gap-2">
-      </div>
-    </div>
-  );
-};
-
-// ─── KPI Card ──────────────────────────────────────────────────────────────────
+/* ── KPI Card ── */
 
 const KPI = ({ label, value, sub, trend: t, color='blue', icon }) => {
-  const cls = {blue:'text-blue-600',emerald:'text-emerald-600',violet:'text-violet-600',amber:'text-amber-500',rose:'text-rose-500',slate:'text-slate-700'};
+  const cls={blue:'text-blue-600',emerald:'text-emerald-600',violet:'text-violet-600',amber:'text-amber-500',rose:'text-rose-500',slate:'text-slate-700'};
   return (
     <div className="bg-white rounded-[22px] p-4 shadow-lg border border-slate-50 flex flex-col gap-1">
-      <div className="flex items-start justify-between">
-        <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 leading-tight">{label}</p>
-        {icon && <div className={`opacity-15 ${cls[color]}`}>{icon}</div>}
-      </div>
+      <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 leading-tight">{label}</p>
       <p className={`text-xl md:text-2xl font-black leading-none ${cls[color]}`}>{value}</p>
-      {sub && <p className="text-[8px] text-slate-400 font-bold">{sub}</p>}
-      {t!==null && t!==undefined && (
+      {sub&&<p className="text-[8px] text-slate-400 font-bold">{sub}</p>}
+      {t!==null&&t!==undefined&&(
         <div className={`mt-1 self-start flex items-center gap-1 text-[7px] font-black px-2 py-0.5 rounded-full ${t>=0?'bg-emerald-50 text-emerald-600':'bg-rose-50 text-rose-500'}`}>
           {t>=0?<TrendingUp size={8}/>:<TrendingDown size={8}/>} {t>=0?'+':''}{t}% vs N-1
         </div>
@@ -330,244 +294,376 @@ const KPI = ({ label, value, sub, trend: t, color='blue', icon }) => {
   );
 };
 
-// ─── Toggle Button ─────────────────────────────────────────────────────────────
+/* ── Pill ── */
 
-const Toggle = ({ label, active, color, onClick }) => (
+const Pill = ({label,active,color,onClick,size='sm'}) => (
   <button onClick={onClick}
-    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all"
-    style={{background: active ? color : '#1e293b', color:'white', opacity: active ? 1 : 0.5}}>
-    {active && <span className="w-1.5 h-1.5 rounded-full bg-white inline-block"/>}
+    className={`flex items-center gap-1.5 rounded-xl font-black uppercase transition-all ${size==='sm'?'px-2.5 py-1 text-[8px]':'px-3 py-1.5 text-[9px]'}`}
+    style={{
+      background: active ? color+'22' : '#1e293b',
+      color: active ? color : '#64748b',
+      border: `1.5px solid ${active ? color+'66' : '#334155'}`,
+    }}>
+    {active&&<span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{background:color}}/>}
     {label}
   </button>
 );
 
-// ─── Main ──────────────────────────────────────────────────────────────────────
+/* ── Composant principal ── */
 
 const Statistiques = ({ tenants, properties, availablePlatforms }) => {
-  const curYear = new Date().getFullYear();
+  const curYear  = new Date().getFullYear();
+  const curMonth = new Date().getMonth();
 
   const availableYears = useMemo(()=>{
     const s=new Set(tenants.map(t=>t.startDate?.slice(0,4)).filter(Boolean));
     return Array.from(s).sort((a,b)=>b-a);
   },[tenants]);
 
-  const [mode,           setMode]           = useState('years');
-  const [selYears,       setSelYears]       = useState([String(curYear)]);
-  const [selProps,       setSelProps]       = useState(properties.slice(0,1).map(p=>p.id));
-  const [selMetrics,     setSelMetrics]     = useState(['gross','profit']);
-  const [filterYear,     setFilterYear]     = useState(String(curYear));
-  const [filterProp,     setFilterProp]     = useState('all');
-  const [filterPlatform, setFilterPlatform] = useState('all');
+  /* ── États filtres ── */
+  const [selYears,     setSelYears]     = useState([String(curYear)]);
+  const [selProps,     setSelProps]     = useState([]);          // vide = tous
+  const [selPlatforms, setSelPlatforms] = useState([]);          // vide = toutes
+  const [filterCharge, setFilterCharge] = useState('all');
 
-  const toggle = (list, setList, item, max=5) => {
+  /* ── États graphique ── */
+  const [chartMode,  setChartMode]  = useState('years');
+  const [selMetric,  setSelMetric]  = useState('gross');
+  const [selMetrics, setSelMetrics] = useState(['gross','profit']);
+
+  const tog = (list, setList, item, max=6) => {
     if (list.includes(item)) { if (list.length>1) setList(list.filter(x=>x!==item)); }
     else if (list.length<max) setList([...list,item]);
   };
 
-  // chart series
-  const curMonth = new Date().getMonth(); // 0-indexed
-
+  /* ── Séries graphique ── */
   const chartSeries = useMemo(()=>{
-    if (mode==='years') {
-      const result = [];
-      selYears.forEach((y, i) => {
-        const color = SERIES_COLORS[i % 5];
-        const paid  = getRevByMonth(tenants, y, filterProp, filterPlatform);
-        if (String(y) === String(curYear) && curMonth < 11) {
-          const forecast = getForecastByMonth(tenants, y, filterProp, filterPlatform);
-          // solid: paid months 0..curMonth-1, null after
-          const solidData = paid.map((v, m) => m < curMonth ? v : null);
-          // dashed: null before curMonth-1, connection point at curMonth-1, forecast after
-          const dottedData = forecast.map((v, m) => {
-            if (m < curMonth - 1) return null;
-            if (m === curMonth - 1) return paid[m] || 0;
-            return v;
-          });
-          result.push({ name: String(y), color, data: solidData });
-          result.push({ name: String(y), color, data: dottedData, dashed: true, hideLegend: true });
-        } else {
-          result.push({ name: String(y), color, data: paid });
-        }
-      });
-      return result;
+    const addYear = (acc, y, color, extraP, extraPl) => {
+      const yStr = String(y);
+      if (yStr === String(curYear) && curMonth < 11) {
+        const paid = getMonthly(tenants,[yStr],extraP,extraPl,selMetric,filterCharge);
+        const fc   = getForecast(tenants,yStr,extraP,extraPl,selMetric);
+        acc.push({ name:yStr, color, data: paid.map((v,m)=>m<curMonth?v:null) });
+        acc.push({ name:yStr, color, data: fc.map((v,m)=>{
+          if (m<curMonth-1) return null;
+          if (m===curMonth-1) return paid[m]||0;
+          return v;
+        }), dashed:true, hideLegend:true });
+      } else {
+        acc.push({ name:yStr, color, data: getMonthly(tenants,[yStr],extraP,extraPl,selMetric,filterCharge) });
+      }
+    };
+
+    if (chartMode==='years') {
+      const r=[];
+      selYears.forEach((y,i)=>addYear(r,y,SC[i%SC.length],selProps,selPlatforms));
+      return r;
     }
-    if (mode==='properties') return selProps.map((pid,i)=>({
-      name:properties.find(p=>p.id===pid)?.name||pid, color:SERIES_COLORS[i],
-      data:getRevByMonth(tenants,filterYear,pid,filterPlatform),
-    }));
+    if (chartMode==='properties') {
+      const list=selProps.length>0?selProps:properties.slice(0,4).map(p=>p.id);
+      return list.map((pid,i)=>({
+        name:properties.find(p=>p.id===pid)?.name||pid,
+        color:SC[i%SC.length],
+        data:getMonthly(tenants,selYears,[pid],selPlatforms,selMetric,filterCharge),
+      }));
+    }
+    if (chartMode==='platforms') {
+      const list=selPlatforms.length>0?selPlatforms:availablePlatforms.slice(0,4);
+      return list.map((pl,i)=>({
+        name:pl, color:SC[i%SC.length],
+        data:getMonthly(tenants,selYears,selProps,[pl],selMetric,filterCharge),
+      }));
+    }
+    if (chartMode==='years_x_props') {
+      const pList=selProps.length>0?selProps.slice(0,3):properties.slice(0,2).map(p=>p.id);
+      const r=[]; let idx=0;
+      selYears.slice(0,3).forEach(y=>{
+        pList.forEach(pid=>{
+          r.push({
+            name:`${y} · ${properties.find(p=>p.id===pid)?.name?.split(' ')[0]||pid}`,
+            color:SC[idx%SC.length],
+            data:getMonthly(tenants,[y],[pid],selPlatforms,selMetric,filterCharge),
+          });
+          idx++;
+        });
+      });
+      return r;
+    }
+    if (chartMode==='years_x_platforms') {
+      const plList=selPlatforms.length>0?selPlatforms.slice(0,3):availablePlatforms.slice(0,2);
+      const r=[]; let idx=0;
+      selYears.slice(0,3).forEach(y=>{
+        plList.forEach(pl=>{
+          r.push({
+            name:`${y} · ${pl}`,
+            color:SC[idx%SC.length],
+            data:getMonthly(tenants,[y],selProps,[pl],selMetric,filterCharge),
+          });
+          idx++;
+        });
+      });
+      return r;
+    }
     // metrics
-    return selMetrics.map((mid,i)=>{
-      const gross   = getRevByMonth(tenants,filterYear,filterProp,filterPlatform);
-      const charges = getChargesByMonth(tenants,filterYear,filterProp);
-      const data =
-        mid==='gross'   ? gross :
-        mid==='profit'  ? gross.map((v,j)=>Math.max(0,v-charges[j])) :
-        mid==='charges' ? charges :
-        mid==='nights'  ? getNightsByMonth(tenants,filterYear,filterProp,filterPlatform) :
-                          getCountByMonth(tenants,filterYear,filterProp,filterPlatform);
-      return { name:METRICS.find(m=>m.id===mid)?.label||mid, color:SERIES_COLORS[i], data };
-    });
-  },[mode,selYears,selProps,selMetrics,filterYear,filterProp,filterPlatform,tenants,properties]);
+    return selMetrics.map((mid,i)=>({
+      name:METRICS.find(m=>m.id===mid)?.label||mid,
+      color:SC[i%SC.length],
+      data:getMonthly(tenants,selYears,selProps,selPlatforms,mid,filterCharge),
+    }));
+  },[chartMode,selYears,selProps,selPlatforms,selMetric,selMetrics,filterCharge,tenants,properties,availablePlatforms]);
 
-  const chartUnit = mode==='metrics' && selMetrics.every(m=>m==='nights'||m==='count') ? '' : '€';
+  const activeMetric = chartMode==='metrics' ? selMetrics[0] : selMetric;
+  const chartUnit = (activeMetric==='nights'||activeMetric==='count') ? '' : '€';
 
-  const kpis     = useMemo(()=>computeKPIs(tenants,filterYear,filterProp,filterPlatform),[tenants,filterYear,filterProp,filterPlatform]);
-  const kpisPrev = useMemo(()=>{
-    const py=filterYear==='all'?'all':String(parseInt(filterYear)-1);
-    return computeKPIs(tenants,py,filterProp,filterPlatform);
-  },[tenants,filterYear,filterProp,filterPlatform]);
+  /* ── KPI ── */
+  const prevYears = useMemo(()=>selYears.map(y=>String(parseInt(y)-1)),[selYears]);
+  const kpis     = useMemo(()=>computeKPIs(tenants,selYears,selProps,selPlatforms,filterCharge),[tenants,selYears,selProps,selPlatforms,filterCharge]);
+  const kpisPrev = useMemo(()=>computeKPIs(tenants,prevYears,selProps,selPlatforms,filterCharge),[tenants,prevYears,selProps,selPlatforms,filterCharge]);
 
-  const platData  = useMemo(()=>getPlatformBreakdown(tenants,filterYear,filterProp),[tenants,filterYear,filterProp]);
-  const propData  = useMemo(()=>getPropBreakdown(tenants,properties,filterYear,filterPlatform),[tenants,properties,filterYear,filterPlatform]);
-  const nightData = useMemo(()=>getNightsByMonth(tenants,filterYear,filterProp,filterPlatform),[tenants,filterYear,filterProp,filterPlatform]);
-  const barData   = useMemo(()=>{
-    const g=getRevByMonth(tenants,filterYear,filterProp,filterPlatform);
-    const c=getChargesByMonth(tenants,filterYear,filterProp);
-    return MONTHS.map((_,i)=>[g[i],c[i]]);
-  },[tenants,filterYear,filterProp,filterPlatform]);
+  /* ── Donuts + bar ── */
+  const platData  = useMemo(()=>getPlatBreak(tenants,selYears,selProps),[tenants,selYears,selProps]);
+  const propData  = useMemo(()=>getPropBreak(tenants,properties,selYears,selPlatforms),[tenants,properties,selYears,selPlatforms]);
+  const nightData = useMemo(()=>getMonthly(tenants,selYears,selProps,selPlatforms,'nights'),[tenants,selYears,selProps,selPlatforms]);
+
+  /* ── Titre résumé sélection ── */
+  const yearLabel = selYears.length===1?selYears[0]:selYears.join(', ');
 
   return (
     <div className="space-y-5 px-2 md:px-0 pb-10">
 
-      {/* ── FILTER BAR ── */}
-      <div className="bg-slate-900 rounded-[28px] p-5 space-y-4">
+      {/* ══ BARRE DE FILTRES ══ */}
+      <div className="bg-slate-900 rounded-[28px] p-5 space-y-4 border border-slate-800">
 
-        {/* Global filters */}
-        <div className="flex flex-wrap gap-2 items-center">
-          <p className="text-[8px] font-black uppercase text-slate-500 tracking-widest w-full">Filtres globaux</p>
-          <select value={filterYear} onChange={e=>setFilterYear(e.target.value)}
-            className="bg-slate-800 text-white text-[9px] font-black uppercase rounded-xl px-3 py-2 outline-none border border-slate-700 cursor-pointer">
-            <option value="all">Toutes années</option>
-            {availableYears.map(y=><option key={y} value={y}>{y}</option>)}
-          </select>
-          <select value={filterProp} onChange={e=>setFilterProp(e.target.value)}
-            className="bg-slate-800 text-white text-[9px] font-black uppercase rounded-xl px-3 py-2 outline-none border border-slate-700 cursor-pointer">
-            <option value="all">Tous logements</option>
-            {properties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          <select value={filterPlatform} onChange={e=>setFilterPlatform(e.target.value)}
-            className="bg-slate-800 text-white text-[9px] font-black uppercase rounded-xl px-3 py-2 outline-none border border-slate-700 cursor-pointer">
-            <option value="all">Toutes plateformes</option>
-            {availablePlatforms.map(p=><option key={p} value={p}>{p}</option>)}
-          </select>
+        {/* Années */}
+        <div className="space-y-2">
+          <p className="text-[7px] font-black uppercase text-slate-500 tracking-widest">Années</p>
+          <div className="flex flex-wrap gap-1.5">
+            {availableYears.map((y,i)=>(
+              <Pill key={y} label={y} active={selYears.includes(y)}
+                color={SC[selYears.includes(y)?selYears.indexOf(y):i%SC.length]}
+                onClick={()=>tog(selYears,setSelYears,y)}/>
+            ))}
+          </div>
         </div>
 
         <div className="h-px bg-slate-800"/>
 
-        {/* Mode */}
+        {/* Logements + Plateformes */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <p className="text-[7px] font-black uppercase text-slate-500 tracking-widest">Logements</p>
+              {selProps.length>0&&(
+                <button onClick={()=>setSelProps([])} className="text-[7px] text-slate-500 underline">Tous</button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {properties.map((p,i)=>(
+                <Pill key={p.id} label={p.name.split(' ')[0]} active={selProps.includes(p.id)}
+                  color={SC[(i+1)%SC.length]}
+                  onClick={()=>{
+                    if (selProps.includes(p.id)) setSelProps(selProps.filter(x=>x!==p.id));
+                    else setSelProps([...selProps,p.id]);
+                  }}/>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <p className="text-[7px] font-black uppercase text-slate-500 tracking-widest">Plateformes</p>
+              {selPlatforms.length>0&&(
+                <button onClick={()=>setSelPlatforms([])} className="text-[7px] text-slate-500 underline">Toutes</button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {availablePlatforms.map((pl,i)=>(
+                <Pill key={pl} label={pl} active={selPlatforms.includes(pl)}
+                  color={SC[(i+2)%SC.length]}
+                  onClick={()=>{
+                    if (selPlatforms.includes(pl)) setSelPlatforms(selPlatforms.filter(x=>x!==pl));
+                    else setSelPlatforms([...selPlatforms,pl]);
+                  }}/>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="h-px bg-slate-800"/>
+
+        {/* Type de charges */}
         <div className="space-y-2">
-          <p className="text-[8px] font-black uppercase text-slate-500 tracking-widest">Mode graphique principal</p>
-          <div className="flex gap-2 flex-wrap">
-            {[['years','Comparer années'],['properties','Comparer logements'],['metrics','Comparer métriques']].map(([m,lbl])=>(
-              <button key={m} onClick={()=>setMode(m)}
-                className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-colors ${mode===m?'bg-blue-600 text-white':'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>
-                {lbl}
+          <p className="text-[7px] font-black uppercase text-slate-500 tracking-widest">Type de charges</p>
+          <div className="flex gap-1.5 flex-wrap">
+            {[['all','Toutes'],['urssaf','URSSAF (7,7%)'],['prestataires','Prestataires']].map(([v,l])=>(
+              <button key={v} onClick={()=>setFilterCharge(v)}
+                className={`px-3 py-1.5 rounded-xl text-[8.5px] font-black uppercase transition-colors border ${filterCharge===v?'bg-rose-600 text-white border-rose-600':'bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-600'}`}>
+                {l}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Series toggles */}
+        <div className="h-px bg-slate-800"/>
+
+        {/* Mode graphique */}
         <div className="space-y-2">
-          <p className="text-[8px] font-black uppercase text-slate-500 tracking-widest">
-            {mode==='years'?'Années à afficher (max 5)':mode==='properties'?'Logements à comparer (max 5)':'Métriques à afficher (max 5)'}
-          </p>
-          <div className="flex gap-2 flex-wrap">
-            {mode==='years' && availableYears.map((y,idx)=>(
-              <Toggle key={y} label={y} active={selYears.includes(y)}
-                color={SERIES_COLORS[selYears.includes(y)?selYears.indexOf(y):idx%5]}
-                onClick={()=>toggle(selYears,setSelYears,y)}/>
-            ))}
-            {mode==='properties' && properties.map((p,idx)=>(
-              <Toggle key={p.id} label={p.name.split(' ')[0]} active={selProps.includes(p.id)}
-                color={SERIES_COLORS[selProps.includes(p.id)?selProps.indexOf(p.id):idx%5]}
-                onClick={()=>toggle(selProps,setSelProps,p.id)}/>
-            ))}
-            {mode==='metrics' && METRICS.map((m,idx)=>(
-              <Toggle key={m.id} label={m.label} active={selMetrics.includes(m.id)}
-                color={SERIES_COLORS[selMetrics.includes(m.id)?selMetrics.indexOf(m.id):idx%5]}
-                onClick={()=>toggle(selMetrics,setSelMetrics,m.id)}/>
+          <p className="text-[7px] font-black uppercase text-slate-500 tracking-widest">Mode graphique</p>
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              ['years',            'Par années'],
+              ['properties',       'Par logements'],
+              ['platforms',        'Par plateformes'],
+              ['years_x_props',    'Années × Logements'],
+              ['years_x_platforms','Années × Plateformes'],
+              ['metrics',          'Métriques'],
+            ].map(([m,l])=>(
+              <button key={m} onClick={()=>setChartMode(m)}
+                className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-colors ${chartMode===m?'bg-blue-600 text-white':'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>
+                {l}
+              </button>
             ))}
           </div>
         </div>
+
+        {/* Métrique */}
+        {chartMode!=='metrics' ? (
+          <div className="space-y-2">
+            <p className="text-[7px] font-black uppercase text-slate-500 tracking-widest">Métrique affichée</p>
+            <div className="flex flex-wrap gap-1.5">
+              {METRICS.map((m,i)=>(
+                <button key={m.id} onClick={()=>setSelMetric(m.id)}
+                  className="px-3 py-1.5 rounded-xl text-[8.5px] font-black uppercase transition-all"
+                  style={{
+                    background: selMetric===m.id ? SC[i%SC.length] : '#1e293b',
+                    color: selMetric===m.id ? 'white' : '#64748b',
+                    border: `1.5px solid ${selMetric===m.id ? SC[i%SC.length] : '#334155'}`,
+                  }}>
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-[7px] font-black uppercase text-slate-500 tracking-widest">Métriques à comparer</p>
+            <div className="flex flex-wrap gap-1.5">
+              {METRICS.map((m,i)=>(
+                <Pill key={m.id} label={m.label} active={selMetrics.includes(m.id)}
+                  color={SC[selMetrics.includes(m.id)?selMetrics.indexOf(m.id):i%SC.length]}
+                  onClick={()=>tog(selMetrics,setSelMetrics,m.id)}/>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* ── KPI CARDS ── */}
+      {/* ══ KPI ══ */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <KPI label="CA Brut"      value={`${Math.round(kpis.gross).toLocaleString('fr-FR')}€`}   trend={trend(kpis.gross,kpisPrev.gross)}        color="blue"    icon={<Euro size={20}/>}/>
-        <KPI label="Profit Net"   value={`${Math.round(kpis.profit).toLocaleString('fr-FR')}€`}  trend={trend(kpis.profit,kpisPrev.profit)}       color="emerald" icon={<TrendingUp size={20}/>}/>
-        <KPI label="Charges"      value={`-${Math.round(kpis.charges).toLocaleString('fr-FR')}€`} color="rose"   icon={<BarChart2 size={20}/>}/>
-        <KPI label="Nuits totales" value={kpis.nights}                                           sub={`${kpis.count} réservation${kpis.count>1?'s':''}`} trend={trend(kpis.nights,kpisPrev.nights)} color="violet" icon={<Calendar size={20}/>}/>
-        <KPI label="Rev. / Nuit"  value={`${Math.round(kpis.revPerNight)}€`}                    trend={trend(kpis.revPerNight,kpisPrev.revPerNight)} color="amber"  icon={<Home size={20}/>}/>
-        <KPI label="Taux charges" value={kpis.gross>0?`${Math.round((kpis.charges/kpis.gross)*100)}%`:'—'} sub="Charges / CA Brut" color="slate"/>
+        <KPI label="CA Brut"      value={`${Math.round(kpis.gross).toLocaleString('fr-FR')}€`}
+          trend={trend(kpis.gross,kpisPrev.gross)} color="blue"/>
+        <KPI label="Profit Net"   value={`${Math.round(kpis.profit).toLocaleString('fr-FR')}€`}
+          trend={trend(kpis.profit,kpisPrev.profit)} color="emerald"/>
+        <KPI label="Charges"      value={`-${Math.round(kpis.charges).toLocaleString('fr-FR')}€`} color="rose"/>
+        <KPI label="Nuits totales" value={kpis.nights}
+          sub={`${kpis.count} réservation${kpis.count>1?'s':''}`}
+          trend={trend(kpis.nights,kpisPrev.nights)} color="violet"/>
+        <KPI label="Rev. / Nuit"  value={`${Math.round(kpis.rpn)}€`}
+          trend={trend(kpis.rpn,kpisPrev.rpn)} color="amber"/>
+        <KPI label="Taux charges" value={kpis.gross>0?`${Math.round((kpis.charges/kpis.gross)*100)}%`:'—'}
+          sub="Charges / CA" color="slate"/>
       </div>
 
-      {/* ── LINE CHART ── */}
+      {/* ══ GRAPHIQUE ══ */}
       <div className="bg-white rounded-[28px] shadow-lg p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Évolution mensuelle</h3>
-          <div className="flex flex-wrap gap-3 items-center">
-            {chartSeries.filter(s=>!s.hideLegend).map(s=>(
-              <div key={s.name} className="flex items-center gap-1.5">
-                <div className="w-6 h-1.5 rounded-full" style={{background:s.color}}/>
-                <span className="text-[8px] font-black text-slate-600 uppercase">{s.name}</span>
-              </div>
-            ))}
-            {chartSeries.some(s=>s.dashed) && (
-              <div className="flex items-center gap-1.5">
-                <svg width="24" height="6"><line x1="0" y1="3" x2="24" y2="3" stroke="#94a3b8" strokeWidth="2" strokeDasharray="5 3"/></svg>
-                <span className="text-[8px] font-bold text-slate-400 uppercase">Prévisionnel</span>
-              </div>
-            )}
+        {/* Légende */}
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          {chartSeries.filter(s=>!s.hideLegend).map(s=>(
+            <div key={s.name+s.color} className="flex items-center gap-1.5">
+              <div className="w-6 h-1.5 rounded-full" style={{background:s.color}}/>
+              <span className="text-[8px] font-black text-slate-600 uppercase">{s.name}</span>
+            </div>
+          ))}
+          {chartSeries.some(s=>s.dashed)&&(
+            <div className="flex items-center gap-1.5">
+              <svg width="24" height="6"><line x1="0" y1="3" x2="24" y2="3" stroke="#94a3b8" strokeWidth="2" strokeDasharray="5 3"/></svg>
+              <span className="text-[8px] font-bold text-slate-400 uppercase">Prévisionnel</span>
+            </div>
+          )}
+        </div>
+
+        {/* Corps : totaux à gauche + courbe à droite */}
+        <div className="flex gap-3 items-center">
+
+          {/* ── TOTAUX ANNUELS ── */}
+          <div className="flex flex-col gap-2 shrink-0" style={{width:'96px'}}>
+            {chartSeries.filter(s=>!s.dashed&&!s.hideLegend).map(s=>{
+              const encaisse = s.data.reduce((a,v)=>a+(v||0), 0);
+
+              // Cherche la série pointillée associée (même nom + même couleur)
+              const dashed = chartSeries.find(d=>d.dashed&&d.hideLegend&&d.name===s.name&&d.color===s.color);
+              // Prévisionnel futur = mois curMonth..11 de la série pointillée
+              const prevFutur = dashed ? dashed.data.slice(curMonth).reduce((a,v)=>a+(v||0),0) : 0;
+              const totalPrev = encaisse + prevFutur;
+
+              const fmtT = v => chartUnit==='€'
+                ? (v>=1000?`${(v/1000).toFixed(v>=10000?0:1)}k€`:`${Math.round(v)}€`)
+                : Math.round(v).toString();
+
+              return (
+                <div key={s.name+s.color} className="rounded-xl px-2 py-2"
+                  style={{background:s.color+'15', borderLeft:`3px solid ${s.color}`}}>
+                  <p className="text-[7px] font-black uppercase truncate leading-tight mb-1.5"
+                    style={{color:s.color}}>{s.name}</p>
+
+                  {dashed ? (
+                    <>
+                      {/* CA encaissé */}
+                      <p className="text-[6px] font-bold text-slate-400 uppercase leading-none mb-0.5">Encaissé</p>
+                      <p className="text-[14px] font-black leading-none mb-2"
+                        style={{color:s.color}}>{fmtT(encaisse)}</p>
+
+                      {/* Séparateur */}
+                      <div className="h-px mb-1.5" style={{background:s.color+'44'}}/>
+
+                      {/* Total encaissé + prévisionnel */}
+                      <p className="text-[6px] font-bold text-slate-400 uppercase leading-none mb-0.5">Encaissé + Prév.</p>
+                      <p className="text-[14px] font-black leading-none"
+                        style={{color:s.color}}>{fmtT(totalPrev)}</p>
+                    </>
+                  ) : (
+                    <p className="text-[15px] font-black leading-none"
+                      style={{color:s.color}}>{fmtT(encaisse)}</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Graphique */}
+          <div className="flex-1 min-w-0">
+            <LineChart series={chartSeries} labels={MONTHS} unit={chartUnit}/>
           </div>
         </div>
-        <LineChart series={chartSeries} labels={MONTHS} unit={chartUnit}/>
       </div>
 
-      {/* ── BOTTOM ROW ── */}
+      {/* ══ BAS DE PAGE ══ */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-        {/* Donut Plateformes */}
         <div className="bg-white rounded-[28px] shadow-lg p-5">
-          <h3 className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-4">Par plateforme</h3>
           {platData.length>0
-            ? <Donut data={platData} colors={DONUT_COLORS}/>
+            ? <Donut data={platData} colors={DC} title="Par plateforme"/>
             : <p className="text-center text-[9px] text-slate-300 font-black py-8">Aucune donnée</p>}
         </div>
-
-        {/* Donut Logements */}
         <div className="bg-white rounded-[28px] shadow-lg p-5">
-          <h3 className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-4">Par logement</h3>
           {propData.length>0
-            ? <Donut data={propData} colors={DONUT_COLORS}/>
+            ? <Donut data={propData} colors={DC} title="Par logement"/>
             : <p className="text-center text-[9px] text-slate-300 font-black py-8">Aucune donnée</p>}
         </div>
-
-        {/* Nuits + CA/Charges bars */}
-        <div className="bg-white rounded-[28px] shadow-lg p-5 space-y-5">
-          <div>
-            <h3 className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-3">Nuits / mois</h3>
-            <MiniBar data={nightData} labels={MONTHS} color="#8b5cf6" unit="nuits"/>
-          </div>
-          <div className="h-px bg-slate-50"/>
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-[9px] font-black uppercase text-slate-400 tracking-widest">CA vs Charges</h3>
-              <div className="flex gap-2">
-                <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-sm bg-blue-500"/><span className="text-[7px] font-black text-slate-400 uppercase">CA</span></div>
-                <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-sm bg-rose-400"/><span className="text-[7px] font-black text-slate-400 uppercase">Charges</span></div>
-              </div>
-            </div>
-            <div className="relative">
-              <GroupBar data={barData} labels={MONTHS}/>
-              <div className="flex justify-between mt-1">
-                {MONTHS.map((m,i)=><span key={i} className="flex-1 text-center text-[6px] text-slate-300 font-bold">{m}</span>)}
-              </div>
-            </div>
-          </div>
+        <div className="bg-white rounded-[28px] shadow-lg p-5">
+          <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-3">Nuits / mois</p>
+          <MiniBar data={nightData} labels={MONTHS} color="#8b5cf6" unit="nuits"/>
         </div>
-
       </div>
+
     </div>
   );
 };
