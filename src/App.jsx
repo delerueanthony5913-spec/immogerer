@@ -653,9 +653,6 @@ const App = () => {
         } catch (calErr) {
           if (calErr.message === 'TOKEN_EXPIRED') { setGoogleConnected(false); silentRenew(); }
         }
-      } else if (prop?.calendarId && !getAccessToken()) {
-        setSyncWarning(true);
-        setTimeout(() => setSyncWarning(false), 8000);
       }
       if (diasCalendarId && getAccessToken() && prop) {
         let updatedExpenses = [...(d.resExpenses || [])];
@@ -1030,10 +1027,10 @@ const App = () => {
           {/* 1. ONGLETS RESERVATIONS */}
           <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border">
             <div className="max-w-7xl mx-auto pb-32">
-                {syncWarning && (
+                {!googleConnected && (properties || []).some(p => p.calendarId) && (
                   <div className="mx-2 md:mx-0 mb-4 bg-orange-50 border border-orange-200 text-orange-700 rounded-[16px] px-4 py-3 text-xs font-black uppercase tracking-wide flex items-center gap-2">
                     <AlertTriangle size={16} className="flex-shrink-0" />
-                    Google Agenda non connecté — réservation sauvegardée mais non synchronisée. Reconnectez-vous pour synchroniser automatiquement.
+                    Google Agenda déconnecté — les réservations ne seront pas synchronisées. Reconnectez-vous dans les Paramètres.
                   </div>
                 )}
                 <div className="flex justify-between items-center mx-2 md:mx-0 mb-6">
