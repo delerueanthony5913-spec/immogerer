@@ -88,14 +88,17 @@ const buildDiasEvent = (exp, propertyName, type, diasEmail, colorId = null) => {
   const fmt = (dt) =>
     `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}T${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}:00`;
 
+  let summary = `Ménage ${isEntry ? 'Entrée' : 'Sortie'} — ${propertyName} | Arrivée ${time} · Durée ${hours}h`;
+  if (exp.providerNote) summary += ` · ${exp.providerNote}`;
+
   let description = `Logement : ${propertyName}\nDurée : ${hours}h\nTarif : ${rate}€/h\nTotal : ${slotTotal}€`;
   if (exp.providerNote) description += `\n\nNotes :\n${exp.providerNote}`;
 
   const event = {
-    summary: `Ménage ${isEntry ? 'Entrée' : 'Sortie'} — ${propertyName}`,
+    summary,
     description,
-    start: { dateTime: fmt(start), timeZone: 'Europe/Paris' },
-    end: { dateTime: fmt(end), timeZone: 'Europe/Paris' },
+    start: { date: `${y}-${m}-${d}` },
+    end: { date: `${y}-${m}-${d}` },
   };
   if (diasEmail) event.attendees = [{ email: diasEmail }];
   if (colorId) event.colorId = String(colorId);
