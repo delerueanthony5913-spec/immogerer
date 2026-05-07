@@ -733,9 +733,9 @@ const App = () => {
     const prop = (properties || []).find(p => p.id === propertyId);
     if (!prop || !prop.name) return { bg: 'bg-white', hover: 'hover:bg-slate-50' };
     const name = prop.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    if (name.includes('cocon') || name.includes('kadelia')) return { bg: 'bg-emerald-50', hover: 'hover:bg-emerald-100' };
-    if (name.includes('signes') || name.includes('cadelio')) return { bg: 'bg-blue-50', hover: 'hover:bg-blue-100' };
-    if (name.includes('villa') || name.includes('cadelia')) return { bg: 'bg-red-50', hover: 'hover:bg-red-100' };
+    if (name.includes('cocon') || name.includes('kadelia')) return { bg: 'bg-emerald-200', hover: 'hover:bg-emerald-300' };
+    if (name.includes('signes') || name.includes('cadelio')) return { bg: 'bg-blue-200', hover: 'hover:bg-blue-300' };
+    if (name.includes('villa') || name.includes('cadelia')) return { bg: 'bg-yellow-200', hover: 'hover:bg-yellow-300' };
     return { bg: 'bg-white', hover: 'hover:bg-slate-50' };
   };
  
