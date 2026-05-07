@@ -196,6 +196,7 @@ const App = () => {
     if (!getAccessToken()) return;
     const prop = (properties || []).find(p => p.id === t.propertyId);
     const statuses = {};
+
     if (t.googleEventId && prop?.calendarId) {
       try {
         const evt = await getEventAttendees(prop.calendarId, t.googleEventId);
@@ -203,31 +204,53 @@ const App = () => {
         if (attendee) statuses[t.googleEventId] = attendee.responseStatus;
       } catch (e) {}
     }
-    for (const exp of (t.resExpenses || []).filter(x => x.person?.toLowerCase().includes('dias'))) {
+
+    const updatedExpenses = (t.resExpenses || []).map(exp => ({ ...exp }));
+    let needsFirebaseUpdate = false;
+
+    for (const exp of updatedExpenses.filter(x => x.person?.toLowerCase().includes('dias'))) {
       if (exp.googleDiasEntryId && diasCalendarId) {
         try {
           const evt = await getEventAttendees(diasCalendarId, exp.googleDiasEntryId);
           const attendee = (evt?.attendees || []).find(a => !a.self);
-          if (attendee) statuses[exp.googleDiasEntryId] = attendee.responseStatus;
+          if (attendee) {
+            statuses[exp.googleDiasEntryId] = attendee.responseStatus;
+            if (attendee.responseStatus !== exp.googleDiasEntryStatus) { exp.googleDiasEntryStatus = attendee.responseStatus; needsFirebaseUpdate = true; }
+          }
         } catch (e) {}
       }
       if (exp.googleDiasExitId && diasCalendarId) {
         try {
           const evt = await getEventAttendees(diasCalendarId, exp.googleDiasExitId);
           const attendee = (evt?.attendees || []).find(a => !a.self);
-          if (attendee) statuses[exp.googleDiasExitId] = attendee.responseStatus;
+          if (attendee) {
+            statuses[exp.googleDiasExitId] = attendee.responseStatus;
+            if (attendee.responseStatus !== exp.googleDiasExitStatus) { exp.googleDiasExitStatus = attendee.responseStatus; needsFirebaseUpdate = true; }
+          }
         } catch (e) {}
       }
     }
+
+    // Sauvegarder statut principal et Dias dans Firebase pour affichage dans la liste
+    const fbUpdate = {};
+    if (t.googleEventId && statuses[t.googleEventId] && statuses[t.googleEventId] !== t.googleEventStatus) {
+      fbUpdate.googleEventStatus = statuses[t.googleEventId];
+    }
+    if (needsFirebaseUpdate) fbUpdate.resExpenses = updatedExpenses;
+    if (Object.keys(fbUpdate).length > 0) {
+      try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', t.id), fbUpdate, { merge: true }); } catch (e) {}
+    }
+
     setAttendeeStatuses(statuses);
   };
 
-  const getStatusIcon = (eventId, size = 10) => {
-    if (!eventId) return <AlertTriangle size={size} className="text-slate-300 flex-shrink-0" title="Non synchronisé avec Google Agenda"/>;
-    if (attendeeStatuses[eventId] === 'accepted') return <CheckCircle size={size} className="text-emerald-500 flex-shrink-0" title="Invitation acceptée"/>;
-    if (attendeeStatuses[eventId] === 'declined') return <X size={size} className="text-red-500 flex-shrink-0" title="Invitation refusée"/>;
-    if (attendeeStatuses[eventId] === 'needsAction' || attendeeStatuses[eventId] === 'tentative') return <Mail size={size} className="text-orange-400 flex-shrink-0" title="En attente de réponse"/>;
-    return <CheckCircle size={size} className="text-blue-400 flex-shrink-0" title="Synchronisé (statut non chargé)"/>;
+  const getStatusIcon = (eventId, storedStatus, size = 14) => {
+    if (!eventId) return null;
+    const live = attendeeStatuses[eventId];
+    const status = live || storedStatus;
+    if (status === 'accepted') return <CheckCircle size={size} className="text-emerald-500 flex-shrink-0" title="Acceptée"/>;
+    if (status === 'declined') return <X size={size} className="text-red-500 flex-shrink-0" title="Refusée"/>;
+    return <Mail size={size} className="text-orange-400 flex-shrink-0" title="En attente de réponse"/>;
   };
   const updatePropCalendar = async (propId, data) => {
     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'properties', propId), data, { merge: true });
@@ -1104,7 +1127,6 @@ const App = () => {
                             <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>{getStatusProps(t).label}</span>
                             {t.paymentDate && t.platform !== 'En direct' && <span className="text-[7px] text-slate-400 font-bold">{formatDateFr(t.paymentDate)}</span>}
                             {t.platform === 'En direct' && t.soldeDate && <span className="text-[7px] text-slate-400 font-bold">{formatDateFr(t.soldeDate)}</span>}
-                            {(properties || []).find(p => p.id === t.propertyId)?.calendarId && !t.googleEventId && <span title="Non synchronisé avec Google Agenda"><AlertTriangle size={10} className="text-orange-400"/></span>}
                           </div>
                         </div>
                         
@@ -1116,7 +1138,7 @@ const App = () => {
                           <div className="space-y-1 border-t border-slate-100 pt-1.5 mb-1.5">
                             {(t.resExpenses || []).map((exp, idx) => (
                               <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[8px] bg-white/60 p-1.5 rounded-xl cursor-pointer hover:bg-white transition-colors leading-tight">
-                                <span className="uppercase font-black text-slate-500 min-w-0 truncate pr-2 flex items-center gap-1">{exp.type} ({exp.person}) {exp.person.toLowerCase().includes('dias') ? (<>{exp.googleDiasEntryId ? <CheckCircle size={8} className="text-emerald-500 flex-shrink-0" title="Entrée synchronisée"/> : <AlertTriangle size={8} className="text-slate-300 flex-shrink-0" title="Entrée non synchronisée"/>}{exp.googleDiasExitId ? <CheckCircle size={8} className="text-emerald-500 flex-shrink-0" title="Sortie synchronisée"/> : <AlertTriangle size={8} className="text-slate-300 flex-shrink-0" title="Sortie non synchronisée"/>}</>) : (exp.sendEmail !== false && providerEmails[exp.person] && (t.googleEventId ? <CheckCircle size={8} className="text-emerald-500 flex-shrink-0" title="Invitation envoyée"/> : <Mail size={8} className="text-orange-400 flex-shrink-0" title="Invitation non encore synchronisée"/>))}</span>
+                                <span className="uppercase font-black text-slate-500 min-w-0 truncate pr-2 flex items-center gap-1">{exp.type} ({exp.person}) {exp.person.toLowerCase().includes('dias') ? (<>{getStatusIcon(exp.googleDiasEntryId, exp.googleDiasEntryStatus, 14)}{getStatusIcon(exp.googleDiasExitId, exp.googleDiasExitStatus, 14)}</>) : (exp.sendEmail !== false && providerEmails[exp.person] && getStatusIcon(t.googleEventId, t.googleEventStatus, 14))}</span>
                                 <div className="text-right flex-shrink-0">
                                   <span className={`font-black flex items-center justify-end gap-1 ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€ {exp.paymentDate ? <CheckCircle size={8}/> : <Clock size={8}/>}</span>
                                   {exp.paymentDate && <div className="text-[7px] text-slate-400 mt-0.5">{formatDateFr(exp.paymentDate)}</div>}
@@ -1147,6 +1169,7 @@ const App = () => {
                           return (
                           <tr key={t.id} data-res-id={t.id} onClick={() => openReservation(t)} className={`${colors.bg} ${colors.hover} cursor-pointer transition-colors`}>
                               <td className="p-4 uppercase"><div className="font-black">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</div><div className="text-blue-600 text-xs font-black tracking-widest mt-0.5">{t.platform}</div></td>
+
                               <td className="p-4"><div className="text-sm font-black">{t.name}</div>{t.phone && <div className="text-slate-400 text-[10px] mt-0.5">{t.phone}</div>}</td>
                               <td className="p-4 text-center text-slate-500 whitespace-nowrap">{formatDateFr(t.startDate)} <ArrowRight size={10} className="inline text-slate-300" /> {formatDateFr(t.endDate)}</td>
                               <td className="p-4 text-[11px] text-slate-600 font-medium">{t.comment ? (<div className="bg-slate-50/50 p-2 rounded-xl border border-slate-100/50 italic whitespace-pre-wrap" title={t.comment}>📝 {t.comment}</div>) : ''}</td>
@@ -1154,7 +1177,7 @@ const App = () => {
                               <div className="space-y-1.5">
                                   {(t.resExpenses || []).map((exp, idx) => (
                                       <div key={idx} onClick={(e) => handleQuickPayToggle(e, t, 'expense', exp.id)} className="flex items-center justify-between text-[10px] bg-white/50 p-1.5 rounded-lg border border-slate-100/50 cursor-pointer hover:border-blue-300 hover:bg-white hover:shadow-sm transition-all">
-                                      <span className="uppercase font-black text-slate-500 leading-none flex items-center gap-1">{exp.type} ({exp.person}) {exp.person.toLowerCase().includes('dias') ? (<>{exp.googleDiasEntryId ? <CheckCircle size={10} className="text-emerald-500 flex-shrink-0" title="Entrée synchronisée"/> : <AlertTriangle size={10} className="text-slate-300 flex-shrink-0" title="Entrée non synchronisée"/>}{exp.googleDiasExitId ? <CheckCircle size={10} className="text-emerald-500 flex-shrink-0" title="Sortie synchronisée"/> : <AlertTriangle size={10} className="text-slate-300 flex-shrink-0" title="Sortie non synchronisée"/>}</>) : (exp.sendEmail !== false && providerEmails[exp.person] && (t.googleEventId ? <CheckCircle size={10} className="text-emerald-500 ml-1" title="Invitation envoyée"/> : <Mail size={10} className="text-orange-400 ml-1" title="Invitation non encore synchronisée"/>))}</span>
+                                      <span className="uppercase font-black text-slate-500 leading-none flex items-center gap-1">{exp.type} ({exp.person}) {exp.person.toLowerCase().includes('dias') ? (<>{getStatusIcon(exp.googleDiasEntryId, exp.googleDiasEntryStatus, 14)}{getStatusIcon(exp.googleDiasExitId, exp.googleDiasExitStatus, 14)}</>) : (exp.sendEmail !== false && providerEmails[exp.person] && getStatusIcon(t.googleEventId, t.googleEventStatus, 14))}</span>
                                       <div className="text-right">
                                           <div className="flex items-center justify-end gap-1.5"><span className={`font-black ${exp.paymentDate ? 'text-emerald-600' : 'text-orange-500'}`}>{exp.amount}€</span>{exp.paymentDate ? <CheckCircle size={10} className="text-emerald-500" /> : <Clock size={10} className="text-orange-400" />}</div>
                                           {exp.paymentDate && <div className="text-[8px] text-slate-400 mt-0.5 leading-none">{formatDateFr(exp.paymentDate)}</div>}
@@ -1564,7 +1587,7 @@ const App = () => {
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 relative z-10 mt-1">
                                       {/* Bloc Entrée */}
                                       <div className="bg-white p-3 rounded-[20px] border border-blue-100 shadow-sm space-y-2">
-                                          <div className="flex justify-between items-center"><span className="text-[10px] font-black uppercase text-blue-600 tracking-widest flex items-center gap-1.5">Entrée {exp.googleDiasEntryId && getStatusIcon(exp.googleDiasEntryId, 12)}</span>{isSundayOrHoliday(exp.dateEntry) && <span className="text-[8px] font-black text-white bg-rose-500 px-2 py-0.5 rounded-full shadow-sm">Férié / Dim</span>}</div>
+                                          <div className="flex justify-between items-center"><span className="text-[10px] font-black uppercase text-blue-600 tracking-widest flex items-center gap-1.5">Entrée {getStatusIcon(exp.googleDiasEntryId, exp.googleDiasEntryStatus, 14)}</span>{isSundayOrHoliday(exp.dateEntry) && <span className="text-[8px] font-black text-white bg-rose-500 px-2 py-0.5 rounded-full shadow-sm">Férié / Dim</span>}</div>
                                           <input type="date" value={exp.dateEntry || ''} onChange={e => updateDiasField(exp.id, 'dateEntry', e.target.value)} className="w-full p-2 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-600 outline-none cursor-pointer" />
                                           <div className="flex gap-2">
                                               <div className="w-1/3 min-w-0">
@@ -1579,7 +1602,7 @@ const App = () => {
                                       </div>
                                       {/* Bloc Sortie */}
                                       <div className="bg-white p-3 rounded-[20px] border border-blue-100 shadow-sm space-y-2">
-                                          <div className="flex justify-between items-center"><span className="text-[10px] font-black uppercase text-blue-600 tracking-widest flex items-center gap-1.5">Sortie {exp.googleDiasExitId && getStatusIcon(exp.googleDiasExitId, 12)}</span>{isSundayOrHoliday(exp.dateExit) && <span className="text-[8px] font-black text-white bg-rose-500 px-2 py-0.5 rounded-full shadow-sm">Férié / Dim</span>}</div>
+                                          <div className="flex justify-between items-center"><span className="text-[10px] font-black uppercase text-blue-600 tracking-widest flex items-center gap-1.5">Sortie {getStatusIcon(exp.googleDiasExitId, exp.googleDiasExitStatus, 14)}</span>{isSundayOrHoliday(exp.dateExit) && <span className="text-[8px] font-black text-white bg-rose-500 px-2 py-0.5 rounded-full shadow-sm">Férié / Dim</span>}</div>
                                           <input type="date" value={exp.dateExit || ''} onChange={e => updateDiasField(exp.id, 'dateExit', e.target.value)} className="w-full p-2 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-600 outline-none cursor-pointer" />
                                           <div className="flex gap-2">
                                               <div className="w-1/3 min-w-0">
@@ -1644,7 +1667,7 @@ const App = () => {
                                       }} className="w-3.5 h-3.5 flex-shrink-0 accent-slate-600" />
                                       <span className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5 min-w-0 break-words">
                                         <Mail size={12} className="flex-shrink-0"/> Inviter à l'agenda ({providerEmails[exp.person]})
-                                        {exp.sendEmail !== false && getStatusIcon(formData.googleEventId, 12)}
+                                        {exp.sendEmail !== false && getStatusIcon(formData.googleEventId, formData.googleEventStatus, 14)}
                                       </span>
                                   </label>
                               )}
