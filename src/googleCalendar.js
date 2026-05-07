@@ -112,3 +112,6 @@ export const updateDiasEvent = (calendarId, eventId, exp, propertyName, type, di
 
 export const deleteDiasEvent = (calendarId, eventId) =>
   call('DELETE', `${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, null, 'all');
+
+export const getEventAttendees = (calendarId, eventId) =>
+  call('GET', `${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`);
