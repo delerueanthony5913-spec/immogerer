@@ -439,11 +439,12 @@ const App = () => {
   };
  
   useEffect(() => {
+    if (!isUnlocked) return;
     if (activeTab !== 'reservations') { setHasScrolledToNext(false); return; }
     if (hasScrolledToNext || reservationsList.length === 0) return;
-    const timer = setTimeout(() => { scrollToCurrentRes(false); setHasScrolledToNext(true); }, 500); 
+    const timer = setTimeout(() => { scrollToCurrentRes(false); setHasScrolledToNext(true); }, 500);
     return () => clearTimeout(timer);
-  }, [activeTab, reservationsList, hasScrolledToNext, todayStr]);
+  }, [activeTab, reservationsList, hasScrolledToNext, todayStr, isUnlocked]);
  
  
   // 5. FONCTIONS OUTILS ET LOGIQUE METIER
