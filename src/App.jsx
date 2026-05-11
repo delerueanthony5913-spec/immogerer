@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { onAuthStateChanged, signInAnonymously } from 'firebase/auth';
-import { collection, doc, onSnapshot, addDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, addDoc, setDoc, deleteDoc, getDocs } from 'firebase/firestore';
 import {
   Key, Lock, Loader2, Filter, List, CalendarRange, BarChart2, Calculator, Settings,
   Menu, X, Euro, Search, ArrowRight, LocateFixed, ChevronLeft, ChevronRight,
@@ -73,6 +73,7 @@ const App = () => {
   });
   const [diasCalendarId, setDiasCalendarId] = useState('8f2fa53e3d419a4a2be45ea9c4f1e19a4fa6ad09ce1f73e80d7960374a6a7767@group.calendar.google.com');
   const [diasColorId, setDiasColorId] = useState('11');
+  const [diasMigrationDone, setDiasMigrationDone] = useState(null);
   const [syncWarning, setSyncWarning] = useState(false);
   const [attendeeStatuses, setAttendeeStatuses] = useState({});
   const tokenClientRef = useRef(null);
@@ -122,6 +123,7 @@ const App = () => {
         if (d.providerEmails) setProviderEmails(d.providerEmails);
         if (d.diasCalendarId) setDiasCalendarId(d.diasCalendarId);
         if (d.diasColorId) setDiasColorId(d.diasColorId);
+        setDiasMigrationDone(!!d.diasMigrationDone);
       }
     });
  
@@ -163,14 +165,46 @@ const App = () => {
       }, Math.max(msLeft, 0));
     };
 
+    const handleVisibility = () => {
+      if (document.visibilityState !== 'visible') return;
+      const expiry = parseInt(localStorage.getItem('gcal_token_expiry') || '0', 10);
+      if (!expiry) return;
+      // Si le token est expiré ou expire dans moins de 5 min, renouvelle silencieusement
+      if (Date.now() > expiry - 5 * 60 * 1000) {
+        tokenClientRef.current?.requestAccessToken({ prompt: '' });
+      }
+    };
+
     const script = document.getElementById('gis-script');
     if (window.google?.accounts?.oauth2) { initGIS(); scheduleRenew(); }
     else if (script) script.addEventListener('load', () => { initGIS(); scheduleRenew(); });
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
 
   useEffect(() => { tenantsRef.current = tenants; }, [tenants]);
   useEffect(() => { propertiesRef.current = properties; }, [properties]);
   useEffect(() => { providerEmailsRef.current = providerEmails; }, [providerEmails]);
+
+  useEffect(() => {
+    if (!user || user.uid === 'local-test-user' || diasMigrationDone !== false) return;
+    const runMigration = async () => {
+      const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'));
+      for (const d of snap.docs) {
+        const data = d.data();
+        const expenses = data.resExpenses || [];
+        const hasOld = expenses.some(e => e.person === 'Dias nettoyage');
+        if (hasOld) {
+          const updated = expenses.map(e => e.person === 'Dias nettoyage' ? { ...e, person: 'nettoyages dias' } : e);
+          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', d.id), { resExpenses: updated }, { merge: true });
+        }
+      }
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), { diasMigrationDone: true }, { merge: true });
+      setDiasMigrationDone(true);
+    };
+    runMigration();
+  }, [user, diasMigrationDone]);
 
   const syncMissingEvents = async () => {
     const missing = tenantsRef.current.filter(t => !t.googleEventId && t.startDate && t.endDate);
@@ -1094,9 +1128,14 @@ const App = () => {
           <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border">
             <div className="max-w-7xl mx-auto pb-32">
                 {!googleConnected && (properties || []).some(p => p.calendarId) && (
-                  <div className="mx-2 md:mx-0 mb-4 bg-orange-50 border border-orange-200 text-orange-700 rounded-[16px] px-4 py-3 text-xs font-black uppercase tracking-wide flex items-center gap-2">
-                    <AlertTriangle size={16} className="flex-shrink-0" />
-                    Google Agenda déconnecté — les réservations ne seront pas synchronisées. Reconnectez-vous dans les Paramètres.
+                  <div className="mx-2 md:mx-0 mb-4 bg-orange-50 border border-orange-200 text-orange-700 rounded-[16px] px-4 py-3 text-xs font-black uppercase tracking-wide flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle size={16} className="flex-shrink-0" />
+                      Google Agenda déconnecté — les réservations ne seront pas synchronisées.
+                    </div>
+                    <button onClick={signInGoogle} className="bg-orange-600 text-white px-3 py-1.5 rounded-xl text-[10px] font-black uppercase whitespace-nowrap hover:bg-orange-700 transition-colors flex-shrink-0">
+                      Reconnecter
+                    </button>
                   </div>
                 )}
                 <div className="flex justify-between items-center mx-2 md:mx-0 mb-6">
