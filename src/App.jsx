@@ -906,6 +906,16 @@ const App = () => {
     });
   };
  
+  const getPropertyColor = (propertyId) => {
+    const prop = (properties || []).find(p => p.id === propertyId);
+    if (!prop?.name) return '#94A3B8';
+    const name = prop.name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    if (name.includes('cocon') || name.includes('kadelia')) return '#10B981';
+    if (name.includes('signes') || name.includes('cadelio')) return '#3B82F6';
+    if (name.includes('villa') || name.includes('cadelia')) return '#EAB308';
+    return '#94A3B8';
+  };
+
   const getRowColors = (propertyId) => {
     const prop = (properties || []).find(p => p.id === propertyId);
     if (!prop || !prop.name) return { bg: 'bg-white', hover: 'hover:bg-slate-50' };
@@ -1291,7 +1301,32 @@ const App = () => {
           <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border">
             <div className="max-w-7xl mx-auto pb-32">
               <div className="flex justify-between items-center mx-2 md:mx-0 mb-6"><div><h2 className="text-2xl md:text-3xl font-black uppercase">Agenda</h2></div><div className="flex items-center gap-4 bg-white px-4 py-2 rounded-2xl shadow-lg"><button onClick={()=>handleMonthChange('prev')}><ChevronLeft/></button><div className="text-center font-black min-w-[120px] uppercase text-xs">{['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][filterMonth==='all'?new Date().getMonth():parseInt(filterMonth)]}</div><button onClick={()=>handleMonthChange('next')}><ChevronRight/></button></div></div>
-              <div className="bg-white p-4 md:p-6 rounded-[32px] md:rounded-[40px] shadow-2xl overflow-x-auto mx-2 md:mx-0"><div className="min-w-[320px] md:min-w-[700px]"><div className="grid grid-cols-7 text-center font-black text-slate-300 text-[8px] md:text-[10px] uppercase mb-2 md:mb-4">{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d=><div key={d}>{d}</div>)}</div><div className="grid grid-cols-7 gap-1 md:gap-2">{(agendaDays || []).map((item,idx)=>{ if(item.empty) return <div key={idx} className="h-16 md:h-32 bg-slate-50/30 rounded-xl md:rounded-2xl"></div>; const dayRes = (reservationsList || []).filter(r=>item.dateStr>=r.startDate && item.dateStr<=r.endDate); return (<div key={item.dateStr} className={`h-16 md:h-32 border rounded-xl md:rounded-2xl p-1 md:p-2 relative flex flex-col ${item.dateStr===todayStr?'border-blue-500 bg-blue-50/10':'border-slate-100'}`}><span className="text-[8px] md:text-[10px] font-black text-slate-300">{item.day}</span><div className="flex-1 space-y-0.5 md:space-y-1 overflow-y-auto no-scrollbar">{dayRes.map(r=>(<div key={r.id} onClick={(e)=>{e.stopPropagation();openReservation(r)}} className="text-[6px] md:text-[8px] font-black text-white p-0.5 md:p-1 rounded truncate cursor-pointer leading-tight" style={{backgroundColor: CHART_COLORS[(properties || []).findIndex(p=>p.id===r.propertyId)%CHART_COLORS.length]}}>{r.name?.split(' ')[0] || 'Résa'}</div>))}</div></div>);})}</div></div></div>
+              <div className="bg-white p-4 md:p-6 rounded-[32px] md:rounded-[40px] shadow-2xl overflow-x-auto mx-2 md:mx-0">
+                <div className="min-w-[320px] md:min-w-[700px]">
+                  <div className="grid grid-cols-7 text-center font-black text-slate-300 text-[8px] md:text-[10px] uppercase mb-2 md:mb-4">
+                    {['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d=><div key={d}>{d}</div>)}
+                  </div>
+                  <div className="grid grid-cols-7 gap-1 md:gap-2">
+                    {(agendaDays || []).map((item, idx) => {
+                      const isOther = !!item.otherMonth;
+                      const isToday = item.dateStr === todayStr;
+                      const dayRes = (reservationsList || []).filter(r => item.dateStr >= r.startDate && item.dateStr <= r.endDate);
+                      return (
+                        <div key={item.dateStr || idx} className={`h-16 md:h-32 border rounded-xl md:rounded-2xl p-1 md:p-2 flex flex-col ${isToday ? 'border-blue-400 bg-blue-50/20' : isOther ? 'border-slate-100 bg-slate-50/70' : 'border-slate-100 bg-white'}`}>
+                          <span className={`text-[8px] md:text-[10px] font-black ${isToday ? 'text-blue-500' : isOther ? 'text-slate-300' : 'text-slate-400'}`}>{item.day}</span>
+                          <div className="flex-1 space-y-0.5 md:space-y-1 overflow-y-auto no-scrollbar">
+                            {dayRes.map(r => (
+                              <div key={r.id} onClick={e=>{e.stopPropagation();openReservation(r)}} className="text-[6px] md:text-[8px] font-black text-white p-0.5 md:p-1 rounded truncate cursor-pointer leading-tight" style={{backgroundColor: getPropertyColor(r.propertyId), opacity: isOther ? 0.5 : 1}}>
+                                {r.name?.split(' ')[0] || 'Résa'}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
  
