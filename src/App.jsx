@@ -81,6 +81,7 @@ const App = () => {
   const tenantsRef = useRef([]);
   const propertiesRef = useRef([]);
   const providerEmailsRef = useRef({});
+  const diasCalendarIdRef = useRef(diasCalendarId);
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -141,15 +142,19 @@ const App = () => {
             setAccessToken(response.access_token);
             setGoogleConnected(true);
             syncMissingEvents();
+            syncDiasStatuses();
             // renouvellement proactif 55 min après réception du token
             clearTimeout(renewTimerRef.current);
             renewTimerRef.current = setTimeout(() => {
               tokenClientRef.current?.requestAccessToken({ prompt: '' });
             }, 55 * 60 * 1000);
           } else {
-            // renouvellement silencieux échoué (session Google expirée)
-            clearAccessToken();
-            setGoogleConnected(false);
+            // Ne déconnecter que si le token actuel est vraiment expiré
+            const currentExpiry = parseInt(localStorage.getItem('gcal_token_expiry') || '0', 10);
+            if (!currentExpiry || Date.now() > currentExpiry) {
+              clearAccessToken();
+              setGoogleConnected(false);
+            }
           }
         },
         prompt: '',
@@ -169,8 +174,12 @@ const App = () => {
       if (document.visibilityState !== 'visible') return;
       const expiry = parseInt(localStorage.getItem('gcal_token_expiry') || '0', 10);
       if (!expiry) return;
-      // Si le token est expiré ou expire dans moins de 5 min, renouvelle silencieusement
-      if (Date.now() > expiry - 5 * 60 * 1000) {
+      if (Date.now() > expiry) {
+        // Token déjà expiré — afficher la bannière sans popup (popup bloquée sur mobile)
+        clearAccessToken();
+        setGoogleConnected(false);
+      } else if (Date.now() > expiry - 5 * 60 * 1000) {
+        // Token expire bientôt — renouvellement silencieux
         tokenClientRef.current?.requestAccessToken({ prompt: '' });
       }
     };
@@ -186,6 +195,7 @@ const App = () => {
   useEffect(() => { tenantsRef.current = tenants; }, [tenants]);
   useEffect(() => { propertiesRef.current = properties; }, [properties]);
   useEffect(() => { providerEmailsRef.current = providerEmails; }, [providerEmails]);
+  useEffect(() => { diasCalendarIdRef.current = diasCalendarId; }, [diasCalendarId]);
 
   useEffect(() => {
     if (!user || user.uid === 'local-test-user' || diasMigrationDone !== false) return;
@@ -215,6 +225,36 @@ const App = () => {
         const evt = await createCalendarEvent(prop.calendarId, t, prop.name, providerEmailsRef.current, prop.colorId || null);
         if (evt?.id) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', t.id), { googleEventId: evt.id }, { merge: true });
       } catch (e) {}
+    }
+  };
+
+  const syncDiasStatuses = async () => {
+    const calId = diasCalendarIdRef.current;
+    if (!calId) return;
+    for (const t of tenantsRef.current) {
+      const diasExps = (t.resExpenses || []).filter(x => x.person?.toLowerCase().includes('dias'));
+      if (!diasExps.length) continue;
+      const updates = diasExps.map(e => ({ ...e }));
+      let changed = false;
+      for (const exp of updates) {
+        if (exp.googleDiasEntryId && exp.googleDiasEntryStatus !== 'accepted') {
+          try {
+            const evt = await getEventAttendees(calId, exp.googleDiasEntryId);
+            const att = (evt?.attendees || []).find(a => !a.self);
+            if (att && att.responseStatus !== exp.googleDiasEntryStatus) { exp.googleDiasEntryStatus = att.responseStatus; changed = true; }
+          } catch (e) {}
+        }
+        if (exp.googleDiasExitId && exp.googleDiasExitStatus !== 'accepted') {
+          try {
+            const evt = await getEventAttendees(calId, exp.googleDiasExitId);
+            const att = (evt?.attendees || []).find(a => !a.self);
+            if (att && att.responseStatus !== exp.googleDiasExitStatus) { exp.googleDiasExitStatus = att.responseStatus; changed = true; }
+          } catch (e) {}
+        }
+      }
+      if (!changed) continue;
+      const newExpenses = (t.resExpenses || []).map(e => updates.find(u => u.id === e.id) || e);
+      try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', t.id), { resExpenses: newExpenses }, { merge: true }); } catch (e) {}
     }
   };
 
@@ -646,7 +686,7 @@ const App = () => {
     if (!dateStr) return '#'; 
  
     const title = encodeURIComponent(`MENAGE ${prop?.name ? prop.name.toUpperCase() : ''} ${type}`);
-    const details = encodeURIComponent(exp.providerNote || '');
+    const details = encodeURIComponent((isEntry ? exp.providerNoteEntry : exp.providerNoteExit) || exp.providerNote || '');
  
     let dates = '';
     if (timeStr && hours > 0) {
@@ -723,9 +763,10 @@ const App = () => {
           rateEntry: parseFloat(r.rateEntry) || 0,
           hoursExit: parseFloat(r.hoursExit) || 0,
           rateExit: parseFloat(r.rateExit) || 0,
-          timeEntry: r.timeEntry || '10:00',
-          timeExit: r.timeExit || '10:00',
-          providerNote: r.providerNote || ''
+          timeEntry: r.timeEntry || '09:30',
+          timeExit: r.timeExit || '10:30',
+          providerNoteEntry: r.providerNoteEntry || r.providerNote || '',
+          providerNoteExit: r.providerNoteExit || r.providerNote || ''
       })) 
     };
     
@@ -1582,7 +1623,7 @@ const App = () => {
                   <div className="flex justify-between font-black uppercase tracking-widest text-slate-400 text-[10px]">
                       Prestations
                       <button type="button" onClick={() => {
-                          const newExp = { id: Date.now().toString(), person: availableProviders[0] || '', type: availableServiceTypes[0] || '', amount: 0, paymentDate: '', hoursEntry: '', rateEntry: '', hoursExit: '', rateExit: '', dateEntry: formData.startDate || '', dateExit: formData.endDate || '', timeEntry: '10:00', timeExit: '10:00', providerNote: '', sendEmail: true };
+                          const newExp = { id: Date.now().toString(), person: availableProviders[0] || '', type: availableServiceTypes[0] || '', amount: 0, paymentDate: '', hoursEntry: '', rateEntry: '', hoursExit: '', rateExit: '', dateEntry: formData.startDate || '', dateExit: formData.endDate || '', timeEntry: '09:30', timeExit: '10:30', providerNoteEntry: '', providerNoteExit: '', sendEmail: true };
                           if (newExp.person.toLowerCase().includes('dias')) {
                               newExp.rateEntry = isSundayOrHoliday(newExp.dateEntry) ? 25 : 15;
                               newExp.rateExit = isSundayOrHoliday(newExp.dateExit) ? 25 : 15;
@@ -1631,7 +1672,7 @@ const App = () => {
                                           <div className="flex gap-2">
                                               <div className="w-1/3 min-w-0">
                                                   <label className="text-[7px] uppercase text-slate-400 font-bold block mb-1">Heure</label>
-                                                  <select value={exp.timeEntry || '10:00'} onChange={e => updateDiasField(exp.id, 'timeEntry', e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg font-black text-center text-[10px] outline-none focus:border-blue-400 bg-white">
+                                                  <select value={exp.timeEntry || '09:30'} onChange={e => updateDiasField(exp.id, 'timeEntry', e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg font-black text-center text-[10px] outline-none focus:border-blue-400 bg-white">
                                                       {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
                                                   </select>
                                               </div>
@@ -1646,7 +1687,7 @@ const App = () => {
                                           <div className="flex gap-2">
                                               <div className="w-1/3 min-w-0">
                                                   <label className="text-[7px] uppercase text-slate-400 font-bold block mb-1">Heure</label>
-                                                  <select value={exp.timeExit || '10:00'} onChange={e => updateDiasField(exp.id, 'timeExit', e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg font-black text-center text-[10px] outline-none focus:border-blue-400 bg-white">
+                                                  <select value={exp.timeExit || '10:30'} onChange={e => updateDiasField(exp.id, 'timeExit', e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg font-black text-center text-[10px] outline-none focus:border-blue-400 bg-white">
                                                       {TIME_SLOTS.map(t => <option key={t} value={t}>{t}</option>)}
                                                   </select>
                                               </div>
@@ -1656,8 +1697,15 @@ const App = () => {
                                       </div>
                                   </div>
  
-                                  <div className="mt-2 relative z-10">
-                                      <textarea value={exp.providerNote || ''} onChange={e => updateDiasField(exp.id, 'providerNote', e.target.value)} placeholder="Note pour le prestataire (code d'accès, infos...)" className="w-full p-3 border border-blue-200 rounded-[16px] text-xs font-medium text-slate-700 outline-none bg-white min-h-[60px]" />
+                                  <div className="mt-2 relative z-10 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                      <div>
+                                          <label className="text-[8px] uppercase text-blue-500 font-black tracking-widest block mb-1">Note Entrée</label>
+                                          <textarea value={exp.providerNoteEntry || ''} onChange={e => updateDiasField(exp.id, 'providerNoteEntry', e.target.value)} placeholder="Infos pour l'entrée (code, consignes...)" className="w-full p-3 border border-blue-200 rounded-[16px] text-xs font-medium text-slate-700 outline-none bg-white min-h-[60px]" />
+                                      </div>
+                                      <div>
+                                          <label className="text-[8px] uppercase text-blue-500 font-black tracking-widest block mb-1">Note Sortie</label>
+                                          <textarea value={exp.providerNoteExit || ''} onChange={e => updateDiasField(exp.id, 'providerNoteExit', e.target.value)} placeholder="Infos pour la sortie (code, consignes...)" className="w-full p-3 border border-blue-200 rounded-[16px] text-xs font-medium text-slate-700 outline-none bg-white min-h-[60px]" />
+                                      </div>
                                   </div>
  
 

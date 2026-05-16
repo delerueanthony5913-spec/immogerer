@@ -76,7 +76,7 @@ export const deleteCalendarEvent = (calendarId, eventId) =>
 const buildDiasEvent = (exp, propertyName, type, diasEmail, colorId = null) => {
   const isEntry = type === 'ENTREE';
   const date = isEntry ? exp.dateEntry : exp.dateExit;
-  const time = isEntry ? (exp.timeEntry || '10:00') : (exp.timeExit || '10:00');
+  const time = isEntry ? (exp.timeEntry || '09:30') : (exp.timeExit || '10:30');
   const hours = parseFloat(isEntry ? exp.hoursEntry : exp.hoursExit) || 0;
   const rate = parseFloat(isEntry ? exp.rateEntry : exp.rateExit) || 0;
   const slotTotal = (hours * rate).toFixed(2);
@@ -89,10 +89,11 @@ const buildDiasEvent = (exp, propertyName, type, diasEmail, colorId = null) => {
     `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}T${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}:00`;
 
   let summary = `Ménage ${isEntry ? 'Entrée' : 'Sortie'} — ${propertyName} | Arrivée ${time} · Durée ${hours}h`;
-  if (exp.providerNote) summary += ` · ${exp.providerNote}`;
+  const note = isEntry ? (exp.providerNoteEntry || exp.providerNote || '') : (exp.providerNoteExit || exp.providerNote || '');
+  if (note) summary += ` · ${note}`;
 
   let description = `Logement : ${propertyName}\nDurée : ${hours}h\nTarif : ${rate}€/h\nTotal : ${slotTotal}€`;
-  if (exp.providerNote) description += `\n\nNotes :\n${exp.providerNote}`;
+  if (note) description += `\n\nNotes :\n${note}`;
 
   const event = {
     summary,
