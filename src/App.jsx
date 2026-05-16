@@ -784,7 +784,9 @@ const App = () => {
           timeEntry: r.timeEntry || '09:30',
           timeExit: r.timeExit || '10:30',
           providerNoteEntry: r.providerNoteEntry || r.providerNote || '',
-          providerNoteExit: r.providerNoteExit || r.providerNote || ''
+          providerNoteExit: r.providerNoteExit || r.providerNote || '',
+          hasEntry: r.hasEntry !== false,
+          hasExit: r.hasExit !== false
       })) 
     };
     
@@ -819,21 +821,27 @@ const App = () => {
         for (const exp of (d.resExpenses || []).filter(x => x.person?.toLowerCase().includes('dias'))) {
           const diasEmail = providerEmails[exp.person] || null;
           try {
-            if (exp.dateEntry && parseFloat(exp.hoursEntry) > 0) {
+            if (exp.hasEntry !== false && exp.dateEntry && parseFloat(exp.hoursEntry) > 0) {
               if (exp.googleDiasEntryId) {
                 await updateDiasEvent(diasCalendarId, exp.googleDiasEntryId, exp, prop.name, 'ENTREE', diasEmail, diasColorId);
               } else {
                 const evt = await createDiasEvent(diasCalendarId, exp, prop.name, 'ENTREE', diasEmail, diasColorId);
                 if (evt?.id) { updatedExpenses = updatedExpenses.map(x => x.id === exp.id ? { ...x, googleDiasEntryId: evt.id } : x); needsExpUpdate = true; }
               }
+            } else if (exp.hasEntry === false && exp.googleDiasEntryId) {
+              try { await deleteDiasEvent(diasCalendarId, exp.googleDiasEntryId); } catch (e) {}
+              updatedExpenses = updatedExpenses.map(x => x.id === exp.id ? { ...x, googleDiasEntryId: null } : x); needsExpUpdate = true;
             }
-            if (exp.dateExit && parseFloat(exp.hoursExit) > 0) {
+            if (exp.hasExit !== false && exp.dateExit && parseFloat(exp.hoursExit) > 0) {
               if (exp.googleDiasExitId) {
                 await updateDiasEvent(diasCalendarId, exp.googleDiasExitId, exp, prop.name, 'SORTIE', diasEmail, diasColorId);
               } else {
                 const evt = await createDiasEvent(diasCalendarId, exp, prop.name, 'SORTIE', diasEmail, diasColorId);
                 if (evt?.id) { updatedExpenses = updatedExpenses.map(x => x.id === exp.id ? { ...x, googleDiasExitId: evt.id } : x); needsExpUpdate = true; }
               }
+            } else if (exp.hasExit === false && exp.googleDiasExitId) {
+              try { await deleteDiasEvent(diasCalendarId, exp.googleDiasExitId); } catch (e) {}
+              updatedExpenses = updatedExpenses.map(x => x.id === exp.id ? { ...x, googleDiasExitId: null } : x); needsExpUpdate = true;
             }
           } catch (diasErr) { if (diasErr.message === 'TOKEN_EXPIRED') { setGoogleConnected(false); silentRenew(); } }
         }
@@ -1346,13 +1354,13 @@ const App = () => {
                     const weekDias = (agendaReservations||[]).flatMap(t =>
                       (t.resExpenses||[]).filter(x => x.person?.toLowerCase().includes('dias')).flatMap(exp => {
                         const evts = [];
-                        if (exp.dateEntry && exp.dateEntry >= weekStart && exp.dateEntry <= weekEnd) {
+                        if (exp.hasEntry !== false && exp.dateEntry && exp.dateEntry >= weekStart && exp.dateEntry <= weekEnd) {
                           const si = week.findIndex(d => d.dateStr === exp.dateEntry);
-                          if (si !== -1) evts.push({ key:`${t.id}-e-${exp.id}`, col: si+1, label:`Menage E · ${exp.timeEntry||'09:30'}` });
+                          if (si !== -1) evts.push({ key:`${t.id}-e-${exp.id}`, col: si+1, label:`Menage E · ${exp.timeEntry||'09:30'}`, tenant: t });
                         }
-                        if (exp.dateExit && exp.dateExit >= weekStart && exp.dateExit <= weekEnd) {
+                        if (exp.hasExit !== false && exp.dateExit && exp.dateExit >= weekStart && exp.dateExit <= weekEnd) {
                           const si = week.findIndex(d => d.dateStr === exp.dateExit);
-                          if (si !== -1) evts.push({ key:`${t.id}-x-${exp.id}`, col: si+1, label:`Menage S · ${exp.timeExit||'10:30'}` });
+                          if (si !== -1) evts.push({ key:`${t.id}-x-${exp.id}`, col: si+1, label:`Menage S · ${exp.timeExit||'10:30'}`, tenant: t });
                         }
                         return evts;
                       })
@@ -1381,10 +1389,10 @@ const App = () => {
                                   className="px-1 md:px-2 py-0.5 rounded-md cursor-pointer mb-0.5 overflow-hidden"
                                   style={{gridColumn:`${bar.startCol}/${bar.endCol+1}`,gridRow:bar.row,backgroundColor:color+'28',borderLeft:`3px solid ${color}`}}
                                 >
-                                  <div className="flex items-baseline gap-0.5 md:gap-1 min-w-0 overflow-hidden">
-                                    <span className="text-[6px] md:text-[9px] font-black text-slate-800 truncate">{bar.name}</span>
-                                    {bar.comment && <span className="text-[5px] md:text-[7px] text-slate-400 truncate hidden md:inline">· {bar.comment}</span>}
-                                    {bar.platform && <span className="text-[5px] md:text-[7px] font-bold text-blue-500 truncate hidden sm:inline">· {bar.platform}</span>}
+                                  <div className="text-[6px] md:text-[9px] font-black whitespace-nowrap overflow-hidden" style={{textOverflow:'ellipsis'}}>
+                                    <span className="text-slate-800">{bar.name}</span>
+                                    {bar.comment && <span className="text-slate-400 font-normal"> · {bar.comment}</span>}
+                                    {bar.platform && <span className="text-blue-500"> · {bar.platform}</span>}
                                   </div>
                                 </div>
                               );
@@ -1394,7 +1402,7 @@ const App = () => {
                         {weekDias.length > 0 && (
                           <div className="grid grid-cols-7 gap-x-1 md:gap-x-2 mt-0.5">
                             {weekDias.map(d => (
-                              <div key={d.key} className="px-1 py-0.5 rounded-md text-[5px] md:text-[7px] font-black text-white truncate mb-0.5" style={{gridColumn:`${d.col}/${d.col+1}`,backgroundColor:'#6366f1'}}>
+                              <div key={d.key} onClick={e=>{e.stopPropagation();openReservation(d.tenant)}} className="px-1 py-0.5 rounded-md text-[5px] md:text-[7px] font-black text-white truncate mb-0.5 cursor-pointer" style={{gridColumn:`${d.col}/${d.col+1}`,backgroundColor:'#6366f1'}}>
                                 {d.label}
                               </div>
                             ))}
@@ -1740,7 +1748,7 @@ const App = () => {
                   <div className="flex justify-between font-black uppercase tracking-widest text-slate-400 text-[10px]">
                       Prestations
                       <button type="button" onClick={() => {
-                          const newExp = { id: Date.now().toString(), person: availableProviders[0] || '', type: availableServiceTypes[0] || '', amount: 0, paymentDate: '', hoursEntry: '', rateEntry: '', hoursExit: '', rateExit: '', dateEntry: formData.startDate || '', dateExit: formData.endDate || '', timeEntry: '09:30', timeExit: '10:30', providerNoteEntry: '', providerNoteExit: '', sendEmail: true };
+                          const newExp = { id: Date.now().toString(), person: availableProviders[0] || '', type: availableServiceTypes[0] || '', amount: 0, paymentDate: '', hoursEntry: '', rateEntry: '', hoursExit: '', rateExit: '', dateEntry: formData.startDate || '', dateExit: formData.endDate || '', timeEntry: '09:30', timeExit: '10:30', providerNoteEntry: '', providerNoteExit: '', hasEntry: true, hasExit: true, sendEmail: true };
                           if (newExp.person.toLowerCase().includes('dias')) {
                               newExp.rateEntry = isSundayOrHoliday(newExp.dateEntry) ? 25 : 15;
                               newExp.rateExit = isSundayOrHoliday(newExp.dateExit) ? 25 : 15;
@@ -1783,9 +1791,15 @@ const App = () => {
                                   {/* Milieu : Dates et Heures (Spécial DIAS) */}
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 relative z-10 mt-1">
                                       {/* Bloc Entrée */}
-                                      <div className="bg-white p-3 rounded-[20px] border border-blue-100 shadow-sm space-y-2">
-                                          <div className="flex justify-between items-center"><span className="text-[10px] font-black uppercase text-blue-600 tracking-widest flex items-center gap-1.5">Entrée {getStatusIcon(exp.googleDiasEntryId, exp.googleDiasEntryStatus, 14)}</span>{isSundayOrHoliday(exp.dateEntry) && <span className="text-[8px] font-black text-white bg-rose-500 px-2 py-0.5 rounded-full shadow-sm">Férié / Dim</span>}</div>
-                                          <input type="date" value={exp.dateEntry || ''} onChange={e => updateDiasField(exp.id, 'dateEntry', e.target.value)} className="w-full p-2 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-600 outline-none cursor-pointer" />
+                                      <div className={`bg-white p-3 rounded-[20px] border border-blue-100 shadow-sm space-y-2 transition-opacity ${exp.hasEntry === false ? 'opacity-40' : ''}`}>
+                                          <div className="flex justify-between items-center">
+                                            <label className="flex items-center gap-1.5 cursor-pointer">
+                                              <input type="checkbox" checked={exp.hasEntry !== false} onChange={e => updateDiasField(exp.id, 'hasEntry', e.target.checked)} className="w-3.5 h-3.5 accent-blue-600" />
+                                              <span className="text-[10px] font-black uppercase text-blue-600 tracking-widest flex items-center gap-1.5">Entrée {getStatusIcon(exp.googleDiasEntryId, exp.googleDiasEntryStatus, 14)}</span>
+                                            </label>
+                                            {isSundayOrHoliday(exp.dateEntry) && <span className="text-[8px] font-black text-white bg-rose-500 px-2 py-0.5 rounded-full shadow-sm">Férié / Dim</span>}
+                                          </div>
+                                          <input type="date" value={exp.dateEntry || ''} onChange={e => updateDiasField(exp.id, 'dateEntry', e.target.value)} disabled={exp.hasEntry === false} className="w-full p-2 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-600 outline-none cursor-pointer disabled:cursor-not-allowed" />
                                           <div className="flex gap-2">
                                               <div className="w-1/3 min-w-0">
                                                   <label className="text-[7px] uppercase text-slate-400 font-bold block mb-1">Heure</label>
@@ -1798,9 +1812,15 @@ const App = () => {
                                           </div>
                                       </div>
                                       {/* Bloc Sortie */}
-                                      <div className="bg-white p-3 rounded-[20px] border border-blue-100 shadow-sm space-y-2">
-                                          <div className="flex justify-between items-center"><span className="text-[10px] font-black uppercase text-blue-600 tracking-widest flex items-center gap-1.5">Sortie {getStatusIcon(exp.googleDiasExitId, exp.googleDiasExitStatus, 14)}</span>{isSundayOrHoliday(exp.dateExit) && <span className="text-[8px] font-black text-white bg-rose-500 px-2 py-0.5 rounded-full shadow-sm">Férié / Dim</span>}</div>
-                                          <input type="date" value={exp.dateExit || ''} onChange={e => updateDiasField(exp.id, 'dateExit', e.target.value)} className="w-full p-2 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-600 outline-none cursor-pointer" />
+                                      <div className={`bg-white p-3 rounded-[20px] border border-blue-100 shadow-sm space-y-2 transition-opacity ${exp.hasExit === false ? 'opacity-40' : ''}`}>
+                                          <div className="flex justify-between items-center">
+                                            <label className="flex items-center gap-1.5 cursor-pointer">
+                                              <input type="checkbox" checked={exp.hasExit !== false} onChange={e => updateDiasField(exp.id, 'hasExit', e.target.checked)} className="w-3.5 h-3.5 accent-blue-600" />
+                                              <span className="text-[10px] font-black uppercase text-blue-600 tracking-widest flex items-center gap-1.5">Sortie {getStatusIcon(exp.googleDiasExitId, exp.googleDiasExitStatus, 14)}</span>
+                                            </label>
+                                            {isSundayOrHoliday(exp.dateExit) && <span className="text-[8px] font-black text-white bg-rose-500 px-2 py-0.5 rounded-full shadow-sm">Férié / Dim</span>}
+                                          </div>
+                                          <input type="date" value={exp.dateExit || ''} onChange={e => updateDiasField(exp.id, 'dateExit', e.target.value)} disabled={exp.hasExit === false} className="w-full p-2 border border-slate-200 rounded-xl text-[10px] font-bold text-slate-600 outline-none cursor-pointer disabled:cursor-not-allowed" />
                                           <div className="flex gap-2">
                                               <div className="w-1/3 min-w-0">
                                                   <label className="text-[7px] uppercase text-slate-400 font-bold block mb-1">Heure</label>
