@@ -1366,15 +1366,17 @@ const App = () => {
                       nextRow++;
                     }
                     const totalRows = nextRow - 1;
+                    const isOddWeek = wi % 2 === 1;
                     return (
-                      <div key={wi} className="mb-1 md:mb-2">
+                      <div key={wi} className={`mb-1 md:mb-2 rounded-xl ${isOddWeek ? 'bg-slate-100/50' : ''}`}>
                         <div className="grid grid-cols-7 gap-1 md:gap-2">
                           {week.map((item, di) => {
                             const isOther = !!item.otherMonth;
                             const isToday = item.dateStr === todayStr;
                             return (
-                              <div key={item.dateStr||di} className={`h-7 md:h-9 border rounded-lg md:rounded-xl px-1 flex items-center ${isToday ? 'border-blue-400 bg-blue-50/20' : isOther ? 'border-slate-100 bg-slate-50/70' : 'border-slate-100 bg-white'}`}>
-                                <span className={`text-[8px] md:text-[10px] font-black ${isToday ? 'text-blue-500' : isOther ? 'text-slate-300' : 'text-slate-400'}`}>{item.day}</span>
+                              <div key={item.dateStr||di} className={`h-7 md:h-9 border rounded-lg md:rounded-xl px-1 flex flex-col items-start justify-center ${isToday ? 'border-blue-500 bg-blue-100 shadow-sm' : isOther ? 'border-slate-100 bg-slate-50/70' : 'border-slate-100 bg-white'}`}>
+                                <span className={`text-[8px] md:text-[10px] font-black leading-none ${isToday ? 'text-blue-700' : isOther ? 'text-slate-300' : 'text-slate-400'}`}>{item.day}</span>
+                                {isToday && <div className="w-1 h-1 rounded-full bg-blue-500 mt-0.5"></div>}
                               </div>
                             );
                           })}
@@ -1382,7 +1384,7 @@ const App = () => {
                         {totalRows > 0 && (
                           <div className="grid grid-cols-7 gap-x-1 md:gap-x-2 mt-0.5" style={{gridTemplateRows:`repeat(${totalRows},auto)`}}>
                             {allItems.map(item => item.isDias ? (
-                              <div key={item.key} onClick={e=>{e.stopPropagation();openReservation(item.tenant)}} className="px-1 py-0.5 rounded-md text-[5px] md:text-[7px] font-black text-white truncate mb-0.5 cursor-pointer" style={{gridColumn:`${item.col}/${item.col+1}`,gridRow:item.assignedRow,backgroundColor:'#EF4444'}}>
+                              <div key={item.key} onClick={e=>{e.stopPropagation();openReservation(item.tenant)}} className="px-1 py-0.5 rounded-md text-[5px] md:text-[7px] font-black text-white truncate mb-0.5 cursor-pointer" style={{gridColumn:`${item.col}/${item.col+1}`,gridRow:item.assignedRow,backgroundColor:'#FCA5A5'}}>
                                 {item.label}
                               </div>
                             ) : (()=>{ const color=getPropertyColor(item.propertyId); return (
