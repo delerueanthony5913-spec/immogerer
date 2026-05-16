@@ -1342,6 +1342,21 @@ const App = () => {
                       return { ...bar, row: row + 1 };
                     });
                     const nRows = bars.length ? Math.max(...bars.map(b => b.row)) : 0;
+                    // Dias cleaning events for this week
+                    const weekDias = (agendaReservations||[]).flatMap(t =>
+                      (t.resExpenses||[]).filter(x => x.person?.toLowerCase().includes('dias')).flatMap(exp => {
+                        const evts = [];
+                        if (exp.dateEntry && exp.dateEntry >= weekStart && exp.dateEntry <= weekEnd) {
+                          const si = week.findIndex(d => d.dateStr === exp.dateEntry);
+                          if (si !== -1) evts.push({ key:`${t.id}-e-${exp.id}`, col: si+1, label:`Menage E · ${exp.timeEntry||'09:30'}` });
+                        }
+                        if (exp.dateExit && exp.dateExit >= weekStart && exp.dateExit <= weekEnd) {
+                          const si = week.findIndex(d => d.dateStr === exp.dateExit);
+                          if (si !== -1) evts.push({ key:`${t.id}-x-${exp.id}`, col: si+1, label:`Menage S · ${exp.timeExit||'10:30'}` });
+                        }
+                        return evts;
+                      })
+                    );
                     return (
                       <div key={wi} className="mb-1 md:mb-2">
                         <div className="grid grid-cols-7 gap-1 md:gap-2">
@@ -1357,14 +1372,30 @@ const App = () => {
                         </div>
                         {nRows > 0 && (
                           <div className="grid grid-cols-7 gap-x-1 md:gap-x-2 mt-0.5" style={{gridTemplateRows:`repeat(${nRows},auto)`}}>
-                            {bars.map(bar => (
-                              <div
-                                key={bar.id}
-                                onClick={e=>{e.stopPropagation();openReservation(bar)}}
-                                className="text-white text-[6px] md:text-[9px] font-black px-1 md:px-2 py-0.5 md:py-1 rounded-md truncate cursor-pointer mb-0.5"
-                                style={{gridColumn:`${bar.startCol}/${bar.endCol+1}`,gridRow:bar.row,backgroundColor:getPropertyColor(bar.propertyId)}}
-                              >
-                                {bar.name?.split(' ')[0]||'Résa'}
+                            {bars.map(bar => {
+                              const color = getPropertyColor(bar.propertyId);
+                              return (
+                                <div
+                                  key={bar.id}
+                                  onClick={e=>{e.stopPropagation();openReservation(bar)}}
+                                  className="px-1 md:px-2 py-0.5 rounded-md cursor-pointer mb-0.5 overflow-hidden"
+                                  style={{gridColumn:`${bar.startCol}/${bar.endCol+1}`,gridRow:bar.row,backgroundColor:color+'28',borderLeft:`3px solid ${color}`}}
+                                >
+                                  <div className="flex items-baseline gap-0.5 md:gap-1 min-w-0 overflow-hidden">
+                                    <span className="text-[6px] md:text-[9px] font-black text-slate-800 truncate">{bar.name}</span>
+                                    {bar.comment && <span className="text-[5px] md:text-[7px] text-slate-400 truncate hidden md:inline">· {bar.comment}</span>}
+                                    {bar.platform && <span className="text-[5px] md:text-[7px] font-bold text-blue-500 truncate hidden sm:inline">· {bar.platform}</span>}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {weekDias.length > 0 && (
+                          <div className="grid grid-cols-7 gap-x-1 md:gap-x-2 mt-0.5">
+                            {weekDias.map(d => (
+                              <div key={d.key} className="px-1 py-0.5 rounded-md text-[5px] md:text-[7px] font-black text-white truncate mb-0.5" style={{gridColumn:`${d.col}/${d.col+1}`,backgroundColor:'#6366f1'}}>
+                                {d.label}
                               </div>
                             ))}
                           </div>
