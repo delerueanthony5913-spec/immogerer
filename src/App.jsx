@@ -1356,11 +1356,11 @@ const App = () => {
                         const evts = [];
                         if (exp.hasEntry !== false && exp.dateEntry && exp.dateEntry >= weekStart && exp.dateEntry <= weekEnd) {
                           const si = week.findIndex(d => d.dateStr === exp.dateEntry);
-                          if (si !== -1) evts.push({ key:`${t.id}-e-${exp.id}`, col: si+1, label:`Menage E · ${exp.timeEntry||'09:30'}`, tenant: t });
+                          if (si !== -1) evts.push({ key:`${t.id}-e-${exp.id}`, col: si+1, label:`Menage E · ${exp.timeEntry||'09:30'}${exp.hoursEntry ? ` · ${exp.hoursEntry}h` : ''}`, tenant: t });
                         }
                         if (exp.hasExit !== false && exp.dateExit && exp.dateExit >= weekStart && exp.dateExit <= weekEnd) {
                           const si = week.findIndex(d => d.dateStr === exp.dateExit);
-                          if (si !== -1) evts.push({ key:`${t.id}-x-${exp.id}`, col: si+1, label:`Menage S · ${exp.timeExit||'10:30'}`, tenant: t });
+                          if (si !== -1) evts.push({ key:`${t.id}-x-${exp.id}`, col: si+1, label:`Menage S · ${exp.timeExit||'10:30'}${exp.hoursExit ? ` · ${exp.hoursExit}h` : ''}`, tenant: t });
                         }
                         return evts;
                       })
@@ -1402,7 +1402,7 @@ const App = () => {
                         {weekDias.length > 0 && (
                           <div className="grid grid-cols-7 gap-x-1 md:gap-x-2 mt-0.5">
                             {weekDias.map(d => (
-                              <div key={d.key} onClick={e=>{e.stopPropagation();openReservation(d.tenant)}} className="px-1 py-0.5 rounded-md text-[5px] md:text-[7px] font-black text-white truncate mb-0.5 cursor-pointer" style={{gridColumn:`${d.col}/${d.col+1}`,backgroundColor:'#6366f1'}}>
+                              <div key={d.key} onClick={e=>{e.stopPropagation();openReservation(d.tenant)}} className="px-1 py-0.5 rounded-md text-[5px] md:text-[7px] font-black text-white truncate mb-0.5 cursor-pointer" style={{gridColumn:`${d.col}/${d.col+1}`,backgroundColor:'#EF4444'}}>
                                 {d.label}
                               </div>
                             ))}
