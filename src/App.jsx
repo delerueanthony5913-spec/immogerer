@@ -783,8 +783,8 @@ const App = () => {
           rateExit: parseFloat(r.rateExit) || 0,
           timeEntry: r.timeEntry || '09:30',
           timeExit: r.timeExit || '10:30',
-          providerNoteEntry: r.providerNoteEntry || r.providerNote || '',
-          providerNoteExit: r.providerNoteExit || r.providerNote || '',
+          providerNoteEntry: r.providerNoteEntry !== undefined ? r.providerNoteEntry : (r.providerNote || ''),
+          providerNoteExit: r.providerNoteExit !== undefined ? r.providerNoteExit : (r.providerNote || ''),
           hasEntry: r.hasEntry !== false,
           hasExit: r.hasExit !== false
       })) 
