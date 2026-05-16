@@ -1342,29 +1342,30 @@ const App = () => {
                         return { ...r, startCol, endCol };
                       })
                       .sort((a,b) => a.startCol - b.startCol);
-                    const rowEnds = [];
-                    const bars = weekRes.map(bar => {
-                      let row = 0;
-                      while (rowEnds[row] !== undefined && rowEnds[row] >= bar.startCol) row++;
-                      rowEnds[row] = bar.endCol;
-                      return { ...bar, row: row + 1 };
-                    });
-                    const nRows = bars.length ? Math.max(...bars.map(b => b.row)) : 0;
-                    // Dias cleaning events for this week
-                    const weekDias = (agendaReservations||[]).flatMap(t =>
-                      (t.resExpenses||[]).filter(x => x.person?.toLowerCase().includes('dias')).flatMap(exp => {
-                        const evts = [];
-                        if (exp.hasEntry !== false && exp.dateEntry && exp.dateEntry >= weekStart && exp.dateEntry <= weekEnd) {
+                    // Dias events for this week, grouped by reservation id
+                    const diasByRes = {};
+                    (agendaReservations||[]).forEach(t => {
+                      (t.resExpenses||[]).filter(x => x.person?.toLowerCase().includes('dias')).forEach(exp => {
+                        if (exp.hasEntry !== false && exp.dateEntry >= weekStart && exp.dateEntry <= weekEnd) {
                           const si = week.findIndex(d => d.dateStr === exp.dateEntry);
-                          if (si !== -1) evts.push({ key:`${t.id}-e-${exp.id}`, col: si+1, label:`Menage E · ${exp.timeEntry||'09:30'}${exp.hoursEntry ? ` · ${exp.hoursEntry}h` : ''}`, tenant: t });
+                          if (si !== -1) { if (!diasByRes[t.id]) diasByRes[t.id] = []; diasByRes[t.id].push({ key:`${t.id}-e-${exp.id}`, col:si+1, label:`Menage E · ${exp.timeEntry||'09:30'}${exp.hoursEntry?` · ${exp.hoursEntry}h`:''}`, tenant:t }); }
                         }
-                        if (exp.hasExit !== false && exp.dateExit && exp.dateExit >= weekStart && exp.dateExit <= weekEnd) {
+                        if (exp.hasExit !== false && exp.dateExit >= weekStart && exp.dateExit <= weekEnd) {
                           const si = week.findIndex(d => d.dateStr === exp.dateExit);
-                          if (si !== -1) evts.push({ key:`${t.id}-x-${exp.id}`, col: si+1, label:`Menage S · ${exp.timeExit||'10:30'}${exp.hoursExit ? ` · ${exp.hoursExit}h` : ''}`, tenant: t });
+                          if (si !== -1) { if (!diasByRes[t.id]) diasByRes[t.id] = []; diasByRes[t.id].push({ key:`${t.id}-x-${exp.id}`, col:si+1, label:`Menage S · ${exp.timeExit||'10:30'}${exp.hoursExit?` · ${exp.hoursExit}h`:''}`, tenant:t }); }
                         }
-                        return evts;
-                      })
-                    );
+                      });
+                    });
+                    // Build unified item list: reservation row then its Dias row just below
+                    const allItems = [];
+                    let nextRow = 1;
+                    for (const bar of weekRes) {
+                      allItems.push({ ...bar, assignedRow: nextRow, isDias: false });
+                      const resDias = diasByRes[bar.id] || [];
+                      if (resDias.length) { nextRow++; resDias.forEach(d => allItems.push({ ...d, assignedRow: nextRow, isDias: true })); }
+                      nextRow++;
+                    }
+                    const totalRows = nextRow - 1;
                     return (
                       <div key={wi} className="mb-1 md:mb-2">
                         <div className="grid grid-cols-7 gap-1 md:gap-2">
@@ -1378,34 +1379,21 @@ const App = () => {
                             );
                           })}
                         </div>
-                        {nRows > 0 && (
-                          <div className="grid grid-cols-7 gap-x-1 md:gap-x-2 mt-0.5" style={{gridTemplateRows:`repeat(${nRows},auto)`}}>
-                            {bars.map(bar => {
-                              const color = getPropertyColor(bar.propertyId);
-                              return (
-                                <div
-                                  key={bar.id}
-                                  onClick={e=>{e.stopPropagation();openReservation(bar)}}
-                                  className="px-1 md:px-2 py-0.5 rounded-md cursor-pointer mb-0.5 overflow-hidden"
-                                  style={{gridColumn:`${bar.startCol}/${bar.endCol+1}`,gridRow:bar.row,backgroundColor:color+'28',borderLeft:`3px solid ${color}`}}
-                                >
-                                  <div className="text-[6px] md:text-[9px] font-black whitespace-nowrap overflow-hidden" style={{textOverflow:'ellipsis'}}>
-                                    <span className="text-slate-800">{bar.name}</span>
-                                    {bar.comment && <span className="text-slate-400 font-normal"> · {bar.comment}</span>}
-                                    {bar.platform && <span className="text-blue-500"> · {bar.platform}</span>}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                        {weekDias.length > 0 && (
-                          <div className="grid grid-cols-7 gap-x-1 md:gap-x-2 mt-0.5">
-                            {weekDias.map(d => (
-                              <div key={d.key} onClick={e=>{e.stopPropagation();openReservation(d.tenant)}} className="px-1 py-0.5 rounded-md text-[5px] md:text-[7px] font-black text-white truncate mb-0.5 cursor-pointer" style={{gridColumn:`${d.col}/${d.col+1}`,backgroundColor:'#EF4444'}}>
-                                {d.label}
+                        {totalRows > 0 && (
+                          <div className="grid grid-cols-7 gap-x-1 md:gap-x-2 mt-0.5" style={{gridTemplateRows:`repeat(${totalRows},auto)`}}>
+                            {allItems.map(item => item.isDias ? (
+                              <div key={item.key} onClick={e=>{e.stopPropagation();openReservation(item.tenant)}} className="px-1 py-0.5 rounded-md text-[5px] md:text-[7px] font-black text-white truncate mb-0.5 cursor-pointer" style={{gridColumn:`${item.col}/${item.col+1}`,gridRow:item.assignedRow,backgroundColor:'#EF4444'}}>
+                                {item.label}
                               </div>
-                            ))}
+                            ) : (()=>{ const color=getPropertyColor(item.propertyId); return (
+                              <div key={item.id} onClick={e=>{e.stopPropagation();openReservation(item)}} className="px-1 md:px-2 py-0.5 rounded-md cursor-pointer mb-0.5 overflow-hidden" style={{gridColumn:`${item.startCol}/${item.endCol+1}`,gridRow:item.assignedRow,backgroundColor:color+'28',borderLeft:`3px solid ${color}`}}>
+                                <div className="text-[6px] md:text-[9px] font-black whitespace-nowrap overflow-hidden" style={{textOverflow:'ellipsis'}}>
+                                  <span className="text-slate-800">{item.name}</span>
+                                  {item.comment && <span className="text-slate-400 font-normal"> · {item.comment}</span>}
+                                  {item.platform && <span className="text-blue-500"> · {item.platform}</span>}
+                                </div>
+                              </div>
+                            );})())}
                           </div>
                         )}
                       </div>
