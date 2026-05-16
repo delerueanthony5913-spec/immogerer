@@ -1348,11 +1348,11 @@ const App = () => {
                       (t.resExpenses||[]).filter(x => x.person?.toLowerCase().includes('dias')).forEach(exp => {
                         if (exp.hasEntry !== false && exp.dateEntry >= weekStart && exp.dateEntry <= weekEnd) {
                           const si = week.findIndex(d => d.dateStr === exp.dateEntry);
-                          if (si !== -1) { if (!diasByRes[t.id]) diasByRes[t.id] = []; diasByRes[t.id].push({ key:`${t.id}-e-${exp.id}`, col:si+1, label:`Menage E · ${exp.timeEntry||'09:30'}${exp.hoursEntry?` · ${exp.hoursEntry}h`:''}`, tenant:t }); }
+                          if (si !== -1) { if (!diasByRes[t.id]) diasByRes[t.id] = []; diasByRes[t.id].push({ key:`${t.id}-e-${exp.id}`, col:si+1, label:`Ménage Entrée${exp.hoursEntry?` · ${exp.hoursEntry}h`:''}`, tenant:t }); }
                         }
                         if (exp.hasExit !== false && exp.dateExit >= weekStart && exp.dateExit <= weekEnd) {
                           const si = week.findIndex(d => d.dateStr === exp.dateExit);
-                          if (si !== -1) { if (!diasByRes[t.id]) diasByRes[t.id] = []; diasByRes[t.id].push({ key:`${t.id}-x-${exp.id}`, col:si+1, label:`Menage S · ${exp.timeExit||'10:30'}${exp.hoursExit?` · ${exp.hoursExit}h`:''}`, tenant:t }); }
+                          if (si !== -1) { if (!diasByRes[t.id]) diasByRes[t.id] = []; diasByRes[t.id].push({ key:`${t.id}-x-${exp.id}`, col:si+1, label:`Ménage Sortie${exp.hoursExit?` · ${exp.hoursExit}h`:''}`, tenant:t }); }
                         }
                       });
                     });
