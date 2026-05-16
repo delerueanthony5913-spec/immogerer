@@ -1368,15 +1368,15 @@ const App = () => {
                     const totalRows = nextRow - 1;
                     const isOddWeek = wi % 2 === 1;
                     return (
-                      <div key={wi} className={`mb-1 md:mb-2 rounded-xl ${isOddWeek ? 'bg-slate-100/50' : ''}`}>
+                      <div key={wi} className={`mb-2 md:mb-3 rounded-xl border-2 p-1 md:p-1.5 ${isOddWeek ? 'bg-slate-50 border-slate-200' : 'bg-white border-slate-100'}`}>
                         <div className="grid grid-cols-7 gap-1 md:gap-2">
                           {week.map((item, di) => {
                             const isOther = !!item.otherMonth;
                             const isToday = item.dateStr === todayStr;
                             return (
-                              <div key={item.dateStr||di} className={`h-7 md:h-9 border rounded-lg md:rounded-xl px-1 flex flex-col items-start justify-center ${isToday ? 'border-blue-500 bg-blue-100 shadow-sm' : isOther ? 'border-slate-100 bg-slate-50/70' : 'border-slate-100 bg-white'}`}>
-                                <span className={`text-[8px] md:text-[10px] font-black leading-none ${isToday ? 'text-blue-700' : isOther ? 'text-slate-300' : 'text-slate-400'}`}>{item.day}</span>
-                                {isToday && <div className="w-1 h-1 rounded-full bg-blue-500 mt-0.5"></div>}
+                              <div key={item.dateStr||di} className={`h-7 md:h-9 border-2 rounded-lg md:rounded-xl px-1 flex flex-col items-start justify-center ${isToday ? 'border-orange-500 bg-orange-100' : isOther ? 'border-slate-100 bg-slate-50/70' : 'border-slate-100 bg-white'}`}>
+                                <span className={`text-[8px] md:text-[10px] font-black leading-none ${isToday ? 'text-orange-700' : isOther ? 'text-slate-300' : 'text-slate-400'}`}>{item.day}</span>
+                                {isToday && <div className="w-1 h-1 rounded-full bg-orange-500 mt-0.5"></div>}
                               </div>
                             );
                           })}
