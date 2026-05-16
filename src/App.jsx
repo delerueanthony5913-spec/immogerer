@@ -547,6 +547,20 @@ const App = () => {
     for (let i = 1; i <= remaining; i++) { const d = new Date(y, m + 1, i); days.push({ day: d.getDate(), dateStr: fmt(d), otherMonth: true }); }
     return days;
   }, [filterYear, filterMonth]);
+
+  const agendaReservations = useMemo(() => {
+    if (!agendaDays.length) return [];
+    const rangeStart = agendaDays[0]?.dateStr;
+    const rangeEnd = agendaDays[agendaDays.length - 1]?.dateStr;
+    return baseTenants.filter(t => {
+      if (!t.startDate || !t.endDate) return false;
+      if (t.startDate > rangeEnd || t.endDate < rangeStart) return false;
+      if (filterProv !== 'all' && !(t.resExpenses && t.resExpenses.some(e => e.person === filterProv))) return false;
+      if (filterStatus === 'paid') return t.platform === 'En direct' ? !!t.soldeDate : !!t.paymentDate;
+      if (filterStatus === 'pending') return t.platform === 'En direct' ? !t.soldeDate : !t.paymentDate;
+      return true;
+    });
+  }, [baseTenants, agendaDays, filterProv, filterStatus]);
  
   const yearsAvailable = useMemo(() => {
     const years = new Set([new Date().getFullYear()]);
@@ -1310,7 +1324,7 @@ const App = () => {
                     const week = (agendaDays||[]).slice(wi*7, wi*7+7);
                     const weekStart = week[0]?.dateStr;
                     const weekEnd = week[6]?.dateStr;
-                    const weekRes = (reservationsList||[])
+                    const weekRes = (agendaReservations||[])
                       .filter(r => r.startDate <= weekEnd && r.endDate >= weekStart)
                       .map(r => {
                         const si = week.findIndex(d => d.dateStr === r.startDate);
