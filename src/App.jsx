@@ -537,10 +537,14 @@ const App = () => {
   const agendaDays = useMemo(() => {
     const y = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
     const m = filterMonth === 'all' ? new Date().getMonth() : parseInt(filterMonth);
-    const firstDay = new Date(y, m, 1), lastDay = new Date(y, m + 1, 0), days = [];
-    let offset = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
-    for (let i = 0; i < offset; i++) days.push({ empty: true });
-    for (let i = 1; i <= lastDay.getDate(); i++) days.push({ day: i, dateStr: `${y}-${(m+1).toString().padStart(2, '0')}-${i.toString().padStart(2, '0')}` });
+    const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const firstDay = new Date(y, m, 1), lastDay = new Date(y, m + 1, 0);
+    const offset = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
+    const days = [];
+    for (let i = offset - 1; i >= 0; i--) { const d = new Date(y, m, 0 - i); days.push({ day: d.getDate(), dateStr: fmt(d), otherMonth: true }); }
+    for (let i = 1; i <= lastDay.getDate(); i++) days.push({ day: i, dateStr: `${y}-${(m+1).toString().padStart(2,'0')}-${i.toString().padStart(2,'0')}` });
+    const remaining = 42 - days.length;
+    for (let i = 1; i <= remaining; i++) { const d = new Date(y, m + 1, i); days.push({ day: d.getDate(), dateStr: fmt(d), otherMonth: true }); }
     return days;
   }, [filterYear, filterMonth]);
  
