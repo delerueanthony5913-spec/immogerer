@@ -1304,27 +1304,60 @@ const App = () => {
               <div className="bg-white p-4 md:p-6 rounded-[32px] md:rounded-[40px] shadow-2xl overflow-x-auto mx-2 md:mx-0">
                 <div className="min-w-[320px] md:min-w-[700px]">
                   <div className="grid grid-cols-7 text-center font-black text-slate-300 text-[8px] md:text-[10px] uppercase mb-2 md:mb-4">
-                    {['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d=><div key={d}>{d}</div>)}
+                    {['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'].map(d => <div key={d}>{d}</div>)}
                   </div>
-                  <div className="grid grid-cols-7 gap-1 md:gap-2">
-                    {(agendaDays || []).map((item, idx) => {
-                      const isOther = !!item.otherMonth;
-                      const isToday = item.dateStr === todayStr;
-                      const dayRes = (reservationsList || []).filter(r => item.dateStr >= r.startDate && item.dateStr <= r.endDate);
-                      return (
-                        <div key={item.dateStr || idx} className={`h-16 md:h-32 border rounded-xl md:rounded-2xl p-1 md:p-2 flex flex-col ${isToday ? 'border-blue-400 bg-blue-50/20' : isOther ? 'border-slate-100 bg-slate-50/70' : 'border-slate-100 bg-white'}`}>
-                          <span className={`text-[8px] md:text-[10px] font-black ${isToday ? 'text-blue-500' : isOther ? 'text-slate-300' : 'text-slate-400'}`}>{item.day}</span>
-                          <div className="flex-1 space-y-0.5 md:space-y-1 overflow-y-auto no-scrollbar">
-                            {dayRes.map(r => (
-                              <div key={r.id} onClick={e=>{e.stopPropagation();openReservation(r)}} className="text-[6px] md:text-[8px] font-black text-white p-0.5 md:p-1 rounded truncate cursor-pointer leading-tight" style={{backgroundColor: getPropertyColor(r.propertyId), opacity: isOther ? 0.5 : 1}}>
-                                {r.name?.split(' ')[0] || 'Résa'}
+                  {Array.from({ length: Math.ceil((agendaDays||[]).length / 7) }, (_, wi) => {
+                    const week = (agendaDays||[]).slice(wi*7, wi*7+7);
+                    const weekStart = week[0]?.dateStr;
+                    const weekEnd = week[6]?.dateStr;
+                    const weekRes = (reservationsList||[])
+                      .filter(r => r.startDate <= weekEnd && r.endDate >= weekStart)
+                      .map(r => {
+                        const si = week.findIndex(d => d.dateStr === r.startDate);
+                        const ei = week.findIndex(d => d.dateStr === r.endDate);
+                        const startCol = r.startDate <= weekStart ? 1 : (si === -1 ? 1 : si + 1);
+                        const endCol   = r.endDate   >= weekEnd   ? 7 : (ei === -1 ? 7 : ei + 1);
+                        return { ...r, startCol, endCol };
+                      })
+                      .sort((a,b) => a.startCol - b.startCol);
+                    const rowEnds = [];
+                    const bars = weekRes.map(bar => {
+                      let row = 0;
+                      while (rowEnds[row] !== undefined && rowEnds[row] >= bar.startCol) row++;
+                      rowEnds[row] = bar.endCol;
+                      return { ...bar, row: row + 1 };
+                    });
+                    const nRows = bars.length ? Math.max(...bars.map(b => b.row)) : 0;
+                    return (
+                      <div key={wi} className="mb-1 md:mb-2">
+                        <div className="grid grid-cols-7 gap-1 md:gap-2">
+                          {week.map((item, di) => {
+                            const isOther = !!item.otherMonth;
+                            const isToday = item.dateStr === todayStr;
+                            return (
+                              <div key={item.dateStr||di} className={`h-7 md:h-9 border rounded-lg md:rounded-xl px-1 flex items-center ${isToday ? 'border-blue-400 bg-blue-50/20' : isOther ? 'border-slate-100 bg-slate-50/70' : 'border-slate-100 bg-white'}`}>
+                                <span className={`text-[8px] md:text-[10px] font-black ${isToday ? 'text-blue-500' : isOther ? 'text-slate-300' : 'text-slate-400'}`}>{item.day}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {nRows > 0 && (
+                          <div className="grid grid-cols-7 gap-x-1 md:gap-x-2 mt-0.5" style={{gridTemplateRows:`repeat(${nRows},auto)`}}>
+                            {bars.map(bar => (
+                              <div
+                                key={bar.id}
+                                onClick={e=>{e.stopPropagation();openReservation(bar)}}
+                                className="text-white text-[6px] md:text-[9px] font-black px-1 md:px-2 py-0.5 md:py-1 rounded-md truncate cursor-pointer mb-0.5"
+                                style={{gridColumn:`${bar.startCol}/${bar.endCol+1}`,gridRow:bar.row,backgroundColor:getPropertyColor(bar.propertyId)}}
+                              >
+                                {bar.name?.split(' ')[0]||'Résa'}
                               </div>
                             ))}
                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
