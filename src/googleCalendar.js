@@ -67,7 +67,7 @@ export const createCalendarEvent = (calendarId, reservation, propertyName, provi
     buildEvent(reservation, propertyName, providerEmails, colorId), 'all');
 
 export const updateCalendarEvent = (calendarId, eventId, reservation, propertyName, providerEmails, colorId) =>
-  call('PUT', `${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+  call('PATCH', `${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
     buildEvent(reservation, propertyName, providerEmails, colorId), 'all');
 
 export const deleteCalendarEvent = (calendarId, eventId) =>
