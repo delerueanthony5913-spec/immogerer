@@ -144,6 +144,7 @@ const App = () => {
           if (response.access_token) {
             setAccessToken(response.access_token);
             setGoogleConnected(true);
+            gcalCheckDoneRef.current = true;
             syncMissingEvents();
             syncDiasStatuses();
             checkDeletedGcalEvents();
@@ -246,7 +247,10 @@ const App = () => {
       const prop = propertiesRef.current.find(p => p.id === t.propertyId);
       if (!prop?.calendarId) continue;
       try { await getEventAttendees(prop.calendarId, t.googleEventId); }
-      catch (e) { if (e.message === 'CALENDAR_ERROR:404') deleted.push({ tenant: t, prop }); }
+      catch (e) {
+        if (e.message === 'TOKEN_EXPIRED') { gcalCheckDoneRef.current = false; break; }
+        if (e.message === 'CALENDAR_ERROR:404' || e.message === 'CALENDAR_ERROR:410') deleted.push({ tenant: t, prop });
+      }
     }
     if (deleted.length > 0) setGcalDeletedList(deleted);
   };
