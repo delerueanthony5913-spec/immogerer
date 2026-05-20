@@ -852,8 +852,6 @@ const App = () => {
               const evt = await createCalendarEvent(prop.calendarId, d, prop.name, providerEmails, prop.colorId || null);
               if (evt?.id) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', savedId), { googleEventId: evt.id }, { merge: true });
             } catch (e) {}
-          } else {
-            alert('Erreur Google Agenda : ' + calErr.message);
           }
         }
       }

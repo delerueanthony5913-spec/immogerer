@@ -52,7 +52,7 @@ const buildEvent = (reservation, propertyName, providerEmails = {}, colorId = nu
   const endDate = endDateObj.toISOString().split('T')[0];
 
   const event = {
-    summary: `${propertyName} — ${reservation.name}${reservation.comment ? ` · ${reservation.comment}` : ''}`,
+    summary: `${propertyName} — ${reservation.name}${reservation.comment ? ` — ${reservation.comment}` : ''}`,
     description,
     start: { date: reservation.startDate },
     end: { date: endDate },
