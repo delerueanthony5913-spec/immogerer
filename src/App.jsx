@@ -241,17 +241,25 @@ const App = () => {
 
   const checkDeletedGcalEvents = async () => {
     const today = new Date().toISOString().split('T')[0];
-    const toCheck = tenantsRef.current.filter(t => t.googleEventId && t.endDate >= today);
+    const all = tenantsRef.current;
+    const toCheck = all.filter(t => t.googleEventId && t.endDate >= today);
+    console.log('[GCal check] total tenants:', all.length, '| with googleEventId+futur:', toCheck.length, '| today:', today);
+    toCheck.forEach(t => console.log('  ->', t.name, t.endDate, t.googleEventId));
     const deleted = [];
     for (const t of toCheck) {
       const prop = propertiesRef.current.find(p => p.id === t.propertyId);
-      if (!prop?.calendarId) continue;
-      try { await getEventAttendees(prop.calendarId, t.googleEventId); }
+      if (!prop?.calendarId) { console.log('[GCal check] skip (no calendarId):', t.name); continue; }
+      try {
+        await getEventAttendees(prop.calendarId, t.googleEventId);
+        console.log('[GCal check] OK (exists):', t.name);
+      }
       catch (e) {
+        console.log('[GCal check] error:', t.name, e.message);
         if (e.message === 'TOKEN_EXPIRED') { gcalCheckDoneRef.current = false; break; }
         if (e.message === 'CALENDAR_ERROR:404' || e.message === 'CALENDAR_ERROR:410') deleted.push({ tenant: t, prop });
       }
     }
+    console.log('[GCal check] deleted found:', deleted.length);
     if (deleted.length > 0) setGcalDeletedList(deleted);
   };
 
