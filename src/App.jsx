@@ -60,8 +60,10 @@ const App = () => {
   const [importStatus, setImportStatus] = useState('');
   const [reviewList, setReviewList] = useState([]);
  
-  const [quickPayConfig, setQuickPayConfig] = useState(null); 
+  const [quickPayConfig, setQuickPayConfig] = useState(null);
   const [statsDetailConfig, setStatsDetailConfig] = useState(null);
+  const [gcalDeletedAlert, setGcalDeletedAlert] = useState(null);
+  const [gcalDeletedList, setGcalDeletedList] = useState([]);
   const [hasScrolledToNext, setHasScrolledToNext] = useState(false);
 
   const [googleConnected, setGoogleConnected] = useState(() => {
@@ -78,6 +80,7 @@ const App = () => {
   const [attendeeStatuses, setAttendeeStatuses] = useState({});
   const tokenClientRef = useRef(null);
   const renewTimerRef  = useRef(null);
+  const gcalCheckDoneRef = useRef(false);
   const tenantsRef = useRef([]);
   const propertiesRef = useRef([]);
   const providerEmailsRef = useRef({});
@@ -143,6 +146,7 @@ const App = () => {
             setGoogleConnected(true);
             syncMissingEvents();
             syncDiasStatuses();
+            checkDeletedGcalEvents();
             // renouvellement proactif 55 min après réception du token
             clearTimeout(renewTimerRef.current);
             renewTimerRef.current = setTimeout(() => {
@@ -194,6 +198,12 @@ const App = () => {
 
   useEffect(() => { tenantsRef.current = tenants; }, [tenants]);
   useEffect(() => { propertiesRef.current = properties; }, [properties]);
+
+  useEffect(() => {
+    if (!googleConnected || gcalCheckDoneRef.current || tenants.length === 0 || properties.length === 0) return;
+    gcalCheckDoneRef.current = true;
+    checkDeletedGcalEvents();
+  }, [googleConnected, tenants, properties]);
   useEffect(() => { providerEmailsRef.current = providerEmails; }, [providerEmails]);
   useEffect(() => { diasCalendarIdRef.current = diasCalendarId; }, [diasCalendarId]);
 
@@ -226,6 +236,19 @@ const App = () => {
         if (evt?.id) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', t.id), { googleEventId: evt.id }, { merge: true });
       } catch (e) {}
     }
+  };
+
+  const checkDeletedGcalEvents = async () => {
+    const today = new Date().toISOString().split('T')[0];
+    const toCheck = tenantsRef.current.filter(t => t.googleEventId && t.endDate >= today);
+    const deleted = [];
+    for (const t of toCheck) {
+      const prop = propertiesRef.current.find(p => p.id === t.propertyId);
+      if (!prop?.calendarId) continue;
+      try { await getEventAttendees(prop.calendarId, t.googleEventId); }
+      catch (e) { if (e.message === 'CALENDAR_ERROR:404') deleted.push({ tenant: t, prop }); }
+    }
+    if (deleted.length > 0) setGcalDeletedList(deleted);
   };
 
   const syncDiasStatuses = async () => {
@@ -263,21 +286,28 @@ const App = () => {
   const silentRenew = () => tokenClientRef.current?.requestAccessToken({ prompt: '' });
 
   const openReservation = async (t) => {
+    setAttendeeStatuses({});
+    if (getAccessToken()) {
+      const prop = (properties || []).find(p => p.id === t.propertyId);
+      if (t.googleEventId && prop?.calendarId) {
+        try {
+          const evt = await getEventAttendees(prop.calendarId, t.googleEventId);
+          const statuses = {};
+          const attendee = (evt?.attendees || []).find(a => !a.self);
+          if (attendee) statuses[t.googleEventId] = attendee.responseStatus;
+          setAttendeeStatuses(statuses);
+        } catch (e) {
+          if (e.message === 'CALENDAR_ERROR:404') {
+            const prop2 = (properties || []).find(p => p.id === t.propertyId);
+            setGcalDeletedAlert({ tenant: t, prop: prop2 });
+            return;
+          }
+        }
+      }
+    }
     setEditingResId(t.id);
     setFormData(t);
-    setAttendeeStatuses({});
     setIsModalOpen(true);
-    if (!getAccessToken()) return;
-    const prop = (properties || []).find(p => p.id === t.propertyId);
-    const statuses = {};
-
-    if (t.googleEventId && prop?.calendarId) {
-      try {
-        const evt = await getEventAttendees(prop.calendarId, t.googleEventId);
-        const attendee = (evt?.attendees || []).find(a => !a.self);
-        if (attendee) statuses[t.googleEventId] = attendee.responseStatus;
-      } catch (e) {}
-    }
 
     const updatedExpenses = (t.resExpenses || []).map(exp => ({ ...exp }));
     let needsFirebaseUpdate = false;
@@ -813,6 +843,12 @@ const App = () => {
           }
         } catch (calErr) {
           if (calErr.message === 'TOKEN_EXPIRED') { setGoogleConnected(false); silentRenew(); }
+          else if (calErr.message === 'CALENDAR_ERROR:404' && savedId) {
+            try {
+              const evt = await createCalendarEvent(prop.calendarId, d, prop.name, providerEmails, prop.colorId || null);
+              if (evt?.id) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', savedId), { googleEventId: evt.id }, { merge: true });
+            } catch (e) {}
+          }
         }
       }
       if (diasCalendarId && getAccessToken() && prop) {
@@ -1117,12 +1153,14 @@ const App = () => {
  
   // --- RENDU PRINCIPAL DE L'APPLICATION ---
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col md:flex-row font-sans text-slate-900">
-      
+    <div style={{height:'100dvh',overflow:'hidden'}} className="bg-[#F8FAFC] flex flex-col md:flex-row font-sans text-slate-900">
+
       <style>{`
         .hide-scroll::-webkit-scrollbar { display: none; }
         .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
         .snap-always { scroll-snap-stop: always; }
+        .res-table-scroll { height: calc(100dvh - 250px); }
+        .res-table-scroll-mobile { height: calc(100dvh - 320px); }
       `}</style>
  
       <aside className={`fixed md:sticky top-0 left-0 z-50 w-72 h-[100dvh] bg-white border-r transform md:translate-x-0 transition-transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
@@ -1145,8 +1183,98 @@ const App = () => {
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2">{isMobileMenuOpen ? <X /> : <Menu />}</button>
       </div>
  
-      <main className="flex-1 w-full min-w-0 min-h-screen relative flex flex-col overflow-x-hidden">
+      <main className="flex-1 w-full min-w-0 relative flex flex-col overflow-x-hidden">
         
+        {gcalDeletedAlert && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
+            <div className="bg-white p-8 rounded-[40px] shadow-2xl max-w-sm w-full border border-slate-100 flex flex-col gap-6">
+              <div className="text-center">
+                <div className="bg-orange-50 text-orange-500 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><AlertTriangle size={32}/></div>
+                <h3 className="font-black text-xl uppercase tracking-tighter">Supprimée de Google Agenda</h3>
+                <p className="text-sm text-slate-500 mt-3 font-medium">La réservation <span className="font-black text-slate-800">{gcalDeletedAlert.tenant.name}</span> a été supprimée de Google Agenda. Que souhaitez-vous faire ?</p>
+              </div>
+              <div className="flex flex-col gap-3">
+                <button onClick={async () => {
+                  const { tenant, prop } = gcalDeletedAlert;
+                  setGcalDeletedAlert(null);
+                  if (prop?.calendarId && getAccessToken()) {
+                    try {
+                      const evt = await createCalendarEvent(prop.calendarId, tenant, prop.name, providerEmails, prop.colorId || null);
+                      if (evt?.id) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', tenant.id), { googleEventId: evt.id }, { merge: true });
+                    } catch (e) {}
+                  }
+                  setEditingResId(tenant.id);
+                  setFormData({ ...tenant });
+                  setIsModalOpen(true);
+                }} className="w-full p-4 rounded-2xl font-black uppercase text-[10px] text-white bg-blue-600 shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all">
+                  Remettre sur Google Agenda
+                </button>
+                <button onClick={async () => {
+                  const { tenant } = gcalDeletedAlert;
+                  setGcalDeletedAlert(null);
+                  await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', tenant.id));
+                }} className="w-full p-4 rounded-2xl font-black uppercase text-[10px] text-rose-600 bg-rose-50 hover:bg-rose-100 transition-colors">
+                  Supprimer de l'appli
+                </button>
+                <button onClick={() => setGcalDeletedAlert(null)} className="w-full p-3 rounded-2xl font-black uppercase text-[10px] text-slate-400 hover:text-slate-600 transition-colors">
+                  Annuler
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {gcalDeletedList.length > 0 && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
+            <div className="bg-white rounded-[40px] shadow-2xl max-w-lg w-full border border-slate-100 flex flex-col max-h-[90vh] overflow-hidden mx-4">
+              <div className="p-6 border-b flex items-center gap-4">
+                <div className="bg-orange-50 text-orange-500 w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0"><AlertTriangle size={24}/></div>
+                <div>
+                  <h3 className="font-black text-lg uppercase tracking-tighter">Réservations absentes de Google Agenda</h3>
+                  <p className="text-[10px] text-slate-400 uppercase font-black mt-0.5">{gcalDeletedList.length} réservation{gcalDeletedList.length > 1 ? 's' : ''} concernée{gcalDeletedList.length > 1 ? 's' : ''}</p>
+                </div>
+              </div>
+              <div className="overflow-y-auto flex-1 p-4 space-y-3">
+                {gcalDeletedList.map(({ tenant: t, prop }, idx) => (
+                  <div key={t.id} className="bg-slate-50 rounded-[20px] p-4 border border-slate-100">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <div className="font-black text-sm uppercase">{t.name}</div>
+                        <div className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-0.5">{t.platform} · {prop?.name || '--'}</div>
+                      </div>
+                      <div className="font-black text-sm text-slate-800">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</div>
+                    </div>
+                    {t.comment && <div className="text-[10px] italic text-slate-500 mb-2">📝 {t.comment}</div>}
+                    <div className="text-[10px] text-slate-400 font-bold mb-3">{t.startDate} → {t.endDate}</div>
+                    <div className="flex gap-2">
+                      <button onClick={async () => {
+                        try {
+                          const evt = await createCalendarEvent(prop.calendarId, t, prop.name, providerEmails, prop.colorId || null);
+                          if (evt?.id) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', t.id), { googleEventId: evt.id }, { merge: true });
+                        } catch (e) {}
+                        setGcalDeletedList(l => l.filter((_, i) => i !== idx));
+                      }} className="flex-1 py-2 px-3 rounded-xl font-black uppercase text-[9px] text-white bg-blue-600 hover:bg-blue-700 transition-colors">
+                        Remettre sur Agenda
+                      </button>
+                      <button onClick={async () => {
+                        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', t.id));
+                        setGcalDeletedList(l => l.filter((_, i) => i !== idx));
+                      }} className="flex-1 py-2 px-3 rounded-xl font-black uppercase text-[9px] text-rose-600 bg-rose-50 hover:bg-rose-100 transition-colors">
+                        Supprimer de l'appli
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="p-4 border-t">
+                <button onClick={() => setGcalDeletedList([])} className="w-full py-3 rounded-2xl font-black uppercase text-[10px] text-slate-400 hover:text-slate-600 transition-colors">
+                  Ignorer pour cette session
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {quickPayConfig && (
           <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
              <div className="bg-white p-8 rounded-[40px] shadow-2xl max-w-sm w-full border border-slate-100 flex flex-col gap-6 animate-in zoom-in-95">
@@ -1198,12 +1326,12 @@ const App = () => {
         <div 
           ref={scrollContainerRef} 
           onScroll={handleScroll} 
-          className="flex-1 w-full flex overflow-x-auto snap-x snap-mandatory hide-scroll"
+          className="flex-1 w-full flex overflow-x-auto overflow-y-hidden snap-x snap-mandatory hide-scroll"
         >
  
           {/* 1. ONGLETS RESERVATIONS */}
           <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border">
-            <div className="max-w-7xl mx-auto pb-32">
+            <div className="max-w-7xl mx-auto">
                 {!googleConnected && (properties || []).some(p => p.calendarId) && (
                   <div className="mx-2 md:mx-0 mb-4 bg-orange-50 border border-orange-200 text-orange-700 rounded-[16px] px-4 py-3 text-xs font-black uppercase tracking-wide flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
@@ -1225,7 +1353,7 @@ const App = () => {
                    </div>
                 </div>
                 
-                <div className="md:hidden max-h-[70vh] overflow-y-auto custom-scrollbar p-1 rounded-[20px] border border-slate-100 bg-slate-50/50 shadow-inner mx-2 relative">
+                <div className="md:hidden res-table-scroll-mobile overflow-y-auto custom-scrollbar p-1 rounded-[20px] border border-slate-100 bg-slate-50/50 shadow-inner mx-2 relative">
                   <div className="grid grid-cols-1 gap-2.5">
                     {(groupedReservationsList || []).map(item => {
                       if (item.isSeparator) return (<div key={item.id} className="flex items-center justify-center mt-2 mb-0.5"><span className="bg-slate-800 text-white px-4 py-1.5 rounded-[10px] text-[8px] font-black uppercase tracking-[0.2em] shadow-sm">{item.label}</span></div>);
@@ -1270,7 +1398,7 @@ const App = () => {
                 </div>
  
                 <div className="hidden md:block bg-white rounded-[40px] shadow-2xl overflow-hidden border border-slate-100">
-                  <div className="max-h-[70vh] overflow-y-auto custom-scrollbar relative">
+                  <div className="res-table-scroll overflow-y-auto custom-scrollbar relative">
                       <table className="w-full text-left text-xs">
                       <thead className="bg-slate-50 font-black uppercase border-b text-slate-400 sticky top-0 z-20 shadow-sm">
                           <tr><th className="p-4 w-[15%]">Logement</th><th className="p-4 w-[15%]">Client</th><th className="p-4 w-[12%] text-center">Dates</th><th className="p-4 w-[25%]">Notes</th><th className="p-4 w-[18%]">Prestations</th><th className="p-4 text-right">Net</th><th className="p-4 text-center">État</th></tr>
@@ -1320,7 +1448,7 @@ const App = () => {
           </div>
  
           {/* 2. ONGLET AGENDA */}
-          <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border">
+          <div className="flex-none w-full max-w-full overflow-y-auto snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border">
             <div className="max-w-7xl mx-auto pb-32">
               <div className="flex justify-between items-center mx-2 md:mx-0 mb-6"><div><h2 className="text-2xl md:text-3xl font-black uppercase">Agenda</h2></div><div className="flex items-center gap-4 bg-white px-4 py-2 rounded-2xl shadow-lg"><button onClick={()=>handleMonthChange('prev')}><ChevronLeft/></button><div className="text-center font-black min-w-[120px] uppercase text-xs">{['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][filterMonth==='all'?new Date().getMonth():parseInt(filterMonth)]}</div><button onClick={()=>handleMonthChange('next')}><ChevronRight/></button></div></div>
               <div className="bg-white p-4 md:p-6 rounded-[32px] md:rounded-[40px] shadow-2xl overflow-x-auto mx-2 md:mx-0">
@@ -1407,7 +1535,7 @@ const App = () => {
           </div>
  
           {/* 3. ONGLET STATISTIQUES */}
-          <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border">
+          <div className="flex-none w-full max-w-full overflow-y-auto snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border">
              <div className="max-w-7xl mx-auto">
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mx-2 md:mx-0 mb-6">
                    <div><h2 className="text-3xl md:text-4xl font-black uppercase text-slate-900 tracking-tighter leading-none mb-2">Statistiques</h2><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tableau de bord interactif</p></div>
@@ -1417,7 +1545,7 @@ const App = () => {
           </div>
  
           {/* 4. ONGLET FINANCES */}
-          <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border">
+          <div className="flex-none w-full max-w-full overflow-y-auto snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border">
              <div className="max-w-7xl mx-auto pb-32 space-y-10">
               <h2 className="text-3xl font-black uppercase mx-2 md:mx-0">Comptabilité</h2>
               <div className="bg-white rounded-[24px] md:rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100 mx-2 md:mx-0">
@@ -1480,7 +1608,7 @@ const App = () => {
           </div>
  
           {/* 5. ONGLET SETTINGS */}
-          <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border">
+          <div className="flex-none w-full max-w-full overflow-y-auto snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border">
             <div className="max-w-7xl mx-auto pb-32 space-y-10">
               <h2 className="text-3xl font-black uppercase mx-2 md:mx-0">Paramètres</h2>
               <div className="bg-white p-8 rounded-[40px] border-2 border-dashed shadow-xl flex flex-col items-center justify-center text-center mx-2 md:mx-0">
