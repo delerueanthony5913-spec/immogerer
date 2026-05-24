@@ -64,6 +64,7 @@ const App = () => {
   const [statsDetailConfig, setStatsDetailConfig] = useState(null);
   const [gcalDeletedAlert, setGcalDeletedAlert] = useState(null);
   const [gcalDeletedList, setGcalDeletedList] = useState([]);
+  const [gcalStatusNotif, setGcalStatusNotif] = useState([]);
   const [hasScrolledToNext, setHasScrolledToNext] = useState(false);
 
   const [googleConnected, setGoogleConnected] = useState(() => {
@@ -80,6 +81,7 @@ const App = () => {
   const [attendeeStatuses, setAttendeeStatuses] = useState({});
   const tokenClientRef = useRef(null);
   const renewTimerRef  = useRef(null);
+  const syncIntervalRef = useRef(null);
   const gcalCheckDoneRef = useRef(false);
   const tenantsRef = useRef([]);
   const propertiesRef = useRef([]);
@@ -146,7 +148,7 @@ const App = () => {
             setGoogleConnected(true);
             gcalCheckDoneRef.current = true;
             syncMissingEvents();
-            syncDiasStatuses();
+            syncAllStatuses();
             checkDeletedGcalEvents();
             // renouvellement proactif 55 min après réception du token
             clearTimeout(renewTimerRef.current);
@@ -209,6 +211,12 @@ const App = () => {
   useEffect(() => { diasCalendarIdRef.current = diasCalendarId; }, [diasCalendarId]);
 
   useEffect(() => {
+    if (!googleConnected) { clearInterval(syncIntervalRef.current); return; }
+    syncIntervalRef.current = setInterval(() => { syncAllStatuses(); }, 5 * 60 * 1000);
+    return () => clearInterval(syncIntervalRef.current);
+  }, [googleConnected]);
+
+  useEffect(() => {
     if (!user || user.uid === 'local-test-user' || diasMigrationDone !== false) return;
     const runMigration = async () => {
       const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'tenants'));
@@ -257,32 +265,74 @@ const App = () => {
 
   const syncDiasStatuses = async () => {
     const calId = diasCalendarIdRef.current;
-    if (!calId) return;
+    if (!calId) return [];
+    const notifications = [];
     for (const t of tenantsRef.current) {
       const diasExps = (t.resExpenses || []).filter(x => x.person?.toLowerCase().includes('dias'));
       if (!diasExps.length) continue;
       const updates = diasExps.map(e => ({ ...e }));
       let changed = false;
+      const tenantChanges = [];
       for (const exp of updates) {
         if (exp.googleDiasEntryId && exp.googleDiasEntryStatus !== 'accepted') {
           try {
             const evt = await getEventAttendees(calId, exp.googleDiasEntryId);
             const att = (evt?.attendees || []).find(a => !a.self);
-            if (att && att.responseStatus !== exp.googleDiasEntryStatus) { exp.googleDiasEntryStatus = att.responseStatus; changed = true; }
+            if (att && att.responseStatus !== exp.googleDiasEntryStatus) {
+              tenantChanges.push({ person: exp.person, type: 'ENTRÉE', oldStatus: exp.googleDiasEntryStatus, newStatus: att.responseStatus });
+              exp.googleDiasEntryStatus = att.responseStatus;
+              changed = true;
+            }
           } catch (e) {}
         }
         if (exp.googleDiasExitId && exp.googleDiasExitStatus !== 'accepted') {
           try {
             const evt = await getEventAttendees(calId, exp.googleDiasExitId);
             const att = (evt?.attendees || []).find(a => !a.self);
-            if (att && att.responseStatus !== exp.googleDiasExitStatus) { exp.googleDiasExitStatus = att.responseStatus; changed = true; }
+            if (att && att.responseStatus !== exp.googleDiasExitStatus) {
+              tenantChanges.push({ person: exp.person, type: 'SORTIE', oldStatus: exp.googleDiasExitStatus, newStatus: att.responseStatus });
+              exp.googleDiasExitStatus = att.responseStatus;
+              changed = true;
+            }
           } catch (e) {}
         }
       }
       if (!changed) continue;
+      const prop = propertiesRef.current.find(p => p.id === t.propertyId);
+      if (tenantChanges.length > 0) notifications.push({ tenant: t, prop, changes: tenantChanges });
       const newExpenses = (t.resExpenses || []).map(e => updates.find(u => u.id === e.id) || e);
       try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', t.id), { resExpenses: newExpenses }, { merge: true }); } catch (e) {}
     }
+    return notifications;
+  };
+
+  const syncNonDiasStatuses = async () => {
+    const notifications = [];
+    const today = new Date().toISOString().split('T')[0];
+    for (const t of tenantsRef.current) {
+      if (!t.googleEventId || (t.endDate && t.endDate < today)) continue;
+      const prop = propertiesRef.current.find(p => p.id === t.propertyId);
+      if (!prop?.calendarId) continue;
+      const nonDiasExps = (t.resExpenses || []).filter(e => e.person && !e.person.toLowerCase().includes('dias'));
+      if (!nonDiasExps.length) continue;
+      try {
+        const evt = await getEventAttendees(prop.calendarId, t.googleEventId);
+        const attendee = (evt?.attendees || []).find(a => !a.self);
+        if (attendee && attendee.responseStatus !== t.googleEventStatus) {
+          const personName = nonDiasExps[0]?.person || 'Prestataire';
+          notifications.push({ tenant: t, prop, changes: [{ person: personName, type: null, oldStatus: t.googleEventStatus, newStatus: attendee.responseStatus }] });
+          try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', t.id), { googleEventStatus: attendee.responseStatus }, { merge: true }); } catch (e) {}
+        }
+      } catch (e) {}
+    }
+    return notifications;
+  };
+
+  const syncAllStatuses = async () => {
+    if (!getAccessToken()) return;
+    const [diasNotifs, nonDiasNotifs] = await Promise.all([syncDiasStatuses(), syncNonDiasStatuses()]);
+    const all = [...diasNotifs, ...nonDiasNotifs];
+    if (all.length > 0) setGcalStatusNotif(n => [...n, ...all]);
   };
 
   const signInGoogle = () => tokenClientRef.current?.requestAccessToken();
@@ -1273,6 +1323,43 @@ const App = () => {
               <div className="p-4 border-t">
                 <button onClick={() => setGcalDeletedList([])} className="w-full py-3 rounded-2xl font-black uppercase text-[10px] text-slate-400 hover:text-slate-600 transition-colors">
                   Ignorer pour cette session
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {gcalStatusNotif.length > 0 && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
+            <div className="bg-white rounded-[40px] shadow-2xl max-w-sm w-full border border-slate-100 flex flex-col max-h-[80vh] overflow-hidden mx-4">
+              <div className="p-6 border-b flex items-center gap-4">
+                <div className="bg-emerald-50 text-emerald-500 w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0"><CheckCircle size={24}/></div>
+                <div>
+                  <h3 className="font-black text-lg uppercase tracking-tighter">Réponses Prestataires</h3>
+                  <p className="text-[10px] text-slate-400 uppercase font-black mt-0.5">{gcalStatusNotif.length} mise{gcalStatusNotif.length > 1 ? 's' : ''} à jour Google Agenda</p>
+                </div>
+              </div>
+              <div className="overflow-y-auto flex-1 p-4 space-y-3">
+                {gcalStatusNotif.map((notif, idx) => (
+                  <div key={idx} className="bg-slate-50 rounded-[20px] p-4 border border-slate-100">
+                    <div className="font-black text-sm uppercase">{notif.tenant?.name}</div>
+                    <div className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-0.5 mb-2">{notif.prop?.name || '--'}</div>
+                    {notif.changes.map((c, ci) => (
+                      <div key={ci} className="flex items-center gap-2 mt-1">
+                        {c.newStatus === 'accepted' && <CheckCircle size={14} className="text-emerald-500 flex-shrink-0"/>}
+                        {c.newStatus === 'declined' && <X size={14} className="text-red-500 flex-shrink-0"/>}
+                        {c.newStatus !== 'accepted' && c.newStatus !== 'declined' && <Mail size={14} className="text-orange-400 flex-shrink-0"/>}
+                        <span className="text-[11px] font-bold text-slate-700">
+                          {c.person}{c.type ? ` (${c.type})` : ''} — {c.newStatus === 'accepted' ? 'Acceptée' : c.newStatus === 'declined' ? 'Refusée' : 'En attente'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+              <div className="p-4 border-t">
+                <button onClick={() => setGcalStatusNotif([])} className="w-full py-3 rounded-2xl font-black uppercase text-[10px] text-slate-400 hover:text-slate-600 transition-colors">
+                  OK
                 </button>
               </div>
             </div>
