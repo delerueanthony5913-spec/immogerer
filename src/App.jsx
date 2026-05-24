@@ -5,7 +5,7 @@ import {
   Key, Lock, Loader2, Filter, List, CalendarRange, BarChart2, Calculator, Settings,
   Menu, X, Euro, Search, ArrowRight, LocateFixed, ChevronLeft, ChevronRight,
   Mail, CheckCircle, Clock, TrendingUp, TrendingDown, UploadCloud, AlertTriangle,
-  Check, Trash2, CalendarCheck, Calendar as CalendarIcon
+  Check, Trash2, CalendarCheck, Calendar as CalendarIcon, FileText
 } from 'lucide-react';
 
 import { auth, db, appId } from './firebaseConfig';
@@ -14,6 +14,7 @@ import DonutChart from './DonutChart';
 import ComparisonChart from './ComparisonChart';
 import { getAccessToken, setAccessToken, clearAccessToken, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, createDiasEvent, updateDiasEvent, deleteDiasEvent, getEventAttendees } from './googleCalendar';
 import Statistiques from './Statistiques';
+import ContratModal from './ContratModal';
 // --- COMPOSANT PRINCIPAL ---
 const App = () => {
   // 1. ETATS GLOBAUX & HOOKS
@@ -46,7 +47,7 @@ const App = () => {
     propertyId: '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', 
     platform: 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', 
     bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '',
-    acompte1Amount: '', acompte1Date: '', acompte2Amount: '', acompte2Date: '', soldeAmount: '', soldeDate: ''
+    acompte1Amount: '', acompte1Date: '', acompte1DueDate: '', acompte2Amount: '', acompte2Date: '', acompte2DueDate: '', soldeAmount: '', soldeDate: '', soldeDueDate: ''
   });
  
   const [inputPlat, setInputPlat] = useState('');
@@ -65,6 +66,7 @@ const App = () => {
   const [gcalDeletedAlert, setGcalDeletedAlert] = useState(null);
   const [gcalDeletedList, setGcalDeletedList] = useState([]);
   const [gcalStatusNotif, setGcalStatusNotif] = useState([]);
+  const [contratModalData, setContratModalData] = useState(null);
   const [hasScrolledToNext, setHasScrolledToNext] = useState(false);
 
   const [googleConnected, setGoogleConnected] = useState(() => {
@@ -1916,17 +1918,26 @@ const App = () => {
                        <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
                            <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">Acompte 1</label>
                            <input type="number" step="0.01" value={formData.acompte1Amount || ''} onChange={e => setFormData({ ...formData, acompte1Amount: e.target.value })} placeholder="Montant €" className="w-full p-3 border border-slate-100 rounded-xl font-black mb-2 text-slate-700 outline-none" />
-                           <input type="date" value={formData.acompte1Date || ''} onChange={e => setFormData({ ...formData, acompte1Date: e.target.value })} className="w-full p-3 border border-slate-100 rounded-xl font-black text-slate-500 outline-none cursor-pointer" />
+                           <label className="text-[9px] font-black uppercase text-slate-300 mb-1 block">Date reçu</label>
+                           <input type="date" value={formData.acompte1Date || ''} onChange={e => setFormData({ ...formData, acompte1Date: e.target.value })} className="w-full p-3 border border-slate-100 rounded-xl font-black text-slate-500 outline-none cursor-pointer mb-2" />
+                           <label className="text-[9px] font-black uppercase text-blue-400 mb-1 block">Date limite (contrat)</label>
+                           <input type="date" value={formData.acompte1DueDate || ''} onChange={e => setFormData({ ...formData, acompte1DueDate: e.target.value })} className="w-full p-3 border border-blue-100 rounded-xl font-black text-blue-500 outline-none cursor-pointer bg-blue-50/30" />
                        </div>
                        <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
                            <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">Acompte 2</label>
                            <input type="number" step="0.01" value={formData.acompte2Amount || ''} onChange={e => setFormData({ ...formData, acompte2Amount: e.target.value })} placeholder="Montant €" className="w-full p-3 border border-slate-100 rounded-xl font-black mb-2 text-slate-700 outline-none" />
-                           <input type="date" value={formData.acompte2Date || ''} onChange={e => setFormData({ ...formData, acompte2Date: e.target.value })} className="w-full p-3 border border-slate-100 rounded-xl font-black text-slate-500 outline-none cursor-pointer" />
+                           <label className="text-[9px] font-black uppercase text-slate-300 mb-1 block">Date reçu</label>
+                           <input type="date" value={formData.acompte2Date || ''} onChange={e => setFormData({ ...formData, acompte2Date: e.target.value })} className="w-full p-3 border border-slate-100 rounded-xl font-black text-slate-500 outline-none cursor-pointer mb-2" />
+                           <label className="text-[9px] font-black uppercase text-blue-400 mb-1 block">Date limite (contrat)</label>
+                           <input type="date" value={formData.acompte2DueDate || ''} onChange={e => setFormData({ ...formData, acompte2DueDate: e.target.value })} className="w-full p-3 border border-blue-100 rounded-xl font-black text-blue-500 outline-none cursor-pointer bg-blue-50/30" />
                        </div>
                        <div className="bg-emerald-50/50 p-4 rounded-3xl border border-emerald-100 shadow-sm">
                            <label className="text-[10px] font-black uppercase text-emerald-600 mb-2 block">Solde (Validation)</label>
                            <input type="number" step="0.01" value={formData.soldeAmount || ''} onChange={e => setFormData({ ...formData, soldeAmount: e.target.value })} placeholder="Montant €" className="w-full p-3 border border-emerald-200 rounded-xl font-black mb-2 text-emerald-700 outline-none bg-white" />
-                           <input type="date" value={formData.soldeDate || ''} onChange={e => setFormData({ ...formData, soldeDate: e.target.value })} className="w-full p-3 border border-emerald-200 rounded-xl font-black text-emerald-700 outline-none cursor-pointer bg-white" />
+                           <label className="text-[9px] font-black uppercase text-slate-300 mb-1 block">Date reçu</label>
+                           <input type="date" value={formData.soldeDate || ''} onChange={e => setFormData({ ...formData, soldeDate: e.target.value })} className="w-full p-3 border border-emerald-200 rounded-xl font-black text-emerald-700 outline-none cursor-pointer bg-white mb-2" />
+                           <label className="text-[9px] font-black uppercase text-blue-400 mb-1 block">Date limite (contrat)</label>
+                           <input type="date" value={formData.soldeDueDate || ''} onChange={e => setFormData({ ...formData, soldeDueDate: e.target.value })} className="w-full p-3 border border-blue-100 rounded-xl font-black text-blue-500 outline-none cursor-pointer bg-blue-50/30" />
                        </div>
                     </div>
                   </div>
@@ -2126,8 +2137,13 @@ const App = () => {
                        {formData.platform === 'En direct' ? (parseFloat(formData?.grossAmount) || 0).toFixed(2) : (nModale - curChargesModale).toFixed(2)}€
                      </p>
                  </div>
-                 <div className="flex items-center gap-4 w-full md:w-auto">
+                 <div className="flex items-center gap-4 w-full md:w-auto flex-wrap">
                    {editingResId && <button type="button" onClick={() => deleteRes(editingResId)} className="p-4 text-rose-500 bg-rose-50 rounded-[24px] hover:bg-rose-500 hover:text-white transition-colors"><Trash2 size={24}/></button>}
+                   {formData.platform === 'En direct' && (() => { const prop = (properties || []).find(p => p.id === formData.propertyId); return prop?.name?.toUpperCase().includes('CADEL'); })() && (
+                     <button type="button" onClick={() => { const prop = (properties || []).find(p => p.id === formData.propertyId); setContratModalData({ tenant: formData, property: prop }); }} className="flex items-center gap-2 px-6 py-5 rounded-[24px] font-black uppercase tracking-[2px] text-[11px] text-blue-600 bg-blue-50 hover:bg-blue-100 transition-all border border-blue-100">
+                       <FileText size={18}/> Contrat
+                     </button>
+                   )}
                    <button type="submit" className="w-full md:w-auto bg-blue-600 px-12 py-5 rounded-[24px] font-black uppercase tracking-[2px] shadow-xl hover:-translate-y-1 transition-all">Enregistrer</button>
                  </div>
               </div>
@@ -2135,8 +2151,19 @@ const App = () => {
           </div>
         </div>
       )}
+      {contratModalData && (
+        <ContratModal
+          tenant={contratModalData.tenant}
+          property={contratModalData.property}
+          providerEmails={providerEmails}
+          onClose={() => setContratModalData(null)}
+          onSaved={(url, name) => {
+            setContratModalData(null);
+          }}
+        />
+      )}
     </div>
   );
 };
- 
+
 export default App;
