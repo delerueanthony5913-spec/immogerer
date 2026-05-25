@@ -5,11 +5,10 @@ import {
   Key, Lock, Loader2, Filter, List, CalendarRange, BarChart2, Calculator, Settings,
   Menu, X, Euro, Search, ArrowRight, LocateFixed, ChevronLeft, ChevronRight,
   Mail, CheckCircle, Clock, TrendingUp, TrendingDown, UploadCloud, AlertTriangle,
-  Check, Trash2, CalendarCheck, Calendar as CalendarIcon, FileText, Paperclip, ExternalLink
+  Check, Trash2, CalendarCheck, Calendar as CalendarIcon, FileText
 } from 'lucide-react';
 
-import { auth, db, storage, appId } from './firebaseConfig';
-import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { auth, db, appId } from './firebaseConfig';
 import { CHART_COLORS, TIME_SLOTS, isSundayOrHoliday } from './utils';
 import DonutChart from './DonutChart';
 import ComparisonChart from './ComparisonChart';
@@ -68,8 +67,6 @@ const App = () => {
   const [gcalDeletedList, setGcalDeletedList] = useState([]);
   const [gcalStatusNotif, setGcalStatusNotif] = useState([]);
   const [contratModalData, setContratModalData] = useState(null);
-  const [attachUploading, setAttachUploading] = useState(false);
-  const [attachError, setAttachError] = useState('');
   const [hasScrolledToNext, setHasScrolledToNext] = useState(false);
 
   const [googleConnected, setGoogleConnected] = useState(() => {
@@ -828,40 +825,6 @@ const App = () => {
     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), n, { merge: true });
   };
  
-  const uploadAttachment = async (file) => {
-    if (!editingResId) return;
-    setAttachUploading(true);
-    setAttachError('');
-    try {
-      const sRef = storageRef(storage, `reservations/${editingResId}/${file.name}`);
-      const timeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Délai dépassé — vérifiez les règles Firebase Storage (Console → Storage → Rules)')), 20000)
-      );
-      await Promise.race([uploadBytes(sRef, file), timeout]);
-      const url = await getDownloadURL(sRef);
-      const att = { name: file.name, url, uploadedAt: new Date().toISOString() };
-      const newAtts = [...(formData.attachments || []), att];
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', editingResId), { attachments: newAtts }, { merge: true });
-      setFormData(f => ({ ...f, attachments: newAtts }));
-    } catch (e) {
-      setAttachError(e.message);
-    } finally {
-      setAttachUploading(false);
-    }
-  };
-
-  const deleteAttachment = async (att) => {
-    if (!editingResId || !window.confirm(`Supprimer "${att.name}" ?`)) return;
-    try {
-      await deleteObject(storageRef(storage, `reservations/${editingResId}/${att.name}`)).catch(() => {});
-      const newAtts = (formData.attachments || []).filter(a => a.url !== att.url);
-      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', editingResId), { attachments: newAtts }, { merge: true });
-      setFormData(f => ({ ...f, attachments: newAtts }));
-    } catch (e) {
-      alert('Erreur suppression : ' + e.message);
-    }
-  };
-
   const saveRes = async (e) => {
     e.preventDefault();
     if (!formData.propertyId) { alert("⚠️ Vous devez sélectionner un Logement."); return; }
@@ -2157,40 +2120,6 @@ const App = () => {
                   })}
               </div>
               
-              {editingResId && (
-                <div className="p-5 md:p-6 rounded-[32px] border border-slate-200 bg-slate-50 shadow-sm">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2"><Paperclip size={13}/> Pièces jointes</h4>
-                    <label className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest px-4 py-2 rounded-2xl cursor-pointer transition-all ${attachUploading ? 'bg-slate-200 text-slate-400' : 'bg-blue-600 text-white hover:bg-blue-700'}`}>
-                      {attachUploading ? <Loader2 size={12} className="animate-spin"/> : <UploadCloud size={12}/>}
-                      {attachUploading ? 'Envoi...' : 'Ajouter'}
-                      <input type="file" className="hidden" disabled={attachUploading} onChange={e => { if (e.target.files[0]) uploadAttachment(e.target.files[0]); e.target.value = ''; }}/>
-                    </label>
-                  </div>
-                  {attachError && (
-                    <div className="bg-rose-50 border border-rose-200 rounded-2xl px-3 py-2 mb-2 text-[9px] font-bold text-rose-600 flex items-start gap-2">
-                      <AlertTriangle size={11} className="flex-shrink-0 mt-0.5"/>
-                      <span>{attachError}</span>
-                    </div>
-                  )}
-                  {(formData.attachments || []).length === 0 ? (
-                    <p className="text-[9px] text-slate-400 font-black uppercase text-center py-2">Aucun fichier</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {(formData.attachments || []).map((att, i) => (
-                        <div key={i} className="flex items-center gap-2 bg-white rounded-2xl border border-slate-100 px-3 py-2">
-                          <Paperclip size={11} className="text-slate-400 flex-shrink-0"/>
-                          <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex-1 text-[9px] font-black text-blue-600 hover:underline truncate flex items-center gap-1 min-w-0">
-                            <span className="truncate">{att.name}</span><ExternalLink size={9} className="flex-shrink-0"/>
-                          </a>
-                          <button type="button" onClick={() => deleteAttachment(att)} className="text-rose-400 hover:text-rose-600 flex-shrink-0 p-1"><Trash2 size={12}/></button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
               {formData.platform !== 'En direct' && (
                 <div className={`p-6 md:p-8 rounded-[32px] md:rounded-[40px] border-2 flex flex-col md:flex-row items-center justify-between transition-all shadow-xl gap-4 ${formData.paymentDate ? 'bg-emerald-50/50 border-emerald-100' : 'bg-orange-50 border-orange-100'}`}>
                     <div className="text-center md:text-left">
