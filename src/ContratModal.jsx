@@ -106,10 +106,10 @@ li{margin-bottom:5px}
       ${form.tenantEmail ? `Email : ${form.tenantEmail}` : '&nbsp;'}
     </div>
   </div>
-  ${form.contactName && form.contactPhone ? `<div class="partie">
-    <div class="partie-lbl">Contact sur place</div>
-    <div class="partie-name">${form.contactName}</div>
-    <div class="partie-detail">Tél : ${form.contactPhone}</div>
+  ${form.contactName && form.contactPhone ? `<div class="partie" style="background:#fefce8;border-color:#fde68a">
+    <div class="partie-lbl" style="color:#92400e">Contact sur place</div>
+    <div class="partie-name" style="text-transform:uppercase;color:#78350f">${form.contactName}</div>
+    <div class="partie-detail" style="color:#92400e">Tél : ${form.contactPhone}</div>
   </div>` : ''}
 </div>
 <hr>
@@ -117,7 +117,6 @@ li{margin-bottom:5px}
 <div class="intro">
 <p>Madame, Monsieur,</p>
 <p>Suite à votre demande, nous avons le plaisir de vous adresser le contrat de location suivant.</p>
-<p>Si cette proposition vous convient, merci de nous retourner un exemplaire signé avec la mention <strong>« Lu et approuvé »</strong>, accompagné du règlement correspondant.</p>
 <p>Nous espérons vous accueillir très prochainement et vous souhaitons un excellent séjour.</p>
 </div>
 
@@ -167,7 +166,7 @@ ${validCautions.length > 0 ? `<p class="hl"><strong>Cautions demandées à l\'ar
 </table>
 </div>
 
-<h2>Signature</h2>
+<h2 style="page-break-before:always;break-before:always">Signature</h2>
 <p>Veuillez dater et signer ci-dessous avec la mention <strong>« Lu et approuvé »</strong> :</p>
 <div class="sigs">
 <div class="sig"><div class="sig-lbl">Le locataire :</div><div class="sig-name">${tenant.name || ''}</div></div>
