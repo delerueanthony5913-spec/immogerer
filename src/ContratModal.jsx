@@ -160,14 +160,14 @@ ${form.specialNotes ? `<h2>À savoir</h2><ul>${form.specialNotes.split('\n').fil
 <p><strong>Assurance</strong> — Le locataire déclare être couvert par une assurance responsabilité civile ou villégiature pour toute la durée du séjour.</p>
 </div>
 
-<h2>La réservation</h2>
+<h2 style="page-break-before:always;break-before:always">La réservation</h2>
 ${a1 > 0 ? `<p>Un acompte de <strong>${a1.toFixed(0)} €</strong> par virement est demandé pour bloquer la réservation${tenant.acompte1DueDate ? `, à régler avant le <strong>${fmt(tenant.acompte1DueDate)}</strong>` : ''}.</p><p><em>(Non remboursable en cas d'annulation par vos soins)</em></p>` : ''}
 ${a2 > 0 ? `<p>Un deuxième acompte de <strong>${a2.toFixed(0)} €</strong> par virement est demandé${tenant.acompte2DueDate ? `, à régler avant le <strong>${fmt(tenant.acompte2DueDate)}</strong>` : ''}.</p>` : ''}
 ${s > 0 ? (form.soldeMode === 'main_propre' ? `<p>Le solde de <strong>${s.toFixed(0)} €</strong> est à remettre en mains propres le jour de votre arrivée.</p>` : `<p>Le solde de <strong>${s.toFixed(0)} €</strong> sera à régler ${soldeModeText}${tenant.soldeDueDate ? ` avant le <strong>${fmt(tenant.soldeDueDate)}</strong>` : ''}.</p>`) : ''}
 ${validCautions.length > 0 ? `<p class="hl"><strong>Cautions demandées à l\'arrivée :</strong> ${validCautions.map(c => `${c.label} : <strong>${c.amount} €</strong>`).join(' — ')}<br><span style="font-style:italic">(Restituées au départ. En cas de dégradations constatées, elles pourront être conservées partiellement ou totalement.)</span></p>` : ''}
 <p>La réservation sera confirmée à réception ${a1 > 0 || a2 > 0 ? 'de l\'acompte' : 'du règlement intégral'} et du présent contrat daté et signé avec la mention <strong>« Lu et approuvé »</strong>. Tant que ces éléments ne sont pas reçus, le logement reste disponible à la location et la réservation n'est pas garantie.</p>
 
-<h2 style="page-break-before:always;break-before:always">Coordonnées bancaires (RIB)</h2>
+<h2>Coordonnées bancaires (RIB)</h2>
 <div class="rib">
 <table>
 <tr><td>Titulaire</td><td>Anthony et Camille DELERUE</td></tr>
