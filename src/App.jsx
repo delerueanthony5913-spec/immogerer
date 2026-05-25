@@ -2140,8 +2140,9 @@ const App = () => {
                  <div className="flex items-center gap-4 w-full md:w-auto flex-wrap">
                    {editingResId && <button type="button" onClick={() => deleteRes(editingResId)} className="p-4 text-rose-500 bg-rose-50 rounded-[24px] hover:bg-rose-500 hover:text-white transition-colors"><Trash2 size={24}/></button>}
                    {formData.platform === 'En direct' && (() => { const prop = (properties || []).find(p => p.id === formData.propertyId); return prop?.name?.toUpperCase().includes('CADEL'); })() && (
-                     <button type="button" onClick={() => { const prop = (properties || []).find(p => p.id === formData.propertyId); setContratModalData({ tenant: formData, property: prop }); }} className="flex items-center gap-2 px-6 py-5 rounded-[24px] font-black uppercase tracking-[2px] text-[11px] text-blue-600 bg-blue-50 hover:bg-blue-100 transition-all border border-blue-100">
-                       <FileText size={18}/> Contrat
+                     <button type="button" onClick={() => { const prop = (properties || []).find(p => p.id === formData.propertyId); setContratModalData({ tenant: formData, property: prop }); }}
+                       className={`flex items-center gap-2 px-6 py-5 rounded-[24px] font-black uppercase tracking-[2px] text-[11px] transition-all border ${formData.contrat ? 'text-green-700 bg-green-50 border-green-200 hover:bg-green-100' : 'text-blue-600 bg-blue-50 border-blue-100 hover:bg-blue-100'}`}>
+                       <FileText size={18}/> {formData.contrat ? 'Contrat ✓' : 'Contrat'}
                      </button>
                    )}
                    <button type="submit" className="w-full md:w-auto bg-blue-600 px-12 py-5 rounded-[24px] font-black uppercase tracking-[2px] shadow-xl hover:-translate-y-1 transition-all">Enregistrer</button>
@@ -2157,8 +2158,13 @@ const App = () => {
           property={contratModalData.property}
           providerEmails={providerEmails}
           onClose={() => setContratModalData(null)}
-          onSaved={(url, name) => {
-            setContratModalData(null);
+          savedData={contratModalData.tenant?.contrat}
+          onSave={async (contratData) => {
+            if (!editingResId) return;
+            try {
+              await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', editingResId), { contrat: contratData }, { merge: true });
+              setFormData(f => ({ ...f, contrat: contratData }));
+            } catch (e) {}
           }}
         />
       )}

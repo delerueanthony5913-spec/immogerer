@@ -16,7 +16,6 @@ const CADELIO_EQUIPMENT = [
   '2 balcons',
   'Parking gratuit à l\'entrée de la résidence',
   'Rangement à skis sécurisé',
-  'Le linge de lit, serviettes et torchons ne sont pas compris (disponibles en option)',
 ];
 
 const fmt = (d) => {
@@ -114,6 +113,7 @@ ${form.cleaningBy === 'inclus' ? '<p>Les frais de ménage sont inclus dans le pr
 
 <h2>Dans l'appartement vous trouverez :</h2>
 <ul>${CADELIO_EQUIPMENT.map(e => `<li>${e}</li>`).join('')}</ul>
+<p style="font-size:9.5pt;background:#fef9c3;border-left:3px solid #ca8a04;padding:7px 12px;margin:8px 0;color:#713f12">Le linge de lit, serviettes de toilette et torchons ne sont pas fournis. Ils sont disponibles en option sur demande.</p>
 
 <h2>À savoir :</h2>
 <ul>
@@ -156,7 +156,13 @@ ${s > 0 ? `<p>Le solde de <strong>${s.toFixed(0)} €</strong> sera à régler p
 
 const isJustine = (name) => name && name.toLowerCase().includes('justine');
 
-export default function ContratModal({ tenant, property, providerEmails, onClose }) {
+const fmtSaved = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} à ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+};
+
+export default function ContratModal({ tenant, property, providerEmails, onClose, onSave, savedData }) {
   const cleaningExp = (tenant.resExpenses || []).find(e =>
     e.type?.toLowerCase().includes('menage') || e.type?.toLowerCase().includes('nettoyage')
   );
@@ -167,7 +173,7 @@ export default function ContratModal({ tenant, property, providerEmails, onClose
   const initContactName = contactExp?.person || 'Justine';
   const initContactPhone = isJustine(initContactName) ? '06 70 30 91 84' : (contactExp ? (providerEmails?.[contactExp.person] || '') : '');
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState(savedData?.form || {
     arrivalTime: '16:00',
     departureTime: '11:00',
     cleaningBy: cleaningExp ? 'prestataire' : 'locataire',
@@ -179,7 +185,7 @@ export default function ContratModal({ tenant, property, providerEmails, onClose
     specialNotes: 'Animaux interdits',
   });
 
-  const [cautions, setCautions] = useState([
+  const [cautions, setCautions] = useState(savedData?.cautions || [
     { id: 1, label: 'Ménage', amount: '50', checked: true },
     { id: 2, label: 'Appartement', amount: String(parseFloat(tenant.deposit) || 500), checked: true },
   ]);
@@ -202,6 +208,7 @@ export default function ContratModal({ tenant, property, providerEmails, onClose
       win.document.write(html);
       win.document.close();
       win.focus();
+      if (onSave) onSave({ form, cautions, savedAt: new Date().toISOString() });
     } catch (e) {
       setError('Erreur : ' + e.message);
     }
@@ -218,6 +225,7 @@ export default function ContratModal({ tenant, property, providerEmails, onClose
           <div className="flex-1">
             <h3 className="font-black text-lg uppercase tracking-tighter">Générer le contrat</h3>
             <p className="text-[10px] text-slate-400 uppercase font-black mt-0.5">{tenant.name} · {property?.name}</p>
+            {savedData?.savedAt && <p className="text-[9px] text-green-600 font-black mt-0.5">Enregistré le {fmtSaved(savedData.savedAt)}</p>}
           </div>
           <button type="button" onClick={onClose} className="p-2 text-slate-400 hover:text-slate-700"><X size={20}/></button>
         </div>
