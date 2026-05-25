@@ -133,19 +133,18 @@ ${form.specialNotes ? `<h2>À savoir</h2><ul>${form.specialNotes.split('\n').fil
 <div class="regl">
 <p><strong>Animaux</strong> — Les animaux sont interdits dans l'appartement.</p>
 <p><strong>Tabac</strong> — Il est interdit de fumer dans l'appartement. Il est toutefois autorisé de fumer sur les balcons.</p>
-<p><strong>Chauffage</strong> — Pensez à fermer les fenêtres lorsque le chauffage est allumé — merci pour vos voisins et pour la planète !</p>
+<p><strong>Chauffage</strong> — Pensez à fermer les fenêtres lorsque le chauffage est allumé.</p>
 <p><strong>Déchets</strong> — Merci de trier vos déchets. Les containers de collecte sélective sont accessibles à proximité immédiate du logement.</p>
-<p><strong>Voisinage & capacité</strong> — Merci de respecter la tranquillité des voisins et de limiter les nuisances sonores. L'appartement accueille au maximum <strong>${form.maxPersons} personnes</strong> conformément au contrat.</p>
+<p><strong>Voisinage & capacité</strong> — Merci de respecter le voisinage ainsi que le nombre de personnes prévu au contrat (les fêtes sont interdites).</p>
 <p><strong>Assurance</strong> — Le locataire déclare être couvert par une assurance responsabilité civile ou villégiature pour toute la durée du séjour.</p>
 </div>
 
 <h2>La réservation</h2>
 ${a1 > 0 ? `<p>Un acompte de <strong>${a1.toFixed(0)} €</strong> par virement est demandé pour bloquer la réservation${tenant.acompte1DueDate ? `, à régler avant le <strong>${fmt(tenant.acompte1DueDate)}</strong>` : ''}.</p><p><em>(Non remboursable en cas d'annulation par vos soins)</em></p>` : ''}
 ${a2 > 0 ? `<p>Un deuxième acompte de <strong>${a2.toFixed(0)} €</strong> par virement est demandé${tenant.acompte2DueDate ? `, à régler avant le <strong>${fmt(tenant.acompte2DueDate)}</strong>` : ''}.</p>` : ''}
-${s > 0 ? `<p>Le solde de <strong>${s.toFixed(0)} €</strong> sera à régler ${soldeModeText}${tenant.soldeDueDate ? ` avant le <strong>${fmt(tenant.soldeDueDate)}</strong>` : (form.soldeMode === 'main_propre' ? ' à l\'arrivée dans les lieux' : '')}.</p>` : ''}
+${s > 0 ? (form.soldeMode === 'main_propre' ? `<p>Le solde de <strong>${s.toFixed(0)} €</strong> est à remettre en mains propres le jour de votre arrivée.</p>` : `<p>Le solde de <strong>${s.toFixed(0)} €</strong> sera à régler ${soldeModeText}${tenant.soldeDueDate ? ` avant le <strong>${fmt(tenant.soldeDueDate)}</strong>` : ''}.</p>`) : ''}
 ${validCautions.length > 0 ? `<p class="hl"><strong>Cautions demandées à l\'arrivée :</strong> ${validCautions.map(c => `${c.label} : <strong>${c.amount} €</strong>`).join(' — ')}<br><span style="font-style:italic">(Restituées au départ. En cas de dégradations constatées, elles pourront être conservées partiellement ou totalement.)</span></p>` : ''}
-<p>La réservation prendra effet à réception ${a1 > 0 || a2 > 0 ? 'de l\'acompte' : 'du règlement intégral'} et du présent contrat daté et signé avec la mention <strong>« Lu et approuvé »</strong>.</p>
-<p>Au-delà de cette date la réservation sera annulée, le propriétaire disposera de la location à sa convenance.</p>
+<p>La réservation sera confirmée à réception ${a1 > 0 || a2 > 0 ? 'de l\'acompte' : 'du règlement intégral'} et du présent contrat daté et signé avec la mention <strong>« Lu et approuvé »</strong>. Tant que ces éléments ne sont pas reçus, le logement reste disponible à la location et la réservation n'est pas garantie.</p>
 
 <h2>Coordonnées bancaires (RIB)</h2>
 <div class="rib">
