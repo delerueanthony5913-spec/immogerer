@@ -58,6 +58,11 @@ li{margin-bottom:3px}
 .footer{text-align:center;font-size:8pt;color:#aaa;margin-top:28px;padding-top:10px;border-top:1px solid #eee}
 .note{font-size:9pt;font-style:italic;color:#666;margin-left:4px}
 .print-btn{position:fixed;top:16px;right:16px;padding:10px 22px;background:#2563eb;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700;font-family:Helvetica,Arial,sans-serif;box-shadow:0 4px 12px rgba(37,99,235,.3)}
+.parties{display:table;width:100%;border-collapse:separate;border-spacing:20px 0;margin-bottom:24px}
+.partie{display:table-cell;width:50%;vertical-align:top;font-size:10pt}
+.partie-lbl{font-family:Helvetica,Arial,sans-serif;font-size:8.5pt;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:5px}
+.partie-name{font-size:12pt;font-weight:bold;margin-bottom:3px}
+.partie-detail{font-size:9.5pt;color:#444;line-height:1.5}
 @media print{.print-btn{display:none}body{padding:0}}
 </style>
 </head>
@@ -66,6 +71,26 @@ li{margin-bottom:3px}
 
 <h1>Contrat de Location</h1>
 <p class="ref">Réf : ${(tenant.name || '').replace(/\s+/g, '_')}_${tenant.startDate || ''}</p>
+<hr>
+
+<div class="parties">
+  <div class="partie">
+    <div class="partie-lbl">Le propriétaire</div>
+    <div class="partie-name">Anthony et Camille DELERUE</div>
+    <div class="partie-detail">
+      Tél : 07 49 89 54 97<br>
+      Email : delerue.anthony@hotmail.fr
+    </div>
+  </div>
+  <div class="partie">
+    <div class="partie-lbl">Le locataire</div>
+    <div class="partie-name">${tenant.name || ''}</div>
+    <div class="partie-detail">
+      ${tenant.phone ? `Tél : ${tenant.phone}<br>` : ''}
+      ${form.tenantEmail ? `Email : ${form.tenantEmail}` : ''}
+    </div>
+  </div>
+</div>
 <hr>
 
 <p>Madame, Monsieur,</p>
@@ -109,8 +134,7 @@ ${s > 0 ? `<p>Le solde de <strong>${s.toFixed(0)} €</strong> sera à régler p
 <h2>Coordonnées bancaires (RIB)</h2>
 <div class="rib">
 <table>
-<tr><td>Titulaire</td><td>M ANTHONY DELERUE / MME CAMILLE BEURAERT</td></tr>
-<tr><td></td><td>4755 ROUTE DU PONT DE BOUC, 13480 CABRIES</td></tr>
+<tr><td>Titulaire</td><td>Anthony et Camille DELERUE</td></tr>
 <tr><td>IBAN</td><td>FR76 1009 6183 3100 0797 9700 147</td></tr>
 <tr><td>BIC</td><td>CMCIFRPP</td></tr>
 <tr><td>Banque</td><td>CIC AIX LA DURANNE — RUE ISAAC NEWTON — 13100 AIX EN PROVENCE</td></tr>
@@ -145,6 +169,7 @@ export default function ContratModal({ tenant, property, providerEmails, onClose
     maxPersons: '4',
     contactName: contactExp?.person || 'Justine',
     contactPhone: contactExp ? (providerEmails?.[contactExp.person] || '') : '',
+    tenantEmail: '',
     specialNotes: 'Animaux interdits',
   });
 
@@ -226,8 +251,13 @@ export default function ContratModal({ tenant, property, providerEmails, onClose
           </div>
 
           <div>
-            <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Téléphone contact</label>
+            <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Téléphone contact sur place</label>
             <input type="text" value={form.contactPhone} onChange={e => setForm({ ...form, contactPhone: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl font-black text-slate-700 outline-none"/>
+          </div>
+
+          <div>
+            <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Email du locataire</label>
+            <input type="email" value={form.tenantEmail} onChange={e => setForm({ ...form, tenantEmail: e.target.value })} placeholder="exemple@mail.com" className="w-full p-3 border border-slate-200 rounded-xl font-black text-slate-700 outline-none"/>
           </div>
 
           <div>
