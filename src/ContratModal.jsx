@@ -9,7 +9,8 @@ const CADELIO_EQUIPMENT = [
   '1 canapé lit Rapido 140 x 190',
   'Un lave-vaisselle',
   'Un réfrigérateur avec congélateur',
-  'Un micro-onde et mini four / grille-pain',
+  'Un four micro-ondes combiné',
+  'Un grille-pain',
   'Une machine à café Senseo et filtre',
   'Une bouilloire',
   'Un set raclette et fondue',
@@ -31,7 +32,7 @@ const buildHTML = (form, cautions, tenant, signatureB64) => {
   const a2 = parseFloat(tenant.acompte2Amount) || 0;
   const s = parseFloat(tenant.soldeAmount) || 0;
   const validCautions = cautions.filter(c => c.label && c.amount && c.checked !== false);
-  const soldeModeText = { virement: 'par virement', main_propre: 'à main propre', justine: 'en espèces à Justine' }[form.soldeMode] || 'par virement';
+  const soldeModeText = { virement_10j: 'par virement 10 jours avant l\'arrivée dans les lieux', main_propre: 'en mains propres' }[form.soldeMode] || 'par virement 10 jours avant l\'arrivée dans les lieux';
 
   return `<!DOCTYPE html>
 <html lang="fr">
@@ -44,26 +45,27 @@ body{font-family:Georgia,serif;font-size:11pt;line-height:1.65;color:#1a1a1a;pad
 h1{text-align:center;font-size:19pt;letter-spacing:4px;text-transform:uppercase;margin-bottom:6px}
 .ref{text-align:center;font-size:8.5pt;color:#999;margin-bottom:18px}
 hr{border:none;border-top:1px solid #ccc;margin:18px 0}
-h2{font-size:11.5pt;margin:22px 0 8px;font-family:Helvetica,Arial,sans-serif;text-transform:uppercase;letter-spacing:1px;border-bottom:1.5px solid #222;padding-bottom:4px}
-p{margin-bottom:7px}
+h2{font-size:11.5pt;margin:22px 0 8px;font-family:Helvetica,Arial,sans-serif;text-transform:uppercase;letter-spacing:1px;border-bottom:1.5px solid #222;padding-bottom:4px;page-break-after:avoid}
+p{margin-bottom:7px;orphans:3;widows:3}
 ul{margin:6px 0 6px 18px}
 li{margin-bottom:3px}
-.rib{background:#f5f5f5;border-left:3px solid #333;padding:12px 16px;margin:8px 0}
+.rib{background:#f5f5f5;border-left:3px solid #333;padding:12px 16px;margin:8px 0;page-break-inside:avoid}
 .rib table{border-collapse:collapse;width:100%}
 .rib td{padding:2px 6px;font-size:10pt}
 .rib td:first-child{font-weight:bold;width:110px;color:#444}
-.sigs{display:table;width:100%;margin-top:28px;border-collapse:separate;border-spacing:20px 0}
+.rib .iban{font-family:'Courier New',Courier,monospace;letter-spacing:2px;font-size:10pt}
+.sigs{display:table;width:100%;margin-top:28px;border-collapse:separate;border-spacing:20px 0;page-break-inside:avoid}
 .sig{display:table-cell;border:1px solid #bbb;padding:10px 12px;min-height:80px;width:50%;vertical-align:top}
 .sig-lbl{font-size:9pt;font-weight:bold;font-family:Helvetica,Arial,sans-serif;margin-bottom:4px}
 .sig-name{font-size:9pt;color:#666}
 .footer{text-align:center;font-size:8pt;color:#aaa;margin-top:28px;padding-top:10px;border-top:1px solid #eee}
 .note{font-size:9pt;font-style:italic;color:#666;margin-left:4px}
 .print-btn{position:fixed;top:16px;right:16px;padding:10px 22px;background:#2563eb;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700;font-family:Helvetica,Arial,sans-serif;box-shadow:0 4px 12px rgba(37,99,235,.3)}
-.parties{display:table;width:100%;border-collapse:separate;border-spacing:20px 0;margin-bottom:24px}
 .partie{display:table-cell;width:50%;vertical-align:top;font-size:10pt}
 .partie-lbl{font-family:Helvetica,Arial,sans-serif;font-size:8.5pt;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:5px}
 .partie-name{font-size:12pt;font-weight:bold;margin-bottom:3px}
 .partie-detail{font-size:9.5pt;color:#444;line-height:1.5}
+.parties{display:table;width:100%;border-collapse:separate;border-spacing:20px 0;margin-bottom:24px;page-break-inside:avoid}
 @media print{.print-btn{display:none}body{padding:0}}
 </style>
 </head>
@@ -116,7 +118,7 @@ ${form.cleaningBy === 'inclus' ? '<p>Les frais de ménage sont inclus dans le pr
 
 <h2>Dans l'appartement vous trouverez :</h2>
 <ul>${CADELIO_EQUIPMENT.map(e => `<li>${e}</li>`).join('')}</ul>
-<p style="font-size:9.5pt;background:#fef9c3;border-left:3px solid #ca8a04;padding:7px 12px;margin:8px 0;color:#713f12">Le linge de lit, serviettes de toilette et torchons ne sont pas fournis. Ils sont disponibles en option sur demande.</p>
+<p style="font-size:9.5pt;background:#fef9c3;border-left:3px solid #ca8a04;padding:7px 12px;margin:8px 0;color:#713f12;page-break-inside:avoid">Le linge de lit, serviettes de toilette et torchons ne sont pas fournis. Vous pouvez les louer directement auprès de Justine.</p>
 
 <h2>À savoir :</h2>
 <ul>
@@ -128,15 +130,15 @@ ${validCautions.length > 0 ? `<p style="font-size:9.5pt;background:#fef9c3;borde
 <h2>La réservation :</h2>
 ${a1 > 0 ? `<p>Un acompte de <strong>${a1.toFixed(0)} €</strong> par virement est demandé pour bloquer la réservation${tenant.acompte1DueDate ? `, à régler avant le <strong>${fmt(tenant.acompte1DueDate)}</strong>` : ''}.</p><p><em>(Non remboursable en cas d'annulation par vos soins)</em></p>` : ''}
 ${a2 > 0 ? `<p>Un deuxième acompte de <strong>${a2.toFixed(0)} €</strong> par virement est demandé${tenant.acompte2DueDate ? `, à régler avant le <strong>${fmt(tenant.acompte2DueDate)}</strong>` : ''}.</p>` : ''}
-${s > 0 ? `<p>Le solde de <strong>${s.toFixed(0)} €</strong> sera à régler ${soldeModeText}${tenant.soldeDueDate ? ` avant le <strong>${fmt(tenant.soldeDueDate)}</strong>` : ' une semaine avant votre arrivée'}.</p>` : ''}
-<p>La réservation prendra effet à réception de l'acompte et du présent contrat daté et signé avec la mention <strong>« Lu et approuvé »</strong>.</p>
+${s > 0 ? `<p>Le solde de <strong>${s.toFixed(0)} €</strong> sera à régler ${soldeModeText}${tenant.soldeDueDate ? ` avant le <strong>${fmt(tenant.soldeDueDate)}</strong>` : (form.soldeMode === 'main_propre' ? ' à l\'arrivée dans les lieux' : '')}.</p>` : ''}
+<p>La réservation prendra effet à réception ${a1 > 0 || a2 > 0 ? 'de l\'acompte' : 'du règlement intégral'} et du présent contrat daté et signé avec la mention <strong>« Lu et approuvé »</strong>.</p>
 <p>Au-delà de cette date la réservation sera annulée, le propriétaire disposera de la location à sa convenance.</p>
 
 <h2>Coordonnées bancaires (RIB)</h2>
 <div class="rib">
 <table>
 <tr><td>Titulaire</td><td>Anthony et Camille DELERUE</td></tr>
-<tr><td>IBAN</td><td>FR76 1009 6183 3100 0797 9700 147</td></tr>
+<tr><td>IBAN</td><td class="iban">FR76 1009 6183 3100 0797 9700 147</td></tr>
 <tr><td>BIC</td><td>CMCIFRPP</td></tr>
 <tr><td>Banque</td><td>CIC AIX LA DURANNE — RUE ISAAC NEWTON — 13100 AIX EN PROVENCE</td></tr>
 </table>
@@ -183,7 +185,7 @@ export default function ContratModal({ tenant, property, providerEmails, onClose
     contactPhone: initContactPhone,
     tenantEmail: '',
     specialNotes: 'Animaux interdits',
-    soldeMode: 'virement',
+    soldeMode: 'virement_10j',
   });
 
   const [cautions, setCautions] = useState(savedData?.cautions || [
@@ -282,9 +284,8 @@ export default function ContratModal({ tenant, property, providerEmails, onClose
           <div>
             <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Mode de règlement du solde</label>
             <select value={form.soldeMode} onChange={e => setForm({ ...form, soldeMode: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl font-black text-slate-700 outline-none bg-white">
-              <option value="virement">Virement bancaire</option>
-              <option value="main_propre">À main propre</option>
-              <option value="justine">En espèces à Justine</option>
+              <option value="virement_10j">Virement — 10 jours avant l'arrivée</option>
+              <option value="main_propre">En mains propres</option>
             </select>
           </div>
 
