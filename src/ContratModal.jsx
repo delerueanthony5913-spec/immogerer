@@ -54,7 +54,7 @@ li{margin-bottom:5px}
 .rib table{border-collapse:collapse;width:100%}
 .rib td{padding:3px 8px;font-size:10pt;color:#2d3748}
 .rib td:first-child{font-weight:bold;width:90px;color:#2c5282}
-.rib .iban{font-family:'Courier New',Courier,monospace;letter-spacing:2px;font-size:10pt;font-weight:bold}
+.rib .iban{letter-spacing:2px;font-size:10pt;font-weight:bold}
 .sigs{display:table;width:100%;margin-top:28px;border-collapse:separate;border-spacing:16px 0;page-break-inside:avoid}
 .sig{display:table-cell;border:1px solid #e2e8f0;background:#f7fafc;padding:12px 14px;min-height:90px;width:50%;vertical-align:top;border-radius:4px}
 .sig-lbl{font-size:9pt;font-weight:bold;font-family:Helvetica,Arial,sans-serif;margin-bottom:4px;color:#2c5282;text-transform:uppercase;letter-spacing:1px}
@@ -152,7 +152,7 @@ ${validCautions.length > 0 ? `<p class="hl"><strong>Cautions demandées à l\'ar
 <tr><td>Titulaire</td><td>Anthony et Camille DELERUE</td></tr>
 <tr><td>IBAN</td><td class="iban">FR76 1009 6183 3100 0797 9700 147</td></tr>
 <tr><td>BIC</td><td>CMCIFRPP</td></tr>
-<tr><td>Banque</td><td>CIC AIX LA DURANNE — RUE ISAAC NEWTON — 13100 AIX EN PROVENCE</td></tr>
+<tr><td>Banque</td><td>CIC — 1140 RUE ANDRE AMPERE — 13851 AIX EN PROVENCE CEDEX 3</td></tr>
 </table>
 </div>
 
