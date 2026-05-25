@@ -53,7 +53,7 @@ li{margin-bottom:3px}
 .rib table{border-collapse:collapse;width:100%}
 .rib td{padding:2px 6px;font-size:10pt}
 .rib td:first-child{font-weight:bold;width:110px;color:#444}
-.rib .iban{font-family:'Courier New',Courier,monospace;letter-spacing:2px;font-size:10pt}
+.rib .iban{font-family:'Courier New',Courier,monospace;letter-spacing:2px;font-size:10pt;font-weight:bold}
 .sigs{display:table;width:100%;margin-top:28px;border-collapse:separate;border-spacing:20px 0;page-break-inside:avoid}
 .sig{display:table-cell;border:1px solid #bbb;padding:10px 12px;min-height:80px;width:50%;vertical-align:top}
 .sig-lbl{font-size:9pt;font-weight:bold;font-family:Helvetica,Arial,sans-serif;margin-bottom:4px}
