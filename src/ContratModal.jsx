@@ -30,7 +30,7 @@ const buildHTML = (form, cautions, tenant) => {
   const a1 = parseFloat(tenant.acompte1Amount) || 0;
   const a2 = parseFloat(tenant.acompte2Amount) || 0;
   const s = parseFloat(tenant.soldeAmount) || 0;
-  const validCautions = cautions.filter(c => c.label && c.amount);
+  const validCautions = cautions.filter(c => c.label && c.amount && c.checked !== false);
 
   return `<!DOCTYPE html>
 <html lang="fr">
@@ -103,6 +103,7 @@ li{margin-bottom:3px}
 <p>Apt B 401 au 4ème étage de la résidence Edelweiss<br>
 Allée des Saules, 05240 La Salle-les-Alpes — Serre Chevalier, Hautes-Alpes<br>
 <a href="https://goo.gl/maps/U1x4oWFEjc1vJN629" style="color:#1d4ed8">Voir sur Google Maps</a></p>
+<img src="https://les-cimes-de-cadelio.vercel.app/_next/image?url=%2Fphotos%2F1.jpg&w=1200&q=75" alt="Séjour" style="width:100%;max-height:220px;object-fit:cover;border-radius:6px;margin:10px 0">
 
 <h2>Le propriétaire loue :</h2>
 <p>Du <strong>${fmt(tenant.startDate)} à ${form.arrivalTime}</strong> au <strong>${fmt(tenant.endDate)} à ${form.departureTime}</strong></p>
@@ -153,6 +154,8 @@ ${s > 0 ? `<p>Le solde de <strong>${s.toFixed(0)} €</strong> sera à régler p
 </html>`;
 };
 
+const isJustine = (name) => name && name.toLowerCase().includes('justine');
+
 export default function ContratModal({ tenant, property, providerEmails, onClose }) {
   const cleaningExp = (tenant.resExpenses || []).find(e =>
     e.type?.toLowerCase().includes('menage') || e.type?.toLowerCase().includes('nettoyage')
@@ -161,25 +164,29 @@ export default function ContratModal({ tenant, property, providerEmails, onClose
     e.person && !e.person.toLowerCase().includes('dias')
   );
 
+  const initContactName = contactExp?.person || 'Justine';
+  const initContactPhone = isJustine(initContactName) ? '06 70 30 91 84' : (contactExp ? (providerEmails?.[contactExp.person] || '') : '');
+
   const [form, setForm] = useState({
     arrivalTime: '16:00',
     departureTime: '11:00',
     cleaningBy: cleaningExp ? 'prestataire' : 'locataire',
     cleaningFee: cleaningExp ? (parseFloat(cleaningExp.amount) || '').toString() : '',
     maxPersons: '4',
-    contactName: contactExp?.person || 'Justine',
-    contactPhone: contactExp ? (providerEmails?.[contactExp.person] || '') : '',
+    contactName: initContactName,
+    contactPhone: initContactPhone,
     tenantEmail: '',
     specialNotes: 'Animaux interdits',
   });
 
   const [cautions, setCautions] = useState([
-    { id: 1, label: 'Appartement', amount: String(parseFloat(tenant.deposit) || 500) },
+    { id: 1, label: 'Ménage', amount: '50', checked: true },
+    { id: 2, label: 'Appartement', amount: String(parseFloat(tenant.deposit) || 500), checked: true },
   ]);
 
   const [error, setError] = useState('');
 
-  const addCaution = () => setCautions(p => [...p, { id: Date.now(), label: '', amount: '' }]);
+  const addCaution = () => setCautions(p => [...p, { id: Date.now(), label: '', amount: '', checked: true }]);
   const removeCaution = (id) => setCautions(p => p.filter(c => c.id !== id));
   const updateCaution = (id, field, val) => setCautions(p => p.map(c => c.id === id ? { ...c, [field]: val } : c));
 
@@ -246,7 +253,10 @@ export default function ContratModal({ tenant, property, providerEmails, onClose
             </div>
             <div>
               <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Contact sur place</label>
-              <input type="text" value={form.contactName} onChange={e => setForm({ ...form, contactName: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl font-black text-slate-700 outline-none"/>
+              <input type="text" value={form.contactName} onChange={e => {
+                const name = e.target.value;
+                setForm(f => ({ ...f, contactName: name, ...(isJustine(name) ? { contactPhone: '06 70 30 91 84' } : {}) }));
+              }} className="w-full p-3 border border-slate-200 rounded-xl font-black text-slate-700 outline-none"/>
             </div>
           </div>
 
@@ -270,11 +280,10 @@ export default function ContratModal({ tenant, property, providerEmails, onClose
             <div className="space-y-2">
               {cautions.map(c => (
                 <div key={c.id} className="flex gap-2 items-center">
-                  <input type="text" value={c.label} onChange={e => updateCaution(c.id, 'label', e.target.value)} placeholder="Ex: Appartement" className="flex-1 p-2.5 border border-slate-200 rounded-xl font-black text-slate-700 outline-none text-sm"/>
-                  <input type="number" value={c.amount} onChange={e => updateCaution(c.id, 'amount', e.target.value)} placeholder="€" className="w-20 p-2.5 border border-slate-200 rounded-xl font-black text-slate-700 outline-none text-sm"/>
-                  {cautions.length > 1 && (
-                    <button type="button" onClick={() => removeCaution(c.id)} className="p-2 text-rose-400 hover:text-rose-600 transition-colors"><Trash2 size={14}/></button>
-                  )}
+                  <input type="checkbox" checked={c.checked !== false} onChange={e => updateCaution(c.id, 'checked', e.target.checked)} className="w-4 h-4 accent-blue-600 flex-shrink-0"/>
+                  <input type="text" value={c.label} onChange={e => updateCaution(c.id, 'label', e.target.value)} placeholder="Ex: Appartement" className={`flex-1 p-2.5 border rounded-xl font-black text-slate-700 outline-none text-sm ${c.checked === false ? 'border-slate-100 text-slate-300' : 'border-slate-200'}`}/>
+                  <input type="number" value={c.amount} onChange={e => updateCaution(c.id, 'amount', e.target.value)} placeholder="€" className={`w-20 p-2.5 border rounded-xl font-black text-slate-700 outline-none text-sm ${c.checked === false ? 'border-slate-100 text-slate-300' : 'border-slate-200'}`}/>
+                  <button type="button" onClick={() => removeCaution(c.id)} className="p-2 text-rose-400 hover:text-rose-600 transition-colors"><Trash2 size={14}/></button>
                 </div>
               ))}
             </div>
