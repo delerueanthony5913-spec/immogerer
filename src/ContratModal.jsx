@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, FileText, Download, Plus, Trash2 } from 'lucide-react';
+import { X, FileText, Download, Plus, Trash2, Mail } from 'lucide-react';
 import SIGNATURE_B64 from './signature.js';
 
 const CADELIO_EQUIPMENT = [
@@ -222,6 +222,14 @@ export default function ContratModal({ tenant, property, providerEmails, onClose
   const removeCaution = (id) => setCautions(p => p.filter(c => c.id !== id));
   const updateCaution = (id, field, val) => setCautions(p => p.map(c => c.id === id ? { ...c, [field]: val } : c));
 
+  const sendEmail = () => {
+    const subject = encodeURIComponent(`Contrat de location — Les Cimes de Cadélio — ${tenant.name || ''}`);
+    const body = encodeURIComponent(
+      `Bonjour,\n\nVeuillez trouver ci-joint votre contrat de location pour Les Cimes de Cadélio.\n\nN'hésitez pas à nous contacter pour toute question.\n\nCordialement,\nAnthony et Camille DELERUE\n07 49 89 54 97`
+    );
+    window.location.href = `mailto:${form.tenantEmail}?subject=${subject}&body=${body}`;
+  };
+
   const generate = () => {
     setError('');
     try {
@@ -358,6 +366,12 @@ export default function ContratModal({ tenant, property, providerEmails, onClose
             <Download size={16}/>
             Ouvrir le contrat
           </button>
+          {form.tenantEmail && (
+            <button type="button" onClick={sendEmail} className="w-full p-3 rounded-2xl font-black uppercase text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition-all flex items-center justify-center gap-2">
+              <Mail size={14}/>
+              Envoyer par email à {form.tenantEmail}
+            </button>
+          )}
           <button type="button" onClick={onClose} className="w-full py-3 rounded-2xl font-black uppercase text-[10px] text-slate-400 hover:text-slate-600 transition-colors">
             Fermer
           </button>
