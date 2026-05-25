@@ -54,7 +54,7 @@ li{margin-bottom:5px}
 .rib table{border-collapse:collapse;width:100%}
 .rib td{padding:3px 8px;font-size:10pt;color:#2d3748}
 .rib td:first-child{font-weight:bold;width:90px;color:#2c5282}
-.rib .iban{letter-spacing:2px;font-size:10pt;font-weight:bold}
+.rib .iban{font-family:'Calibri','Segoe UI',Arial,sans-serif;letter-spacing:2.5px;font-size:10.5pt;font-weight:700}
 .sigs{display:table;width:100%;margin-top:28px;border-collapse:separate;border-spacing:16px 0;page-break-inside:avoid}
 .sig{display:table-cell;border:1px solid #e2e8f0;background:#f7fafc;padding:12px 14px;min-height:90px;width:50%;vertical-align:top;border-radius:4px}
 .sig-lbl{font-size:9pt;font-weight:bold;font-family:Helvetica,Arial,sans-serif;margin-bottom:4px;color:#2c5282;text-transform:uppercase;letter-spacing:1px}
@@ -72,7 +72,16 @@ li{margin-bottom:5px}
 .regl p{border-bottom:1px solid #dbeafe;padding:6px 0;margin-bottom:0;font-size:10.5pt}
 .regl p:last-child{border-bottom:none}
 .intro{background:#f7fafc;border-radius:6px;padding:14px 18px;margin:14px 0;border-left:3px solid #bee3f8}
-@media print{.print-btn{display:none}body{padding:0}}
+@media print{
+  .print-btn{display:none}
+  body{padding:1.5cm}
+  h2{page-break-after:avoid}
+  p{orphans:4;widows:4}
+  .rib,.sigs,.parties,.hl,.intro,.regl{page-break-inside:avoid}
+  h2 + p, h2 + ul, h2 + div{page-break-before:avoid}
+  ul{page-break-inside:avoid}
+  li{page-break-inside:avoid}
+}
 </style>
 </head>
 <body>
