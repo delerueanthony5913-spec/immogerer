@@ -62,8 +62,8 @@ li{margin-bottom:5px}
 .footer{text-align:center;font-size:8pt;color:#a0aec0;margin-top:28px;padding-top:12px;border-top:1px solid #e2e8f0}
 .note{font-size:9pt;font-style:italic;color:#718096}
 .print-btn{position:fixed;top:16px;right:16px;padding:10px 22px;background:#3182ce;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700;font-family:Helvetica,Arial,sans-serif;box-shadow:0 4px 12px rgba(49,130,206,.3)}
-.parties{display:table;width:100%;border-collapse:separate;border-spacing:10px 0;margin-bottom:20px;page-break-inside:avoid}
-.partie{display:table-cell;vertical-align:top;font-size:10pt;background:#f7fafc;padding:11px 13px;border-radius:6px;border:1px solid #e2e8f0}
+.parties{display:flex;gap:10px;margin-bottom:20px;page-break-inside:avoid;break-inside:avoid}
+.partie{flex:1;vertical-align:top;font-size:10pt;background:#f7fafc;padding:11px 13px;border-radius:6px;border:1px solid #e2e8f0}
 .partie-lbl{font-family:Helvetica,Arial,sans-serif;font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#a0aec0;margin-bottom:5px}
 .partie-name{font-size:11pt;font-weight:bold;margin-bottom:3px;color:#1a365d}
 .partie-detail{font-size:9pt;color:#4a5568;line-height:1.6}
@@ -71,16 +71,16 @@ li{margin-bottom:5px}
 .regl{background:#f0f7ff;border-radius:6px;padding:6px 16px;margin:8px 0;page-break-inside:avoid;break-inside:avoid;border:1px solid #bee3f8}
 .regl p{border-bottom:1px solid #dbeafe;padding:6px 0;margin-bottom:0;font-size:10.5pt}
 .regl p:last-child{border-bottom:none}
-.intro{background:#f7fafc;border-radius:6px;padding:14px 18px;margin:14px 0;border-left:3px solid #bee3f8}
+.intro{background:#f7fafc;border-radius:6px;padding:14px 18px;margin:14px 0;border-left:3px solid #bee3f8;page-break-inside:avoid;break-inside:avoid}
+.logement-top{page-break-inside:avoid;break-inside:avoid}
 @media print{
   .print-btn{display:none}
   body{padding:1.5cm}
-  h2{page-break-after:avoid}
+  h2{page-break-after:avoid;break-after:avoid}
   p{orphans:4;widows:4}
-  .rib,.sigs,.parties,.hl,.intro,.regl{page-break-inside:avoid}
-  h2 + p, h2 + ul, h2 + div{page-break-before:avoid}
-  ul{page-break-inside:avoid}
-  li{page-break-inside:avoid}
+  .rib,.sigs,.parties,.hl,.intro,.regl,.logement-top{page-break-inside:avoid;break-inside:avoid}
+  h2 + p, h2 + ul, h2 + div, h2 + img{page-break-before:avoid;break-before:avoid}
+  ul{page-break-inside:avoid;break-inside:avoid}
 }
 </style>
 </head>
@@ -122,8 +122,10 @@ li{margin-bottom:5px}
 </div>
 
 <h2>Le logement loué</h2>
-<img src="https://les-cimes-de-cadelio.vercel.app/_next/image?url=%2Fphotos%2F1.jpg&w=1200&q=75" alt="Séjour" style="width:100%;max-height:220px;object-fit:cover;border-radius:6px;margin:6px 0 10px">
+<div class="logement-top">
+<img src="https://les-cimes-de-cadelio.vercel.app/_next/image?url=%2Fphotos%2F1.jpg&w=1200&q=75" alt="Séjour" style="width:100%;max-height:180px;object-fit:cover;border-radius:6px;margin:6px 0 8px">
 <p style="font-size:9.5pt;color:#4a5568">Apt B 401 — Résidence Edelweiss, Allée des Saules, 05240 La Salle-les-Alpes — Serre Chevalier · <a href="https://goo.gl/maps/U1x4oWFEjc1vJN629" style="color:#3182ce">Google Maps</a></p>
+</div>
 <p>Du <strong>${fmt(tenant.startDate)} à ${form.arrivalTime}</strong> au <strong>${fmt(tenant.endDate)} à ${form.departureTime}</strong></p>
 <p>Le montant de la location est fixé à <strong>${amount.toFixed(0)} €</strong> net toutes charges comprises pour un maximum de <strong>${form.maxPersons} personnes</strong>.</p>
 ${form.taxeSejour === 'incluse' ? `<p>La taxe de séjour est incluse dans le prix de la location.</p>` : ''}
@@ -223,11 +225,18 @@ export default function ContratModal({ tenant, property, providerEmails, onClose
   const updateCaution = (id, field, val) => setCautions(p => p.map(c => c.id === id ? { ...c, [field]: val } : c));
 
   const sendEmail = () => {
+    // Ouvre d'abord le contrat (déjà sauvegardé) pour que l'utilisateur puisse le sauvegarder en PDF
+    try {
+      const html = buildHTML(form, cautions, tenant, SIGNATURE_B64);
+      const win = window.open('', '_blank');
+      if (win) { win.document.write(html); win.document.close(); win.focus(); }
+    } catch (_) {}
+    // Puis ouvre le client email
     const subject = encodeURIComponent(`Contrat de location — Les Cimes de Cadélio — ${tenant.name || ''}`);
     const body = encodeURIComponent(
       `Bonjour,\n\nVeuillez trouver ci-joint votre contrat de location pour Les Cimes de Cadélio.\n\nN'hésitez pas à nous contacter pour toute question.\n\nCordialement,\nAnthony et Camille DELERUE\n07 49 89 54 97`
     );
-    window.location.href = `mailto:${form.tenantEmail}?subject=${subject}&body=${body}`;
+    setTimeout(() => { window.location.href = `mailto:${form.tenantEmail}?subject=${subject}&body=${body}`; }, 300);
   };
 
   const generate = () => {
