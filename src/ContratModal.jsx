@@ -41,38 +41,44 @@ const buildHTML = (form, cautions, tenant, signatureB64) => {
 <title>Contrat - ${tenant.name || ''}</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:Georgia,serif;font-size:11pt;line-height:1.65;color:#1a1a1a;padding:2.2cm;max-width:21cm;margin:0 auto}
-h1{text-align:center;font-size:19pt;letter-spacing:4px;text-transform:uppercase;margin-bottom:6px}
-.ref{text-align:center;font-size:8.5pt;color:#999;margin-bottom:18px}
-hr{border:none;border-top:1px solid #ccc;margin:18px 0}
-h2{font-size:11.5pt;margin:22px 0 8px;font-family:Helvetica,Arial,sans-serif;text-transform:uppercase;letter-spacing:1px;border-bottom:1.5px solid #222;padding-bottom:4px;page-break-after:avoid}
-p{margin-bottom:7px;orphans:3;widows:3}
-ul{margin:6px 0 6px 18px}
-li{margin-bottom:3px}
-.rib{background:#f5f5f5;border-left:3px solid #333;padding:12px 16px;margin:8px 0;page-break-inside:avoid}
+body{font-family:Georgia,serif;font-size:11pt;line-height:1.75;color:#2d3748;padding:2.2cm;max-width:21cm;margin:0 auto}
+.prop-title{text-align:center;font-size:14pt;font-family:Helvetica,Arial,sans-serif;font-weight:900;letter-spacing:4px;color:#2c5282;text-transform:uppercase;margin-bottom:2px}
+h1{text-align:center;font-size:17pt;letter-spacing:3px;text-transform:uppercase;margin-bottom:4px;color:#1a365d;font-weight:normal}
+.ref{text-align:center;font-size:8pt;color:#a0aec0;margin-bottom:16px;letter-spacing:2px}
+hr{border:none;border-top:1px solid #e2e8f0;margin:16px 0}
+h2{font-size:10.5pt;margin:22px 0 8px;font-family:Helvetica,Arial,sans-serif;text-transform:uppercase;letter-spacing:2px;color:#2c5282;border-bottom:1.5px solid #bee3f8;padding-bottom:4px;page-break-after:avoid}
+p{margin-bottom:8px;orphans:3;widows:3}
+ul{margin:6px 0 6px 20px}
+li{margin-bottom:5px}
+.rib{background:#ebf8ff;border-left:3px solid #3182ce;padding:12px 16px;margin:8px 0;page-break-inside:avoid;border-radius:0 4px 4px 0}
 .rib table{border-collapse:collapse;width:100%}
-.rib td{padding:2px 6px;font-size:10pt}
-.rib td:first-child{font-weight:bold;width:110px;color:#444}
+.rib td{padding:3px 8px;font-size:10pt;color:#2d3748}
+.rib td:first-child{font-weight:bold;width:90px;color:#2c5282}
 .rib .iban{font-family:'Courier New',Courier,monospace;letter-spacing:2px;font-size:10pt;font-weight:bold}
-.sigs{display:table;width:100%;margin-top:28px;border-collapse:separate;border-spacing:20px 0;page-break-inside:avoid}
-.sig{display:table-cell;border:1px solid #bbb;padding:10px 12px;min-height:80px;width:50%;vertical-align:top}
-.sig-lbl{font-size:9pt;font-weight:bold;font-family:Helvetica,Arial,sans-serif;margin-bottom:4px}
-.sig-name{font-size:9pt;color:#666}
-.footer{text-align:center;font-size:8pt;color:#aaa;margin-top:28px;padding-top:10px;border-top:1px solid #eee}
-.note{font-size:9pt;font-style:italic;color:#666;margin-left:4px}
-.print-btn{position:fixed;top:16px;right:16px;padding:10px 22px;background:#2563eb;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700;font-family:Helvetica,Arial,sans-serif;box-shadow:0 4px 12px rgba(37,99,235,.3)}
-.partie{display:table-cell;width:50%;vertical-align:top;font-size:10pt}
-.partie-lbl{font-family:Helvetica,Arial,sans-serif;font-size:8.5pt;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:5px}
-.partie-name{font-size:12pt;font-weight:bold;margin-bottom:3px}
-.partie-detail{font-size:9.5pt;color:#444;line-height:1.5}
-.parties{display:table;width:100%;border-collapse:separate;border-spacing:20px 0;margin-bottom:24px;page-break-inside:avoid}
+.sigs{display:table;width:100%;margin-top:28px;border-collapse:separate;border-spacing:16px 0;page-break-inside:avoid}
+.sig{display:table-cell;border:1px solid #e2e8f0;background:#f7fafc;padding:12px 14px;min-height:90px;width:50%;vertical-align:top;border-radius:4px}
+.sig-lbl{font-size:9pt;font-weight:bold;font-family:Helvetica,Arial,sans-serif;margin-bottom:4px;color:#2c5282;text-transform:uppercase;letter-spacing:1px}
+.sig-name{font-size:9pt;color:#718096}
+.footer{text-align:center;font-size:8pt;color:#a0aec0;margin-top:28px;padding-top:12px;border-top:1px solid #e2e8f0}
+.note{font-size:9pt;font-style:italic;color:#718096}
+.print-btn{position:fixed;top:16px;right:16px;padding:10px 22px;background:#3182ce;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700;font-family:Helvetica,Arial,sans-serif;box-shadow:0 4px 12px rgba(49,130,206,.3)}
+.parties{display:table;width:100%;border-collapse:separate;border-spacing:10px 0;margin-bottom:20px;page-break-inside:avoid}
+.partie{display:table-cell;vertical-align:top;font-size:10pt;background:#f7fafc;padding:11px 13px;border-radius:6px;border:1px solid #e2e8f0}
+.partie-lbl{font-family:Helvetica,Arial,sans-serif;font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#a0aec0;margin-bottom:5px}
+.partie-name{font-size:11pt;font-weight:bold;margin-bottom:3px;color:#1a365d}
+.partie-detail{font-size:9pt;color:#4a5568;line-height:1.6}
+.hl{font-size:9.5pt;background:#fffbeb;border-left:3px solid #d97706;padding:8px 12px;margin:8px 0;color:#78350f;page-break-inside:avoid;border-radius:0 4px 4px 0}
+.regl{background:#f0f7ff;border-radius:6px;padding:6px 16px;margin:8px 0;page-break-inside:avoid;border:1px solid #bee3f8}
+.regl p{border-bottom:1px solid #dbeafe;padding:6px 0;margin-bottom:0;font-size:10.5pt}
+.regl p:last-child{border-bottom:none}
+.intro{background:#f7fafc;border-radius:6px;padding:14px 18px;margin:14px 0;border-left:3px solid #bee3f8}
 @media print{.print-btn{display:none}body{padding:0}}
 </style>
 </head>
 <body>
 <button class="print-btn" onclick="window.print()">⬇ Enregistrer en PDF</button>
 
-<p style="text-align:center;font-size:14pt;font-family:Helvetica,Arial,sans-serif;font-weight:900;letter-spacing:3px;color:#1a1a1a;margin-bottom:4px;text-transform:uppercase">Les Cimes de Cadélio</p>
+<p class="prop-title">Les Cimes de Cadélio</p>
 <h1>Contrat de Location</h1>
 <p class="ref">Réf : ${(tenant.name || '').replace(/\s+/g, '_')}_${tenant.startDate || ''}</p>
 <hr>
@@ -81,27 +87,30 @@ li{margin-bottom:3px}
   <div class="partie">
     <div class="partie-lbl">Le propriétaire</div>
     <div class="partie-name">Anthony et Camille DELERUE</div>
-    <div class="partie-detail">
-      Tél : 07 49 89 54 97<br>
-      Email : delerue.anthony@hotmail.fr
-    </div>
+    <div class="partie-detail">Tél : 07 49 89 54 97<br>Email : delerue.anthony@hotmail.fr</div>
   </div>
   <div class="partie">
     <div class="partie-lbl">Le locataire</div>
     <div class="partie-name">${tenant.name || ''}</div>
     <div class="partie-detail">
       ${tenant.phone ? `Tél : ${tenant.phone}<br>` : ''}
-      ${form.tenantEmail ? `Email : ${form.tenantEmail}` : ''}
+      ${form.tenantEmail ? `Email : ${form.tenantEmail}` : '&nbsp;'}
     </div>
   </div>
+  ${form.contactName && form.contactPhone ? `<div class="partie">
+    <div class="partie-lbl">Contact sur place</div>
+    <div class="partie-name">${form.contactName}</div>
+    <div class="partie-detail">Tél : ${form.contactPhone}</div>
+  </div>` : ''}
 </div>
 <hr>
 
+<div class="intro">
 <p>Madame, Monsieur,</p>
-<br>
-<p>Suite à votre demande, j'ai l'amabilité de vous proposer le contrat de location suivant.</p>
-<p>Si cette proposition retient votre attention, veuillez me renvoyer un exemplaire revêtu de votre accord et accompagné du règlement.</p>
-<p>En souhaitant bientôt vous accueillir, je vous adresse mes salutations.</p>
+<p>Suite à votre demande, nous avons le plaisir de vous adresser le contrat de location suivant.</p>
+<p>Si cette proposition vous convient, merci de nous retourner un exemplaire signé avec la mention <strong>« Lu et approuvé »</strong>, accompagné du règlement correspondant.</p>
+<p>Nous espérons vous accueillir très prochainement et vous souhaitons un excellent séjour.</p>
+</div>
 
 <h2>Adresse du logement</h2>
 <p>Apt B 401 au 4ème étage de la résidence Edelweiss<br>
@@ -112,20 +121,30 @@ Allée des Saules, 05240 La Salle-les-Alpes — Serre Chevalier, Hautes-Alpes<br
 <h2>Le propriétaire loue :</h2>
 <p>Du <strong>${fmt(tenant.startDate)} à ${form.arrivalTime}</strong> au <strong>${fmt(tenant.endDate)} à ${form.departureTime}</strong></p>
 <p>Le montant de la location est fixé à <strong>${amount.toFixed(0)} €</strong> net toutes charges comprises pour un maximum de <strong>${form.maxPersons} personnes</strong>.</p>
+${form.taxeSejour === 'incluse' ? `<p>La taxe de séjour est incluse dans le prix de la location.</p>` : ''}
+${form.taxeSejour === 'ensus' ? `<p>La taxe de séjour${form.taxeSejourDetail ? ` (${form.taxeSejourDetail})` : ''} sera à régler directement sur place à l'arrivée.</p>` : ''}
 ${form.cleaningBy === 'prestataire' && form.cleaningFee ? `<p>Les frais de ménage de <strong>${form.cleaningFee} €</strong> sont à rajouter au prix de la location.</p>` : ''}
-${form.cleaningBy === 'locataire' ? '<p style="font-size:9.5pt;background:#fef9c3;border-left:3px solid #ca8a04;padding:7px 12px;margin:8px 0;color:#713f12">Le ménage de fin de séjour est à la charge du locataire.</p>' : ''}
+${form.cleaningBy === 'locataire' ? '<p class="hl">Le ménage de fin de séjour est à la charge du locataire.</p>' : ''}
 ${form.cleaningBy === 'inclus' ? '<p>Les frais de ménage sont inclus dans le prix de la location.</p>' : ''}
 
 <h2>Dans l'appartement vous trouverez :</h2>
 <ul>${CADELIO_EQUIPMENT.map(e => `<li>${e}</li>`).join('')}</ul>
-<p style="font-size:9.5pt;background:#fef9c3;border-left:3px solid #ca8a04;padding:7px 12px;margin:8px 0;color:#713f12;page-break-inside:avoid">Le linge de lit, serviettes de toilette et torchons ne sont pas fournis. Vous pouvez les louer directement auprès de Justine.</p>
+<p class="hl">Le linge de lit, serviettes de toilette et torchons ne sont pas fournis. Vous pouvez les louer directement auprès de Justine.</p>
 
 <h2>À savoir :</h2>
-<ul>
-${form.specialNotes ? form.specialNotes.split('\n').filter(l => l.trim()).map(l => `<li>${l}</li>`).join('') : ''}
-${form.contactName && form.contactPhone ? `<li>Votre contact sur place sera <strong>${form.contactName}</strong> au <strong>${form.contactPhone}</strong></li>` : ''}
-</ul>
-${validCautions.length > 0 ? `<p style="font-size:9.5pt;background:#fef9c3;border-left:3px solid #ca8a04;padding:7px 12px;margin:8px 0;color:#713f12"><strong>Cautions demandées à l\'arrivée :</strong> ${validCautions.map(c => `${c.label} : <strong>${c.amount} €</strong>`).join(' — ')}<br><span style="font-style:italic">(Restituées au départ. En cas de dégradations, elles pourront être conservées partiellement ou totalement.)</span></p>` : ''}
+${form.specialNotes ? `<ul>${form.specialNotes.split('\n').filter(l => l.trim()).map(l => `<li>${l}</li>`).join('')}</ul>` : ''}
+${validCautions.length > 0 ? `<p class="hl"><strong>Cautions demandées à l\'arrivée :</strong> ${validCautions.map(c => `${c.label} : <strong>${c.amount} €</strong>`).join(' — ')}<br><span style="font-style:italic">(Restituées au départ. En cas de dégradations constatées, elles pourront être conservées partiellement ou totalement.)</span></p>` : ''}
+
+<h2>Règlement intérieur</h2>
+<div class="regl">
+<p><strong>Animaux de compagnie</strong> — Les animaux (chiens, chats…) ne sont pas acceptés dans l'appartement.</p>
+<p><strong>Tabac</strong> — Il est strictement interdit de fumer dans l'appartement et sur les balcons.</p>
+<p><strong>Chauffage</strong> — Merci de bien fermer les fenêtres lorsque le chauffage est en fonctionnement.</p>
+<p><strong>Tri des déchets</strong> — Le tri sélectif est obligatoire. Les bacs se trouvent à l'entrée de la résidence.</p>
+<p><strong>Tranquillité</strong> — Merci de respecter la tranquillité du voisinage. Le silence est exigé entre 22h et 8h.</p>
+<p><strong>Capacité</strong> — L'appartement ne peut accueillir que <strong>${form.maxPersons} personnes</strong> maximum conformément au contrat. Toute personne supplémentaire non déclarée est interdite.</p>
+<p><strong>Assurance</strong> — Le locataire déclare être couvert par une assurance responsabilité civile ou villégiature pour toute la durée du séjour.</p>
+</div>
 
 <h2>La réservation :</h2>
 ${a1 > 0 ? `<p>Un acompte de <strong>${a1.toFixed(0)} €</strong> par virement est demandé pour bloquer la réservation${tenant.acompte1DueDate ? `, à régler avant le <strong>${fmt(tenant.acompte1DueDate)}</strong>` : ''}.</p><p><em>(Non remboursable en cas d'annulation par vos soins)</em></p>` : ''}
@@ -184,8 +203,10 @@ export default function ContratModal({ tenant, property, providerEmails, onClose
     contactName: initContactName,
     contactPhone: initContactPhone,
     tenantEmail: '',
-    specialNotes: 'Animaux interdits',
+    specialNotes: '',
     soldeMode: 'virement_10j',
+    taxeSejour: 'non',
+    taxeSejourDetail: '',
   });
 
   const [cautions, setCautions] = useState(savedData?.cautions || [
@@ -287,6 +308,18 @@ export default function ContratModal({ tenant, property, providerEmails, onClose
               <option value="virement_10j">Virement — 10 jours avant l'arrivée</option>
               <option value="main_propre">En mains propres</option>
             </select>
+          </div>
+
+          <div>
+            <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Taxe de séjour</label>
+            <select value={form.taxeSejour} onChange={e => setForm({ ...form, taxeSejour: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl font-black text-slate-700 outline-none bg-white mb-2">
+              <option value="non">Non applicable</option>
+              <option value="incluse">Incluse dans le prix</option>
+              <option value="ensus">En sus (à préciser)</option>
+            </select>
+            {form.taxeSejour === 'ensus' && (
+              <input type="text" value={form.taxeSejourDetail} onChange={e => setForm({ ...form, taxeSejourDetail: e.target.value })} placeholder="Ex : 1,65 € par personne et par nuit" className="w-full p-3 border border-slate-200 rounded-xl font-black text-slate-700 outline-none text-sm"/>
+            )}
           </div>
 
           <div>
