@@ -30,6 +30,7 @@ const buildHTML = (form, cautions, tenant) => {
   const a2 = parseFloat(tenant.acompte2Amount) || 0;
   const s = parseFloat(tenant.soldeAmount) || 0;
   const validCautions = cautions.filter(c => c.label && c.amount && c.checked !== false);
+  const soldeModeText = { virement: 'par virement', main_propre: 'à main propre', justine: 'en espèces à Justine' }[form.soldeMode] || 'par virement';
 
   return `<!DOCTYPE html>
 <html lang="fr">
@@ -68,6 +69,7 @@ li{margin-bottom:3px}
 <body>
 <button class="print-btn" onclick="window.print()">⬇ Enregistrer en PDF</button>
 
+<p style="text-align:center;font-size:14pt;font-family:Helvetica,Arial,sans-serif;font-weight:900;letter-spacing:3px;color:#1a1a1a;margin-bottom:4px;text-transform:uppercase">Les Cimes de Cadélio</p>
 <h1>Contrat de Location</h1>
 <p class="ref">Réf : ${(tenant.name || '').replace(/\s+/g, '_')}_${tenant.startDate || ''}</p>
 <hr>
@@ -108,7 +110,7 @@ Allée des Saules, 05240 La Salle-les-Alpes — Serre Chevalier, Hautes-Alpes<br
 <p>Du <strong>${fmt(tenant.startDate)} à ${form.arrivalTime}</strong> au <strong>${fmt(tenant.endDate)} à ${form.departureTime}</strong></p>
 <p>Le montant de la location est fixé à <strong>${amount.toFixed(0)} €</strong> net toutes charges comprises pour un maximum de <strong>${form.maxPersons} personnes</strong>.</p>
 ${form.cleaningBy === 'prestataire' && form.cleaningFee ? `<p>Les frais de ménage de <strong>${form.cleaningFee} €</strong> sont à rajouter au prix de la location.</p>` : ''}
-${form.cleaningBy === 'locataire' ? '<p>Le ménage de fin de séjour est à la charge du locataire.</p>' : ''}
+${form.cleaningBy === 'locataire' ? '<p style="font-size:9.5pt;background:#fef9c3;border-left:3px solid #ca8a04;padding:7px 12px;margin:8px 0;color:#713f12">Le ménage de fin de séjour est à la charge du locataire.</p>' : ''}
 ${form.cleaningBy === 'inclus' ? '<p>Les frais de ménage sont inclus dans le prix de la location.</p>' : ''}
 
 <h2>Dans l'appartement vous trouverez :</h2>
@@ -119,16 +121,13 @@ ${form.cleaningBy === 'inclus' ? '<p>Les frais de ménage sont inclus dans le pr
 <ul>
 ${form.specialNotes ? form.specialNotes.split('\n').filter(l => l.trim()).map(l => `<li>${l}</li>`).join('') : ''}
 ${form.contactName && form.contactPhone ? `<li>Votre contact sur place sera <strong>${form.contactName}</strong> au <strong>${form.contactPhone}</strong></li>` : ''}
-${validCautions.length > 0 ? `<li>Cautions demandées à l'arrivée :
-  <ul>${validCautions.map(c => `<li>${c.label} : <strong>${c.amount} €</strong></li>`).join('')}</ul>
-  <p class="note">(Ces cautions seront restituées au départ. En cas de dégradations constatées, elles pourront être conservées partiellement ou totalement)</p>
-</li>` : ''}
 </ul>
+${validCautions.length > 0 ? `<p style="font-size:9.5pt;background:#fef9c3;border-left:3px solid #ca8a04;padding:7px 12px;margin:8px 0;color:#713f12"><strong>Cautions demandées à l\'arrivée :</strong> ${validCautions.map(c => `${c.label} : <strong>${c.amount} €</strong>`).join(' — ')}<br><span style="font-style:italic">(Restituées au départ. En cas de dégradations, elles pourront être conservées partiellement ou totalement.)</span></p>` : ''}
 
 <h2>La réservation :</h2>
 ${a1 > 0 ? `<p>Un acompte de <strong>${a1.toFixed(0)} €</strong> par virement est demandé pour bloquer la réservation${tenant.acompte1DueDate ? `, à régler avant le <strong>${fmt(tenant.acompte1DueDate)}</strong>` : ''}.</p><p><em>(Non remboursable en cas d'annulation par vos soins)</em></p>` : ''}
 ${a2 > 0 ? `<p>Un deuxième acompte de <strong>${a2.toFixed(0)} €</strong> par virement est demandé${tenant.acompte2DueDate ? `, à régler avant le <strong>${fmt(tenant.acompte2DueDate)}</strong>` : ''}.</p>` : ''}
-${s > 0 ? `<p>Le solde de <strong>${s.toFixed(0)} €</strong> sera à régler par virement${tenant.soldeDueDate ? ` avant le <strong>${fmt(tenant.soldeDueDate)}</strong>` : ' une semaine avant votre arrivée'}.</p>` : ''}
+${s > 0 ? `<p>Le solde de <strong>${s.toFixed(0)} €</strong> sera à régler ${soldeModeText}${tenant.soldeDueDate ? ` avant le <strong>${fmt(tenant.soldeDueDate)}</strong>` : ' une semaine avant votre arrivée'}.</p>` : ''}
 <p>La réservation prendra effet à réception de l'acompte et du présent contrat daté et signé avec la mention <strong>« Lu et approuvé »</strong>.</p>
 <p>Au-delà de cette date la réservation sera annulée, le propriétaire disposera de la location à sa convenance.</p>
 
@@ -183,6 +182,7 @@ export default function ContratModal({ tenant, property, providerEmails, onClose
     contactPhone: initContactPhone,
     tenantEmail: '',
     specialNotes: 'Animaux interdits',
+    soldeMode: 'virement',
   });
 
   const [cautions, setCautions] = useState(savedData?.cautions || [
@@ -276,6 +276,15 @@ export default function ContratModal({ tenant, property, providerEmails, onClose
           <div>
             <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Email du locataire</label>
             <input type="email" value={form.tenantEmail} onChange={e => setForm({ ...form, tenantEmail: e.target.value })} placeholder="exemple@mail.com" className="w-full p-3 border border-slate-200 rounded-xl font-black text-slate-700 outline-none"/>
+          </div>
+
+          <div>
+            <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Mode de règlement du solde</label>
+            <select value={form.soldeMode} onChange={e => setForm({ ...form, soldeMode: e.target.value })} className="w-full p-3 border border-slate-200 rounded-xl font-black text-slate-700 outline-none bg-white">
+              <option value="virement">Virement bancaire</option>
+              <option value="main_propre">À main propre</option>
+              <option value="justine">En espèces à Justine</option>
+            </select>
           </div>
 
           <div>
