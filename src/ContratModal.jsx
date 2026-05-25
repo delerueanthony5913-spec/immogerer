@@ -112,13 +112,9 @@ li{margin-bottom:5px}
 <p>Nous espérons vous accueillir très prochainement et vous souhaitons un excellent séjour.</p>
 </div>
 
-<h2>Adresse du logement</h2>
-<p>Apt B 401 au 4ème étage de la résidence Edelweiss<br>
-Allée des Saules, 05240 La Salle-les-Alpes — Serre Chevalier, Hautes-Alpes<br>
-<a href="https://goo.gl/maps/U1x4oWFEjc1vJN629" style="color:#1d4ed8">Voir sur Google Maps</a></p>
-<img src="https://les-cimes-de-cadelio.vercel.app/_next/image?url=%2Fphotos%2F1.jpg&w=1200&q=75" alt="Séjour" style="width:100%;max-height:220px;object-fit:cover;border-radius:6px;margin:10px 0">
-
-<h2>Le propriétaire loue :</h2>
+<h2>Le logement loué</h2>
+<img src="https://les-cimes-de-cadelio.vercel.app/_next/image?url=%2Fphotos%2F1.jpg&w=1200&q=75" alt="Séjour" style="width:100%;max-height:220px;object-fit:cover;border-radius:6px;margin:6px 0 10px">
+<p style="font-size:9.5pt;color:#4a5568">Apt B 401 — Résidence Edelweiss, Allée des Saules, 05240 La Salle-les-Alpes — Serre Chevalier · <a href="https://goo.gl/maps/U1x4oWFEjc1vJN629" style="color:#3182ce">Google Maps</a></p>
 <p>Du <strong>${fmt(tenant.startDate)} à ${form.arrivalTime}</strong> au <strong>${fmt(tenant.endDate)} à ${form.departureTime}</strong></p>
 <p>Le montant de la location est fixé à <strong>${amount.toFixed(0)} €</strong> net toutes charges comprises pour un maximum de <strong>${form.maxPersons} personnes</strong>.</p>
 ${form.taxeSejour === 'incluse' ? `<p>La taxe de séjour est incluse dans le prix de la location.</p>` : ''}
@@ -131,25 +127,23 @@ ${form.cleaningBy === 'inclus' ? '<p>Les frais de ménage sont inclus dans le pr
 <ul>${CADELIO_EQUIPMENT.map(e => `<li>${e}</li>`).join('')}</ul>
 <p class="hl">Le linge de lit, serviettes de toilette et torchons ne sont pas fournis. Vous pouvez les louer directement auprès de Justine.</p>
 
-<h2>À savoir :</h2>
-${form.specialNotes ? `<ul>${form.specialNotes.split('\n').filter(l => l.trim()).map(l => `<li>${l}</li>`).join('')}</ul>` : ''}
-${validCautions.length > 0 ? `<p class="hl"><strong>Cautions demandées à l\'arrivée :</strong> ${validCautions.map(c => `${c.label} : <strong>${c.amount} €</strong>`).join(' — ')}<br><span style="font-style:italic">(Restituées au départ. En cas de dégradations constatées, elles pourront être conservées partiellement ou totalement.)</span></p>` : ''}
+${form.specialNotes ? `<h2>À savoir</h2><ul>${form.specialNotes.split('\n').filter(l => l.trim()).map(l => `<li>${l}</li>`).join('')}</ul>` : ''}
 
 <h2>Règlement intérieur</h2>
 <div class="regl">
-<p><strong>Animaux de compagnie</strong> — Les animaux (chiens, chats…) ne sont pas acceptés dans l'appartement.</p>
-<p><strong>Tabac</strong> — Il est strictement interdit de fumer dans l'appartement et sur les balcons.</p>
-<p><strong>Chauffage</strong> — Merci de bien fermer les fenêtres lorsque le chauffage est en fonctionnement.</p>
-<p><strong>Tri des déchets</strong> — Le tri sélectif est obligatoire. Les bacs se trouvent à l'entrée de la résidence.</p>
-<p><strong>Tranquillité</strong> — Merci de respecter la tranquillité du voisinage. Le silence est exigé entre 22h et 8h.</p>
-<p><strong>Capacité</strong> — L'appartement ne peut accueillir que <strong>${form.maxPersons} personnes</strong> maximum conformément au contrat. Toute personne supplémentaire non déclarée est interdite.</p>
+<p><strong>Animaux</strong> — Les animaux sont interdits dans l'appartement.</p>
+<p><strong>Tabac</strong> — Il est interdit de fumer dans l'appartement. Il est toutefois autorisé de fumer sur les balcons.</p>
+<p><strong>Chauffage</strong> — Pensez à fermer les fenêtres lorsque le chauffage est allumé — merci pour vos voisins et pour la planète !</p>
+<p><strong>Déchets</strong> — Merci de trier vos déchets. Les containers de collecte sélective sont accessibles à proximité immédiate du logement.</p>
+<p><strong>Voisinage & capacité</strong> — Merci de respecter la tranquillité des voisins et de limiter les nuisances sonores. L'appartement accueille au maximum <strong>${form.maxPersons} personnes</strong> conformément au contrat.</p>
 <p><strong>Assurance</strong> — Le locataire déclare être couvert par une assurance responsabilité civile ou villégiature pour toute la durée du séjour.</p>
 </div>
 
-<h2>La réservation :</h2>
+<h2>La réservation</h2>
 ${a1 > 0 ? `<p>Un acompte de <strong>${a1.toFixed(0)} €</strong> par virement est demandé pour bloquer la réservation${tenant.acompte1DueDate ? `, à régler avant le <strong>${fmt(tenant.acompte1DueDate)}</strong>` : ''}.</p><p><em>(Non remboursable en cas d'annulation par vos soins)</em></p>` : ''}
 ${a2 > 0 ? `<p>Un deuxième acompte de <strong>${a2.toFixed(0)} €</strong> par virement est demandé${tenant.acompte2DueDate ? `, à régler avant le <strong>${fmt(tenant.acompte2DueDate)}</strong>` : ''}.</p>` : ''}
 ${s > 0 ? `<p>Le solde de <strong>${s.toFixed(0)} €</strong> sera à régler ${soldeModeText}${tenant.soldeDueDate ? ` avant le <strong>${fmt(tenant.soldeDueDate)}</strong>` : (form.soldeMode === 'main_propre' ? ' à l\'arrivée dans les lieux' : '')}.</p>` : ''}
+${validCautions.length > 0 ? `<p class="hl"><strong>Cautions demandées à l\'arrivée :</strong> ${validCautions.map(c => `${c.label} : <strong>${c.amount} €</strong>`).join(' — ')}<br><span style="font-style:italic">(Restituées au départ. En cas de dégradations constatées, elles pourront être conservées partiellement ou totalement.)</span></p>` : ''}
 <p>La réservation prendra effet à réception ${a1 > 0 || a2 > 0 ? 'de l\'acompte' : 'du règlement intégral'} et du présent contrat daté et signé avec la mention <strong>« Lu et approuvé »</strong>.</p>
 <p>Au-delà de cette date la réservation sera annulée, le propriétaire disposera de la location à sa convenance.</p>
 
@@ -342,8 +336,8 @@ export default function ContratModal({ tenant, property, providerEmails, onClose
           </div>
 
           <div>
-            <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">Règles (une par ligne)</label>
-            <textarea value={form.specialNotes} onChange={e => setForm({ ...form, specialNotes: e.target.value })} rows={3} placeholder="Animaux interdits&#10;Pas de fête..." className="w-full p-3 border border-slate-200 rounded-xl font-black text-slate-700 outline-none resize-none text-sm"/>
+            <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">À savoir <span className="normal-case font-medium text-slate-300">(optionnel — apparaît dans le contrat si rempli)</span></label>
+            <textarea value={form.specialNotes} onChange={e => setForm({ ...form, specialNotes: e.target.value })} rows={3} placeholder="Une ligne = un point. Laisser vide pour ne pas afficher cette section." className="w-full p-3 border border-slate-200 rounded-xl font-black text-slate-700 outline-none resize-none text-sm"/>
           </div>
 
           {error && (
