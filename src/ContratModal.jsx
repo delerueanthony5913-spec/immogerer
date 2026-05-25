@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, FileText, Download, Plus, Trash2 } from 'lucide-react';
+import SIGNATURE_B64 from './signature.js';
 
 const CADELIO_EQUIPMENT = [
   '1 lit double 160 x 200',
@@ -24,7 +25,7 @@ const fmt = (d) => {
   return `${day}/${m}/${y}`;
 };
 
-const buildHTML = (form, cautions, tenant) => {
+const buildHTML = (form, cautions, tenant, signatureB64) => {
   const amount = parseFloat(tenant.grossAmount) || 0;
   const a1 = parseFloat(tenant.acompte1Amount) || 0;
   const a2 = parseFloat(tenant.acompte2Amount) || 0;
@@ -145,7 +146,7 @@ ${s > 0 ? `<p>Le solde de <strong>${s.toFixed(0)} €</strong> sera à régler $
 <p>Veuillez dater et signer ci-dessous avec la mention <strong>« Lu et approuvé »</strong> :</p>
 <div class="sigs">
 <div class="sig"><div class="sig-lbl">Le locataire :</div><div class="sig-name">${tenant.name || ''}</div></div>
-<div class="sig"><div class="sig-lbl">Le bailleur :</div><div class="sig-name">Camille et Anthony DELERUE</div></div>
+<div class="sig"><div class="sig-lbl">Le bailleur :</div><div class="sig-name">Camille et Anthony DELERUE</div>${signatureB64 ? `<img src="${signatureB64}" style="max-width:200px;max-height:65px;margin-top:8px;display:block">` : ''}</div>
 </div>
 
 <div class="footer">Camille et Anthony DELERUE — 5913 route des grandes terres, 13480 CABRIES — 07 49 89 54 97 — delerue.anthony@hotmail.fr</div>
@@ -199,7 +200,7 @@ export default function ContratModal({ tenant, property, providerEmails, onClose
   const generate = () => {
     setError('');
     try {
-      const html = buildHTML(form, cautions, tenant);
+      const html = buildHTML(form, cautions, tenant, SIGNATURE_B64);
       const win = window.open('', '_blank');
       if (!win) {
         setError('Popup bloquée par le navigateur. Autorisez les popups pour ce site puis réessayez.');
