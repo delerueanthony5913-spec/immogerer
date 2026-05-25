@@ -26,6 +26,16 @@ const fmt = (d) => {
   return `${day}/${m}/${y}`;
 };
 
+const MONTHS_FR = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+const fmtRange = (start, end) => {
+  if (!start || !end) return '';
+  const [sy, sm, sd] = start.split('-');
+  const [ey, em, ed] = end.split('-');
+  if (sy === ey && sm === em)
+    return `${parseInt(sd)} au ${parseInt(ed)} ${MONTHS_FR[parseInt(em)-1]} ${ey}`;
+  return `${parseInt(sd)} ${MONTHS_FR[parseInt(sm)-1]} au ${parseInt(ed)} ${MONTHS_FR[parseInt(em)-1]} ${ey}`;
+};
+
 const buildHTML = (form, cautions, tenant, signatureB64) => {
   const amount = parseFloat(tenant.grossAmount) || 0;
   const a1 = parseFloat(tenant.acompte1Amount) || 0;
@@ -33,12 +43,13 @@ const buildHTML = (form, cautions, tenant, signatureB64) => {
   const s = parseFloat(tenant.soldeAmount) || 0;
   const validCautions = cautions.filter(c => c.label && c.amount && c.checked !== false);
   const soldeModeText = { virement_10j: 'par virement 10 jours avant l\'arrivée dans les lieux', main_propre: 'en mains propres' }[form.soldeMode] || 'par virement 10 jours avant l\'arrivée dans les lieux';
+  const docTitle = `Contrat Les Cimes de Cadelio - ${tenant.name || ''} - ${fmtRange(tenant.startDate, tenant.endDate)}`;
 
   return `<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>Contrat - ${tenant.name || ''}</title>
+<title>${docTitle}</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:Georgia,serif;font-size:11pt;line-height:1.75;color:#2d3748;padding:2.2cm;max-width:21cm;margin:0 auto}
@@ -62,7 +73,7 @@ li{margin-bottom:5px}
 .footer{text-align:center;font-size:8pt;color:#a0aec0;margin-top:28px;padding-top:12px;border-top:1px solid #e2e8f0}
 .note{font-size:9pt;font-style:italic;color:#718096}
 .print-btn{position:fixed;top:16px;right:16px;padding:10px 22px;background:#3182ce;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700;font-family:Helvetica,Arial,sans-serif;box-shadow:0 4px 12px rgba(49,130,206,.3)}
-.parties{display:flex;gap:10px;margin-bottom:20px;page-break-inside:avoid;break-inside:avoid}
+.parties{display:flex;gap:10px;margin-top:28px;margin-bottom:20px;page-break-inside:avoid;break-inside:avoid}
 .partie{flex:1;vertical-align:top;font-size:10pt;background:#f7fafc;padding:11px 13px;border-radius:6px;border:1px solid #e2e8f0}
 .partie-lbl{font-family:Helvetica,Arial,sans-serif;font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#a0aec0;margin-bottom:5px}
 .partie-name{font-size:11pt;font-weight:bold;margin-bottom:3px;color:#1a365d}
