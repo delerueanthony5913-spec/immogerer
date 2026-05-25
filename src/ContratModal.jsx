@@ -73,7 +73,7 @@ li{margin-bottom:5px}
 .footer{text-align:center;font-size:8pt;color:#a0aec0;margin-top:28px;padding-top:12px;border-top:1px solid #e2e8f0}
 .note{font-size:9pt;font-style:italic;color:#718096}
 .print-btn{position:fixed;top:16px;right:16px;padding:10px 22px;background:#3182ce;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700;font-family:Helvetica,Arial,sans-serif;box-shadow:0 4px 12px rgba(49,130,206,.3)}
-.parties{display:flex;gap:10px;margin-top:28px;margin-bottom:20px;page-break-inside:avoid;break-inside:avoid}
+.parties{display:flex;gap:10px;margin-top:10px;margin-bottom:16px;page-break-inside:avoid;break-inside:avoid}
 .partie{flex:1;vertical-align:top;font-size:10pt;background:#f7fafc;padding:11px 13px;border-radius:6px;border:1px solid #e2e8f0}
 .partie-lbl{font-family:Helvetica,Arial,sans-serif;font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#a0aec0;margin-bottom:5px}
 .partie-name{font-size:11pt;font-weight:bold;margin-bottom:3px;color:#1a365d}
@@ -82,12 +82,12 @@ li{margin-bottom:5px}
 .regl{background:#f0f7ff;border-radius:6px;padding:6px 16px;margin:8px 0;page-break-inside:avoid;break-inside:avoid;border:1px solid #bee3f8}
 .regl p{border-bottom:1px solid #dbeafe;padding:6px 0;margin-bottom:0;font-size:10.5pt}
 .regl p:last-child{border-bottom:none}
-.intro{background:#f7fafc;border-radius:6px;padding:14px 18px;margin:14px 0;border-left:3px solid #bee3f8;page-break-inside:avoid;break-inside:avoid}
+.intro{background:#f7fafc;border-radius:6px;padding:10px 18px;margin:8px 0;border-left:3px solid #bee3f8;page-break-inside:avoid;break-inside:avoid}
 .logement-top{page-break-inside:avoid;break-inside:avoid}
 @media print{
   .print-btn{display:none}
   body{padding:1.5cm}
-  h2{page-break-after:avoid;break-after:avoid}
+  h2{page-break-after:avoid;break-after:avoid;margin-top:2em}
   p{orphans:4;widows:4}
   .rib,.sigs,.parties,.hl,.intro,.regl,.logement-top{page-break-inside:avoid;break-inside:avoid}
   h2 + p, h2 + ul, h2 + div, h2 + img{page-break-before:avoid;break-before:avoid}
@@ -167,7 +167,7 @@ ${s > 0 ? (form.soldeMode === 'main_propre' ? `<p>Le solde de <strong>${s.toFixe
 ${validCautions.length > 0 ? `<p class="hl"><strong>Cautions demandées à l\'arrivée :</strong> ${validCautions.map(c => `${c.label} : <strong>${c.amount} €</strong>`).join(' — ')}<br><span style="font-style:italic">(Restituées au départ. En cas de dégradations constatées, elles pourront être conservées partiellement ou totalement.)</span></p>` : ''}
 <p>La réservation sera confirmée à réception ${a1 > 0 || a2 > 0 ? 'de l\'acompte' : 'du règlement intégral'} et du présent contrat daté et signé avec la mention <strong>« Lu et approuvé »</strong>. Tant que ces éléments ne sont pas reçus, le logement reste disponible à la location et la réservation n'est pas garantie.</p>
 
-<h2>Coordonnées bancaires (RIB)</h2>
+<h2 style="page-break-before:always;break-before:always">Coordonnées bancaires (RIB)</h2>
 <div class="rib">
 <table>
 <tr><td>Titulaire</td><td>Anthony et Camille DELERUE</td></tr>
@@ -177,7 +177,7 @@ ${validCautions.length > 0 ? `<p class="hl"><strong>Cautions demandées à l\'ar
 </table>
 </div>
 
-<h2 style="page-break-before:always;break-before:always">Signature</h2>
+<h2>Signature</h2>
 <p>Veuillez dater et signer ci-dessous avec la mention <strong>« Lu et approuvé »</strong> :</p>
 <div class="sigs">
 <div class="sig"><div class="sig-lbl">Le locataire :</div><div class="sig-name">${tenant.name || ''}</div></div>
