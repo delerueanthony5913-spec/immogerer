@@ -61,16 +61,16 @@ h2{font-size:10.5pt;margin:22px 0 8px;font-family:Helvetica,Arial,sans-serif;tex
 p{margin-bottom:8px;orphans:3;widows:3}
 ul{margin:6px 0 6px 20px}
 li{margin-bottom:5px}
-.rib{background:#ebf8ff;border-left:3px solid #3182ce;padding:12px 16px;margin:8px 0;page-break-inside:avoid;break-inside:avoid;border-radius:0 4px 4px 0}
+.rib{background:#ebf8ff;border-left:3px solid #3182ce;padding:8px 14px;margin:6px 0;page-break-inside:avoid;break-inside:avoid;border-radius:0 4px 4px 0}
 .rib table{border-collapse:collapse;width:100%}
-.rib td{padding:3px 8px;font-size:10pt;color:#2d3748;font-family:'Calibri','Segoe UI',Arial,sans-serif}
+.rib td{padding:2px 8px;font-size:10pt;color:#2d3748;font-family:'Calibri','Segoe UI',Arial,sans-serif}
 .rib td:first-child{font-weight:bold;width:90px;color:#2c5282}
 .rib .iban{letter-spacing:2.5px;font-size:10.5pt;font-weight:700}
-.sigs{display:flex;gap:16px;margin-top:28px;page-break-inside:avoid;break-inside:avoid}
-.sig{flex:1;border:1px solid #e2e8f0;background:#f7fafc;padding:12px 14px;min-height:90px;border-radius:4px}
+.sigs{display:flex;gap:12px;margin-top:16px;page-break-inside:avoid;break-inside:avoid}
+.sig{flex:1;border:1px solid #e2e8f0;background:#f7fafc;padding:10px 12px;min-height:70px;border-radius:4px}
 .sig-lbl{font-size:9pt;font-weight:bold;font-family:Helvetica,Arial,sans-serif;margin-bottom:4px;color:#2c5282;text-transform:uppercase;letter-spacing:1px}
 .sig-name{font-size:9pt;color:#718096}
-.footer{text-align:center;font-size:8pt;color:#a0aec0;margin-top:28px;padding-top:12px;border-top:1px solid #e2e8f0}
+.footer{text-align:center;font-size:8pt;color:#a0aec0;margin-top:16px;padding-top:10px;border-top:1px solid #e2e8f0}
 .note{font-size:9pt;font-style:italic;color:#718096}
 .print-btn{position:fixed;top:16px;right:16px;padding:10px 22px;background:#3182ce;color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:13px;font-weight:700;font-family:Helvetica,Arial,sans-serif;box-shadow:0 4px 12px rgba(49,130,206,.3)}
 .parties{display:flex;gap:10px;margin-top:10px;margin-bottom:16px;page-break-inside:avoid;break-inside:avoid}
@@ -87,7 +87,7 @@ li{margin-bottom:5px}
 @media print{
   .print-btn{display:none}
   body{padding:1.5cm}
-  h2{page-break-after:avoid;break-after:avoid;margin-top:2em}
+  h2{page-break-after:avoid;break-after:avoid;margin-top:1.4em}
   p{orphans:4;widows:4}
   .rib,.sigs,.parties,.hl,.intro,.regl,.logement-top{page-break-inside:avoid;break-inside:avoid}
   h2 + p, h2 + ul, h2 + div, h2 + img{page-break-before:avoid;break-before:avoid}

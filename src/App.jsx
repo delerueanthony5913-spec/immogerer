@@ -69,6 +69,7 @@ const App = () => {
   const [gcalStatusNotif, setGcalStatusNotif] = useState([]);
   const [contratModalData, setContratModalData] = useState(null);
   const [attachUploading, setAttachUploading] = useState(false);
+  const [attachError, setAttachError] = useState('');
   const [hasScrolledToNext, setHasScrolledToNext] = useState(false);
 
   const [googleConnected, setGoogleConnected] = useState(() => {
@@ -830,16 +831,20 @@ const App = () => {
   const uploadAttachment = async (file) => {
     if (!editingResId) return;
     setAttachUploading(true);
+    setAttachError('');
     try {
       const sRef = storageRef(storage, `reservations/${editingResId}/${file.name}`);
-      await uploadBytes(sRef, file);
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Délai dépassé — vérifiez les règles Firebase Storage (Console → Storage → Rules)')), 20000)
+      );
+      await Promise.race([uploadBytes(sRef, file), timeout]);
       const url = await getDownloadURL(sRef);
       const att = { name: file.name, url, uploadedAt: new Date().toISOString() };
       const newAtts = [...(formData.attachments || []), att];
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', editingResId), { attachments: newAtts }, { merge: true });
       setFormData(f => ({ ...f, attachments: newAtts }));
     } catch (e) {
-      alert('Erreur upload : ' + e.message);
+      setAttachError(e.message);
     } finally {
       setAttachUploading(false);
     }
@@ -2162,6 +2167,12 @@ const App = () => {
                       <input type="file" className="hidden" disabled={attachUploading} onChange={e => { if (e.target.files[0]) uploadAttachment(e.target.files[0]); e.target.value = ''; }}/>
                     </label>
                   </div>
+                  {attachError && (
+                    <div className="bg-rose-50 border border-rose-200 rounded-2xl px-3 py-2 mb-2 text-[9px] font-bold text-rose-600 flex items-start gap-2">
+                      <AlertTriangle size={11} className="flex-shrink-0 mt-0.5"/>
+                      <span>{attachError}</span>
+                    </div>
+                  )}
                   {(formData.attachments || []).length === 0 ? (
                     <p className="text-[9px] text-slate-400 font-black uppercase text-center py-2">Aucun fichier</p>
                   ) : (
