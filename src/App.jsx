@@ -5,7 +5,7 @@ import {
   Key, Lock, Loader2, Filter, List, CalendarRange, BarChart2, Calculator, Settings,
   Menu, X, Euro, Search, ArrowRight, LocateFixed, ChevronLeft, ChevronRight,
   Mail, CheckCircle, Clock, TrendingUp, TrendingDown, UploadCloud, AlertTriangle,
-  Check, Trash2, CalendarCheck, Calendar as CalendarIcon, FileText
+  Check, Trash2, CalendarCheck, Calendar as CalendarIcon, FileText, Copy
 } from 'lucide-react';
 
 import { auth, db, appId } from './firebaseConfig';
@@ -965,6 +965,35 @@ const App = () => {
     }
   };
  
+  const duplicateRes = () => {
+    const {
+      id, googleEventId, googleEventStatus, contrat, isDuplicate,
+      paymentDate, acompte1Date, acompte1DueDate, acompte2Date, acompte2DueDate,
+      soldeDate, soldeDueDate, resExpenses, ...rest
+    } = formData;
+    const cleanedExpenses = (resExpenses || []).map(exp => ({
+      ...exp,
+      id: Math.random().toString(36).substr(2, 9),
+      paymentDate: '',
+      googleDiasEntryId: undefined,
+      googleDiasEntryStatus: undefined,
+      googleDiasExitId: undefined,
+      googleDiasExitStatus: undefined,
+    }));
+    setEditingResId(null);
+    setFormData({
+      ...rest,
+      paymentDate: '',
+      acompte1Date: '',
+      acompte1DueDate: '',
+      acompte2Date: '',
+      acompte2DueDate: '',
+      soldeDate: '',
+      soldeDueDate: '',
+      resExpenses: cleanedExpenses,
+    });
+  };
+
   const handleQuickPayToggle = async (e, tenant, type, expId = null) => {
     e.stopPropagation(); e.preventDefault();
     if (!user || user.uid === 'local-test-user') return;
@@ -2139,6 +2168,7 @@ const App = () => {
                  </div>
                  <div className="flex items-center gap-4 w-full md:w-auto flex-wrap">
                    {editingResId && <button type="button" onClick={() => deleteRes(editingResId)} className="p-4 text-rose-500 bg-rose-50 rounded-[24px] hover:bg-rose-500 hover:text-white transition-colors"><Trash2 size={24}/></button>}
+                   {editingResId && <button type="button" onClick={duplicateRes} title="Dupliquer" className="p-4 text-blue-400 bg-blue-50 rounded-[24px] hover:bg-blue-500 hover:text-white transition-colors"><Copy size={24}/></button>}
                    {formData.platform === 'En direct' && (() => { const prop = (properties || []).find(p => p.id === formData.propertyId); return prop?.name?.toUpperCase().includes('CADEL'); })() && (
                      <button type="button" onClick={() => { const prop = (properties || []).find(p => p.id === formData.propertyId); setContratModalData({ tenant: formData, property: prop }); }}
                        className={`flex items-center gap-2 px-6 py-5 rounded-[24px] font-black uppercase tracking-[2px] text-[11px] transition-all border ${formData.contrat ? 'text-green-700 bg-green-50 border-green-200 hover:bg-green-100' : 'text-blue-600 bg-blue-50 border-blue-100 hover:bg-blue-100'}`}>
