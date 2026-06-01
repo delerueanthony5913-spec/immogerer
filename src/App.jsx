@@ -2162,7 +2162,7 @@ const App = () => {
                     <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
                         <div className="w-full md:w-1/2">
                             <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">Montant Global de la réservation</label>
-                            <input type="number" step="0.01" value={formData.grossAmount || ''} onChange={e => setFormData({ ...formData, grossAmount: e.target.value })} placeholder="Montant total €" className="w-full p-3 border border-slate-200 rounded-xl font-black text-slate-700 outline-none text-lg" />
+                            <input type="number" step="0.01" value={formData.grossAmount || ''} onChange={e => { const g = parseFloat(e.target.value) || 0; const a1 = parseFloat(formData.acompte1Amount) || 0; const a2 = parseFloat(formData.acompte2Amount) || 0; setFormData({ ...formData, grossAmount: e.target.value, soldeAmount: Math.max(0, g - a1 - a2) }); }} placeholder="Montant total €" className="w-full p-3 border border-slate-200 rounded-xl font-black text-slate-700 outline-none text-lg" />
                         </div>
                         <div className="w-full md:w-1/2 text-right">
                             <p className="text-[10px] font-bold text-slate-400 uppercase">Les acomptes et le solde ci-dessous correspondent au paiement de ce montant global.</p>
@@ -2171,7 +2171,7 @@ const App = () => {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                        <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
                            <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">Acompte 1</label>
-                           <input type="number" step="0.01" value={formData.acompte1Amount || ''} onChange={e => setFormData({ ...formData, acompte1Amount: e.target.value })} placeholder="Montant €" className="w-full p-3 border border-slate-100 rounded-xl font-black mb-2 text-slate-700 outline-none" />
+                           <input type="number" step="0.01" value={formData.acompte1Amount || ''} onChange={e => { const g = parseFloat(formData.grossAmount) || 0; const a1 = parseFloat(e.target.value) || 0; const a2 = parseFloat(formData.acompte2Amount) || 0; setFormData({ ...formData, acompte1Amount: e.target.value, soldeAmount: Math.max(0, g - a1 - a2) }); }} placeholder="Montant €" className="w-full p-3 border border-slate-100 rounded-xl font-black mb-2 text-slate-700 outline-none" />
                            <label className="text-[9px] font-black uppercase text-slate-300 mb-1 block">Date reçu</label>
                            <input type="date" value={formData.acompte1Date || ''} onChange={e => setFormData({ ...formData, acompte1Date: e.target.value })} className="w-full p-3 border border-slate-100 rounded-xl font-black text-slate-500 outline-none cursor-pointer mb-2" />
                            <label className="text-[9px] font-black uppercase text-blue-400 mb-1 block">Date limite (contrat)</label>
@@ -2179,7 +2179,7 @@ const App = () => {
                        </div>
                        <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
                            <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">Acompte 2</label>
-                           <input type="number" step="0.01" value={formData.acompte2Amount || ''} onChange={e => setFormData({ ...formData, acompte2Amount: e.target.value })} placeholder="Montant €" className="w-full p-3 border border-slate-100 rounded-xl font-black mb-2 text-slate-700 outline-none" />
+                           <input type="number" step="0.01" value={formData.acompte2Amount || ''} onChange={e => { const g = parseFloat(formData.grossAmount) || 0; const a1 = parseFloat(formData.acompte1Amount) || 0; const a2 = parseFloat(e.target.value) || 0; setFormData({ ...formData, acompte2Amount: e.target.value, soldeAmount: Math.max(0, g - a1 - a2) }); }} placeholder="Montant €" className="w-full p-3 border border-slate-100 rounded-xl font-black mb-2 text-slate-700 outline-none" />
                            <label className="text-[9px] font-black uppercase text-slate-300 mb-1 block">Date reçu</label>
                            <input type="date" value={formData.acompte2Date || ''} onChange={e => setFormData({ ...formData, acompte2Date: e.target.value })} className="w-full p-3 border border-slate-100 rounded-xl font-black text-slate-500 outline-none cursor-pointer mb-2" />
                            <label className="text-[9px] font-black uppercase text-blue-400 mb-1 block">Date limite (contrat)</label>
