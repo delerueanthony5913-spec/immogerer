@@ -633,8 +633,10 @@ const App = () => {
     const items = [];
     const addEntry = (monthKey, entry) => {
       if (!nextMonths.includes(monthKey)) return;
-      if (!monthStats[monthKey]) monthStats[monthKey] = { income: 0, taxes: 0, charges: 0 };
-      monthStats[monthKey].income += entry.income;
+      if (!monthStats[monthKey]) monthStats[monthKey] = { urssafGross: 0, directNet: 0, totalBank: 0, taxes: 0, charges: 0 };
+      monthStats[monthKey].urssafGross += entry.urssafGross;
+      monthStats[monthKey].directNet += entry.directNet;
+      monthStats[monthKey].totalBank += entry.totalBank;
       monthStats[monthKey].taxes += entry.taxes;
       monthStats[monthKey].charges += entry.charges;
       items.push({ ...entry, month: monthKey });
@@ -643,26 +645,30 @@ const App = () => {
       const prop = properties.find(p => p.id === t.propertyId);
       const propName = prop?.name || '--';
       const base = { id: t.id, tenant: t, name: t.name, propName, startDate: t.startDate, endDate: t.endDate };
+      const isUrssaf = t.isUrssaf !== false;
       if (t.platform === 'En direct') {
         const a1 = parseFloat(t.acompte1Amount) || 0;
         const a2 = parseFloat(t.acompte2Amount) || 0;
         const s = parseFloat(t.soldeAmount) || 0;
-        const tax = t.isUrssaf !== false ? (parseFloat(t.grossAmount) || 0) * 0.077 : 0;
+        const gross = parseFloat(t.grossAmount) || 0;
+        const tax = isUrssaf ? gross * 0.077 : 0;
         const charges = (t.resExpenses || []).filter(e => !e.paymentDate).reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-        if (a1 > 0 && !t.acompte1Date) { const d = t.acompte1DueDate || t.startDate || ''; if (d >= todayStr) addEntry(d.substring(0, 7), { ...base, label: 'Acompte 1', dueDate: d, income: a1, taxes: 0, charges: 0 }); }
-        if (a2 > 0 && !t.acompte2Date) { const d = t.acompte2DueDate || t.startDate || ''; if (d >= todayStr) addEntry(d.substring(0, 7), { ...base, label: 'Acompte 2', dueDate: d, income: a2, taxes: 0, charges: 0 }); }
-        if (s > 0 && !t.soldeDate) { const d = t.soldeDueDate || t.endDate || ''; if (d >= todayStr) addEntry(d.substring(0, 7), { ...base, label: 'Solde', dueDate: d, income: s, taxes: tax, charges }); }
+        if (a1 > 0 && !t.acompte1Date) { const d = t.acompte1DueDate || t.endDate || ''; if (d >= todayStr) addEntry(d.substring(0, 7), { ...base, label: 'Acompte 1', dueDate: d, urssafGross: isUrssaf ? 0 : 0, directNet: isUrssaf ? 0 : a1, totalBank: a1, taxes: 0, charges: 0 }); }
+        if (a2 > 0 && !t.acompte2Date) { const d = t.acompte2DueDate || t.endDate || ''; if (d >= todayStr) addEntry(d.substring(0, 7), { ...base, label: 'Acompte 2', dueDate: d, urssafGross: 0, directNet: isUrssaf ? 0 : a2, totalBank: a2, taxes: 0, charges: 0 }); }
+        if (s > 0 && !t.soldeDate) { const d = t.soldeDueDate || t.endDate || ''; if (d >= todayStr) addEntry(d.substring(0, 7), { ...base, label: 'Solde', dueDate: d, urssafGross: isUrssaf ? gross : 0, directNet: isUrssaf ? 0 : s, totalBank: s, taxes: tax, charges }); }
       } else {
-        const d = t.endDate || t.startDate || '';
+        const d = t.endDate || '';
         if (d >= todayStr) {
-          const tax = t.isUrssaf !== false ? (parseFloat(t.grossAmount) || 0) * 0.077 : 0;
+          const gross = parseFloat(t.grossAmount) || 0;
+          const net = parseFloat(t.netAmount) || 0;
+          const tax = isUrssaf ? gross * 0.077 : 0;
           const charges = (t.resExpenses || []).filter(e => !e.paymentDate).reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-          addEntry(d.substring(0, 7), { ...base, label: t.platform, dueDate: d, income: parseFloat(t.netAmount) || 0, taxes: tax, charges });
+          addEntry(d.substring(0, 7), { ...base, label: t.platform, dueDate: d, urssafGross: isUrssaf ? gross : 0, directNet: isUrssaf ? 0 : net, totalBank: net, taxes: tax, charges });
         }
       }
     });
     return {
-      months: nextMonths.filter(m => monthStats[m]).map(m => ({ month: m, ...monthStats[m], profit: monthStats[m].income - monthStats[m].taxes - monthStats[m].charges })),
+      months: nextMonths.filter(m => monthStats[m]).map(m => ({ month: m, ...monthStats[m], profit: monthStats[m].totalBank - monthStats[m].taxes - monthStats[m].charges })),
       items: items.sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))
     };
   }, [financeBaseTenants, properties]);
@@ -1752,9 +1758,16 @@ const App = () => {
                     <div className="text-amber-200 font-black">{previsionData.months.reduce((s, m) => s + m.profit, 0).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€ net estimé</div>
                   </div>
                   <div className="overflow-x-auto custom-scrollbar">
-                    <table className="w-full text-left min-w-[280px] md:min-w-[600px]">
+                    <table className="w-full text-left min-w-[320px] md:min-w-[700px]">
                       <thead className="bg-amber-50 uppercase text-amber-600 border-b text-[6px] md:text-xs tracking-tighter md:tracking-normal">
-                        <tr><th className="p-1 md:p-5">Mois</th><th className="p-1 md:p-5 text-right">Attendu</th><th className="p-1 md:p-5 text-right text-rose-400">Cotis.</th><th className="p-1 md:p-5 text-right text-slate-400">Prest.</th><th className="p-1 md:p-5 text-right font-black text-amber-700">Net estimé</th></tr>
+                        <tr>
+                          <th className="p-1 md:p-5">Mois</th>
+                          <th className="p-1 md:p-5 text-right text-slate-500">Brut URSSAF</th>
+                          <th className="p-1 md:p-5 text-right text-emerald-600">Direct</th>
+                          <th className="p-1 md:p-5 text-right text-rose-400">Cotis.</th>
+                          <th className="p-1 md:p-5 text-right text-slate-400">Prest.</th>
+                          <th className="p-1 md:p-5 text-right font-black text-amber-700">Net estimé</th>
+                        </tr>
                       </thead>
                       <tbody>
                         {previsionData.months.map((m, idx) => {
@@ -1770,17 +1783,18 @@ const App = () => {
                                     {isExp ? '▾' : '▸'} {formatMonthYear(m.month)}
                                   </span>
                                 </td>
-                                <td className="p-1 md:p-5 text-right text-indigo-600 text-[8px] md:text-sm">{m.income.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
-                                <td className="p-1 md:p-5 text-right text-rose-400 text-[8px] md:text-sm">-{m.taxes.toFixed(0)}€</td>
-                                <td className="p-1 md:p-5 text-right text-slate-400 text-[8px] md:text-sm">-{m.charges.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
+                                <td className="p-1 md:p-5 text-right text-slate-500 text-[8px] md:text-sm">{m.urssafGross > 0 ? `${m.urssafGross.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€` : '-'}</td>
+                                <td className="p-1 md:p-5 text-right text-emerald-600 font-black text-[8px] md:text-sm">{m.directNet > 0 ? `${m.directNet.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€` : '-'}</td>
+                                <td className="p-1 md:p-5 text-right text-rose-400 text-[8px] md:text-sm">{m.taxes > 0 ? `-${m.taxes.toFixed(2)}€` : '-'}</td>
+                                <td className="p-1 md:p-5 text-right text-slate-400 text-[8px] md:text-sm">{m.charges > 0 ? `-${m.charges.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€` : '-'}</td>
                                 <td className={`p-1 md:p-5 text-right font-black text-[8px] md:text-sm ${m.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{m.profit.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
                               </tr>
                               {isExp && (
                                 <tr>
-                                  <td colSpan={5} className={`p-0 ${pal.expanded}`}>
+                                  <td colSpan={6} className={`p-0 ${pal.expanded}`}>
                                     <table className="w-full text-left">
                                       <thead className={`${pal.header} uppercase text-[6px] md:text-[9px] tracking-wider`}>
-                                        <tr className={pal.text}><th className="pl-4 md:pl-8 py-2 md:py-3">Logement</th><th className="py-2 md:py-3">Client</th><th className="py-2 md:py-3 hidden md:table-cell">Séjour</th><th className="py-2 md:py-3">Type</th><th className="py-2 md:py-3 text-right pr-4 md:pr-8">Attendu</th></tr>
+                                        <tr className={pal.text}><th className="pl-4 md:pl-8 py-2 md:py-3">Logement</th><th className="py-2 md:py-3">Client</th><th className="py-2 md:py-3 hidden md:table-cell">Séjour</th><th className="py-2 md:py-3">Type</th><th className="py-2 md:py-3 text-right pr-4 md:pr-8">Virement att.</th></tr>
                                       </thead>
                                       <tbody className="divide-y divide-white/50">
                                         {monthItems.map((item, i) => (
@@ -1789,7 +1803,7 @@ const App = () => {
                                             <td className="py-2 md:py-3 text-[7px] md:text-[10px] font-bold">{item.name}</td>
                                             <td className="py-2 md:py-3 text-[7px] md:text-[10px] text-slate-500 hidden md:table-cell">{formatDateFr(item.startDate)} → {formatDateFr(item.endDate)}</td>
                                             <td className="py-2 md:py-3"><span className={`${pal.badge} text-[6px] md:text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full`}>{item.label}</span></td>
-                                            <td className="py-2 md:py-3 text-right pr-4 md:pr-8 font-black text-indigo-600 text-[8px] md:text-xs">{item.income.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
+                                            <td className="py-2 md:py-3 text-right pr-4 md:pr-8 font-black text-indigo-600 text-[8px] md:text-xs">{item.totalBank.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
                                           </tr>
                                         ))}
                                       </tbody>
@@ -1801,6 +1815,16 @@ const App = () => {
                           );
                         })}
                       </tbody>
+                      <tfoot className="bg-amber-600 text-white font-black text-[10px] md:text-sm sticky bottom-0 z-10">
+                        <tr>
+                          <td className="p-1.5 md:p-5 uppercase text-[6px] md:text-[10px]">Total prévisionnel</td>
+                          <td className="p-1.5 md:p-5 text-right opacity-90 text-[8px] md:text-sm">{previsionData.months.reduce((s,m)=>s+m.urssafGross,0).toLocaleString('fr-FR',{maximumFractionDigits:2})}€</td>
+                          <td className="p-1.5 md:p-5 text-right text-amber-200 text-[8px] md:text-sm">{previsionData.months.reduce((s,m)=>s+m.directNet,0).toLocaleString('fr-FR',{maximumFractionDigits:2})}€</td>
+                          <td className="p-1.5 md:p-5 text-right text-rose-200 text-[8px] md:text-sm">-{previsionData.months.reduce((s,m)=>s+m.taxes,0).toFixed(2)}€</td>
+                          <td className="p-1.5 md:p-5 text-right text-amber-200 text-[8px] md:text-sm">-{previsionData.months.reduce((s,m)=>s+m.charges,0).toLocaleString('fr-FR',{maximumFractionDigits:2})}€</td>
+                          <td className="p-1.5 md:p-5 text-right bg-amber-700/40 font-black text-[8px] md:text-sm">{previsionData.months.reduce((s,m)=>s+m.profit,0).toLocaleString('fr-FR',{maximumFractionDigits:2})}€</td>
+                        </tr>
+                      </tfoot>
                     </table>
                   </div>
                 </div>
@@ -1870,8 +1894,29 @@ const App = () => {
                     </tfoot>
                   </table>
                 </div>
+                {previsionData.months.length > 0 && (() => {
+                  const bilanProfit = monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank - d.taxes - d.charges, 0);
+                  const prevProfit = previsionData.months.reduce((s, m) => s + m.profit, 0);
+                  const grandTotal = bilanProfit + prevProfit;
+                  return (
+                    <div className="border-t-4 border-slate-700 bg-gradient-to-r from-slate-900 to-indigo-900 text-white px-4 md:px-8 py-4 md:py-6 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                      <div>
+                        <div className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-slate-400">Bilan réalisé + Prévisionnel</div>
+                        <div className="flex gap-4 mt-1 text-[8px] md:text-xs text-slate-300">
+                          <span>Réalisé : <span className="text-indigo-300 font-black">{bilanProfit.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</span></span>
+                          <span>+</span>
+                          <span>Prévi : <span className="text-amber-300 font-black">{prevProfit.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</span></span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-slate-400">Total estimé</div>
+                        <div className={`text-xl md:text-3xl font-black ${grandTotal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{grandTotal.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
- 
+
               <div className="bg-white rounded-[24px] md:rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100 mx-2 md:mx-0">
                 <div className="p-3 md:p-8 bg-slate-900 text-white font-black uppercase flex justify-between text-[10px] md:text-xs">Suivi Prestataires</div>
                 <div className="max-h-[60vh] overflow-y-auto overflow-x-auto custom-scrollbar relative">
