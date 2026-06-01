@@ -671,10 +671,12 @@ const App = () => {
         const s = storedSolde > 0 ? storedSolde : Math.max(0, gross - a1 - a2);
         const tax = isUrssaf ? gross * 0.077 : 0;
         const charges = (t.resExpenses || []).filter(e => !e.paymentDate).reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-        // Date limite si renseignée, sinon fin de séjour
-        if (a1 > 0 && !t.acompte1Date) { const d = clampDate(t.acompte1DueDate || t.endDate); addEntry(d.substring(0, 7), { ...base, label: 'Acompte 1', dueDate: d, urssafGross: 0, directNet: isUrssaf ? 0 : a1, totalBank: a1, taxes: 0, charges: 0 }); }
-        if (a2 > 0 && !t.acompte2Date) { const d = clampDate(t.acompte2DueDate || t.endDate); addEntry(d.substring(0, 7), { ...base, label: 'Acompte 2', dueDate: d, urssafGross: 0, directNet: isUrssaf ? 0 : a2, totalBank: a2, taxes: 0, charges: 0 }); }
-        if (s > 0 && !t.soldeDate) { const d = clampDate(t.soldeDueDate || t.endDate); addEntry(d.substring(0, 7), { ...base, label: 'Solde', dueDate: d, urssafGross: isUrssaf ? gross : 0, directNet: isUrssaf ? 0 : s, totalBank: s, taxes: tax, charges }); }
+        // Date du solde = référence de repli pour les acomptes en retard
+        const dSolde = clampDate(t.soldeDueDate || t.endDate);
+        // Acompte : date limite si future, sinon regroupé avec le solde
+        if (a1 > 0 && !t.acompte1Date) { const d = (t.acompte1DueDate && t.acompte1DueDate >= todayStr) ? t.acompte1DueDate : dSolde; addEntry(d.substring(0, 7), { ...base, label: 'Acompte 1', dueDate: d, urssafGross: 0, directNet: isUrssaf ? 0 : a1, totalBank: a1, taxes: 0, charges: 0 }); }
+        if (a2 > 0 && !t.acompte2Date) { const d = (t.acompte2DueDate && t.acompte2DueDate >= todayStr) ? t.acompte2DueDate : dSolde; addEntry(d.substring(0, 7), { ...base, label: 'Acompte 2', dueDate: d, urssafGross: 0, directNet: isUrssaf ? 0 : a2, totalBank: a2, taxes: 0, charges: 0 }); }
+        if (s > 0 && !t.soldeDate) { addEntry(dSolde.substring(0, 7), { ...base, label: 'Solde', dueDate: dSolde, urssafGross: isUrssaf ? gross : 0, directNet: isUrssaf ? 0 : s, totalBank: s, taxes: tax, charges }); }
       } else {
         const d = t.endDate || '';
         if (d >= todayStr) {
