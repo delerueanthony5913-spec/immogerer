@@ -1749,7 +1749,7 @@ const App = () => {
                 <div className="bg-white rounded-[24px] md:rounded-[40px] shadow-2xl overflow-hidden text-xs border border-amber-100 mx-2 md:mx-0">
                   <div className="p-3 md:p-8 bg-amber-500 text-white font-black uppercase flex justify-between items-center text-[10px] md:text-xs">
                     <div>Prévisionnel — 6 prochains mois</div>
-                    <div className="text-amber-200 font-black">{previsionData.months.reduce((s, m) => s + m.profit, 0).toLocaleString('fr-FR')}€ net estimé</div>
+                    <div className="text-amber-200 font-black">{previsionData.months.reduce((s, m) => s + m.profit, 0).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€ net estimé</div>
                   </div>
                   <div className="overflow-x-auto custom-scrollbar">
                     <table className="w-full text-left min-w-[280px] md:min-w-[600px]">
@@ -1770,10 +1770,10 @@ const App = () => {
                                     {isExp ? '▾' : '▸'} {formatMonthYear(m.month)}
                                   </span>
                                 </td>
-                                <td className="p-1 md:p-5 text-right text-indigo-600 text-[8px] md:text-sm">{m.income.toLocaleString('fr-FR')}€</td>
+                                <td className="p-1 md:p-5 text-right text-indigo-600 text-[8px] md:text-sm">{m.income.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
                                 <td className="p-1 md:p-5 text-right text-rose-400 text-[8px] md:text-sm">-{m.taxes.toFixed(0)}€</td>
-                                <td className="p-1 md:p-5 text-right text-slate-400 text-[8px] md:text-sm">-{m.charges.toLocaleString('fr-FR')}€</td>
-                                <td className={`p-1 md:p-5 text-right font-black text-[8px] md:text-sm ${m.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{m.profit.toLocaleString('fr-FR')}€</td>
+                                <td className="p-1 md:p-5 text-right text-slate-400 text-[8px] md:text-sm">-{m.charges.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
+                                <td className={`p-1 md:p-5 text-right font-black text-[8px] md:text-sm ${m.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{m.profit.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
                               </tr>
                               {isExp && (
                                 <tr>
@@ -1789,7 +1789,7 @@ const App = () => {
                                             <td className="py-2 md:py-3 text-[7px] md:text-[10px] font-bold">{item.name}</td>
                                             <td className="py-2 md:py-3 text-[7px] md:text-[10px] text-slate-500 hidden md:table-cell">{formatDateFr(item.startDate)} → {formatDateFr(item.endDate)}</td>
                                             <td className="py-2 md:py-3"><span className={`${pal.badge} text-[6px] md:text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full`}>{item.label}</span></td>
-                                            <td className="py-2 md:py-3 text-right pr-4 md:pr-8 font-black text-indigo-600 text-[8px] md:text-xs">{item.income.toLocaleString('fr-FR')}€</td>
+                                            <td className="py-2 md:py-3 text-right pr-4 md:pr-8 font-black text-indigo-600 text-[8px] md:text-xs">{item.income.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
                                           </tr>
                                         ))}
                                       </tbody>
@@ -1824,12 +1824,12 @@ const App = () => {
                               <td className="p-1 md:p-6 capitalize text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">
                                 <span className="inline-flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full flex-shrink-0 ${pal.dot}`}></span>{isExpanded ? '▾' : '▸'} {formatMonthYear(m)}</span>
                               </td>
-                              <td className="p-1 md:p-6 text-right text-slate-500"><div className="text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{d.urssafGross.toLocaleString('fr-FR')}€</div></td>
-                              <td className="p-1 md:p-6 text-right text-emerald-600 font-black text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{d.directNet > 0 ? `${d.directNet.toLocaleString('fr-FR')}€` : '-'}</td>
-                              <td className="p-1 md:p-6 text-right text-indigo-600 font-black text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{d.totalBank.toLocaleString('fr-FR')}€</td>
-                              <td className="p-1 md:p-6 text-right text-slate-500 text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">-{d.charges.toLocaleString('fr-FR')}€</td>
+                              <td className="p-1 md:p-6 text-right text-slate-500"><div className="text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{d.urssafGross.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</div></td>
+                              <td className="p-1 md:p-6 text-right text-emerald-600 font-black text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{d.directNet > 0 ? `${d.directNet.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€` : '-'}</td>
+                              <td className="p-1 md:p-6 text-right text-indigo-600 font-black text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{d.totalBank.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
+                              <td className="p-1 md:p-6 text-right text-slate-500 text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">-{d.charges.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
                               <td className="p-1 md:p-6 text-right text-rose-500 text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">-{d.taxes.toFixed(2)}€</td>
-                              <td className={`p-1 md:p-6 text-right font-black text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal ${d.totalBank - d.taxes - d.charges >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{(d.totalBank - d.taxes - d.charges).toLocaleString('fr-FR')}€</td>
+                              <td className={`p-1 md:p-6 text-right font-black text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal ${d.totalBank - d.taxes - d.charges >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{(d.totalBank - d.taxes - d.charges).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
                             </tr>
                             {isExpanded && (
                               <tr>
@@ -1845,7 +1845,7 @@ const App = () => {
                                           <td className="py-2 md:py-3 text-[7px] md:text-[10px] font-bold">{item.tenant.name}</td>
                                           <td className="py-2 md:py-3 text-[7px] md:text-[10px] text-slate-500 hidden md:table-cell">{formatDateFr(item.tenant.startDate)} → {formatDateFr(item.tenant.endDate)}</td>
                                           <td className="py-2 md:py-3"><span className={`${pal.badge} text-[6px] md:text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full`}>{item.label}</span></td>
-                                          <td className="py-2 md:py-3 text-right pr-4 md:pr-8 font-black text-[8px] md:text-xs">{item.amount.toLocaleString('fr-FR')}€</td>
+                                          <td className="py-2 md:py-3 text-right pr-4 md:pr-8 font-black text-[8px] md:text-xs">{item.amount.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
                                         </tr>
                                       ))}
                                     </tbody>
@@ -1860,12 +1860,12 @@ const App = () => {
                     <tfoot className="bg-indigo-600 text-white font-black text-[10px] md:text-lg sticky bottom-0 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
                       <tr>
                         <td className="p-1.5 md:p-8 uppercase text-[6px] md:text-[10px] leading-tight tracking-tighter md:tracking-normal">TOTAL</td>
-                        <td className="p-1.5 md:p-8 text-right opacity-90"><div className="leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.urssafGross, 0).toLocaleString('fr-FR')}€</div></td>
-                        <td className="p-1.5 md:p-8 text-right text-emerald-300 leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.directNet, 0).toLocaleString('fr-FR')}€</td>
-                        <td className="p-1.5 md:p-8 text-right leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0).toLocaleString('fr-FR')}€</td>
-                        <td className="p-1.5 md:p-8 text-right text-indigo-200 leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">-{monthlyRecapData.reduce((acc, [m, d]) => acc + d.charges, 0).toLocaleString('fr-FR')}€</td>
-                        <td className="p-1.5 md:p-8 text-right text-rose-300 leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">-{monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes, 0).toLocaleString('fr-FR')}€</td>
-                        <td className="p-1.5 md:p-8 text-right bg-indigo-700/50 leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{(monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0) - monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes + d.charges, 0)).toLocaleString('fr-FR')}€</td>
+                        <td className="p-1.5 md:p-8 text-right opacity-90"><div className="leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.urssafGross, 0).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</div></td>
+                        <td className="p-1.5 md:p-8 text-right text-emerald-300 leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.directNet, 0).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
+                        <td className="p-1.5 md:p-8 text-right leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
+                        <td className="p-1.5 md:p-8 text-right text-indigo-200 leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">-{monthlyRecapData.reduce((acc, [m, d]) => acc + d.charges, 0).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
+                        <td className="p-1.5 md:p-8 text-right text-rose-300 leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">-{monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes, 0).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
+                        <td className="p-1.5 md:p-8 text-right bg-indigo-700/50 leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{(monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0) - monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes + d.charges, 0)).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -1885,7 +1885,7 @@ const App = () => {
                                     <td className="p-1 md:p-6 text-[8px] md:text-sm tracking-tighter md:tracking-normal">{formatDateFr(exp.dateRes)}</td>
                                     <td className="p-1 md:p-6 uppercase text-[8px] md:text-xs tracking-tighter md:tracking-normal">{exp.propertyName}</td>
                                     <td className="p-1 md:p-6 text-blue-600 uppercase text-[8px] md:text-xs tracking-tighter md:tracking-normal">{exp.person}</td>
-                                    <td className="p-1 md:p-6 text-right text-[8px] md:text-sm tracking-tighter md:tracking-normal">{(exp.amount || 0).toLocaleString('fr-FR')}€</td>
+                                    <td className="p-1 md:p-6 text-right text-[8px] md:text-sm tracking-tighter md:tracking-normal">{(exp.amount || 0).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
                                     <td className="p-1 md:p-6 text-center"><span className={`px-1.5 py-0.5 md:px-3 md:py-1 rounded-full text-[6px] md:text-[9px] font-black uppercase tracking-tighter md:tracking-normal ${exp.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>{exp.paymentDate ? 'Payé' : 'Attente'}</span></td>
                                 </tr>
                             ))}
