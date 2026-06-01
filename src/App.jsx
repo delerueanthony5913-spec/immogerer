@@ -665,8 +665,10 @@ const App = () => {
       if (t.platform === 'En direct') {
         const a1 = parseFloat(t.acompte1Amount) || 0;
         const a2 = parseFloat(t.acompte2Amount) || 0;
-        const s = parseFloat(t.soldeAmount) || 0;
-        const gross = parseFloat(t.grossAmount) || 0;
+        const gross = parseFloat(t.grossAmount) || (parseFloat(t.soldeAmount) || 0);
+        // Solde effectif = ce qui est stocké, sinon calculé depuis le global
+        const storedSolde = parseFloat(t.soldeAmount) || 0;
+        const s = storedSolde > 0 ? storedSolde : Math.max(0, gross - a1 - a2);
         const tax = isUrssaf ? gross * 0.077 : 0;
         const charges = (t.resExpenses || []).filter(e => !e.paymentDate).reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
         // Acomptes non payés → regroupés en fin de séjour (même mois que le solde)
