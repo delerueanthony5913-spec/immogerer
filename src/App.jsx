@@ -650,11 +650,8 @@ const App = () => {
       const propName = prop?.name || '--';
       const base = { id: t.id, tenant: t, name: t.name, propName, startDate: t.startDate, endDate: t.endDate };
       const isUrssaf = t.isUrssaf !== false;
-      // Pour En direct : si la date attendue est passée ou absente → mois courant (paiement en attente)
-      const expDate = (dueDate, fallback) => {
-        const raw = dueDate || fallback || todayStr;
-        return raw < todayStr ? todayStr : raw;
-      };
+      // Si la date est dans le passé ou absente → mois courant
+      const clampDate = (d) => (!d || d < todayStr) ? todayStr : d;
       if (t.platform === 'En direct') {
         const a1 = parseFloat(t.acompte1Amount) || 0;
         const a2 = parseFloat(t.acompte2Amount) || 0;
@@ -662,9 +659,11 @@ const App = () => {
         const gross = parseFloat(t.grossAmount) || 0;
         const tax = isUrssaf ? gross * 0.077 : 0;
         const charges = (t.resExpenses || []).filter(e => !e.paymentDate).reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-        if (a1 > 0 && !t.acompte1Date) { const d = expDate(t.acompte1DueDate, t.startDate); addEntry(d.substring(0, 7), { ...base, label: 'Acompte 1', dueDate: d, urssafGross: 0, directNet: isUrssaf ? 0 : a1, totalBank: a1, taxes: 0, charges: 0 }); }
-        if (a2 > 0 && !t.acompte2Date) { const d = expDate(t.acompte2DueDate, t.startDate); addEntry(d.substring(0, 7), { ...base, label: 'Acompte 2', dueDate: d, urssafGross: 0, directNet: isUrssaf ? 0 : a2, totalBank: a2, taxes: 0, charges: 0 }); }
-        if (s > 0 && !t.soldeDate) { const d = expDate(t.soldeDueDate, t.endDate); addEntry(d.substring(0, 7), { ...base, label: 'Solde', dueDate: d, urssafGross: isUrssaf ? gross : 0, directNet: isUrssaf ? 0 : s, totalBank: s, taxes: tax, charges }); }
+        // Acomptes non payés → regroupés en fin de séjour (même mois que le solde)
+        const endMonth = clampDate(t.endDate);
+        if (a1 > 0 && !t.acompte1Date) { addEntry(endMonth.substring(0, 7), { ...base, label: 'Acompte 1', dueDate: endMonth, urssafGross: 0, directNet: isUrssaf ? 0 : a1, totalBank: a1, taxes: 0, charges: 0 }); }
+        if (a2 > 0 && !t.acompte2Date) { addEntry(endMonth.substring(0, 7), { ...base, label: 'Acompte 2', dueDate: endMonth, urssafGross: 0, directNet: isUrssaf ? 0 : a2, totalBank: a2, taxes: 0, charges: 0 }); }
+        if (s > 0 && !t.soldeDate) { const d = clampDate(t.soldeDueDate || t.endDate); addEntry(d.substring(0, 7), { ...base, label: 'Solde', dueDate: d, urssafGross: isUrssaf ? gross : 0, directNet: isUrssaf ? 0 : s, totalBank: s, taxes: tax, charges }); }
       } else {
         const d = t.endDate || '';
         if (d >= todayStr) {
