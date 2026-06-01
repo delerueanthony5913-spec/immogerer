@@ -48,7 +48,8 @@ const App = () => {
     propertyId: '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', 
     platform: 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', 
     bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '',
-    acompte1Amount: '', acompte1Date: '', acompte1DueDate: '', acompte2Amount: '', acompte2Date: '', acompte2DueDate: '', soldeAmount: '', soldeDate: '', soldeDueDate: ''
+    acompte1Amount: '', acompte1Date: '', acompte1DueDate: '', acompte2Amount: '', acompte2Date: '', acompte2DueDate: '', soldeAmount: '', soldeDate: '', soldeDueDate: '',
+    owner: ''
   });
  
   const [inputPlat, setInputPlat] = useState('');
@@ -363,16 +364,16 @@ const App = () => {
       }
     }
     setEditingResId(t.id);
+    const effectiveOwner = t.owner || ownerFromProp(t.propertyId);
     if (t.platform === 'En direct') {
       let g = parseFloat(t.grossAmount) || 0;
       const a1 = parseFloat(t.acompte1Amount) || 0;
       const a2 = parseFloat(t.acompte2Amount) || 0;
       const s = parseFloat(t.soldeAmount) || 0;
-      // Pas de montant global mais solde renseigné sans acomptes → global = solde
       if (!g && !a1 && !a2 && s > 0) g = s;
-      setFormData({ ...t, grossAmount: g || t.grossAmount, soldeAmount: g > 0 ? Math.max(0, g - a1 - a2) : s });
+      setFormData({ ...t, owner: effectiveOwner, grossAmount: g || t.grossAmount, soldeAmount: g > 0 ? Math.max(0, g - a1 - a2) : s });
     } else {
-      setFormData(t);
+      setFormData({ ...t, owner: effectiveOwner });
     }
     setIsModalOpen(true);
 
@@ -473,30 +474,39 @@ const App = () => {
     );
   }, [tenants, filterProp, filterPlat]);
 
+  const [filterOwnerRes, setFilterOwnerRes] = useState('all');
+
   const ownerOfProp = (propName = '') => {
-    const n = propName.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    const n = (propName || '').toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
     if (n.includes('cocon') || n.includes('kadelia')) return 'camille';
     if (n.includes('cadelio') || n.includes('signes')) return 'anthony';
     if (n.includes('villa') || n.includes('cadelia')) return 'anthony';
     return 'other';
   };
 
+  const ownerFromProp = (propId) => {
+    const prop = (properties || []).find(p => p.id === propId);
+    return ownerOfProp(prop?.name);
+  };
+
   const financeBaseTenants = useMemo(() => {
     if (filterOwner === 'global') return baseTenants;
     return baseTenants.filter(t => {
-      const prop = properties.find(p => p.id === t.propertyId);
-      return ownerOfProp(prop?.name) === filterOwner;
+      const effectiveOwner = t.owner || ownerFromProp(t.propertyId);
+      return effectiveOwner === filterOwner;
     });
   }, [baseTenants, filterOwner, properties]);
  
   const filteredData = useMemo(() => {
     return baseTenants.filter(t => {
       const dateRef = t.startDate ? new Date(t.startDate) : new Date();
+      const effectiveOwner = t.owner || ownerFromProp(t.propertyId);
       return (filterYear === 'all' || dateRef.getFullYear() === parseInt(filterYear)) &&
              (filterMonth === 'all' || dateRef.getMonth() === parseInt(filterMonth)) &&
-             (filterProv === 'all' || (t.resExpenses && t.resExpenses.some(e => e.person === filterProv)));
+             (filterProv === 'all' || (t.resExpenses && t.resExpenses.some(e => e.person === filterProv))) &&
+             (filterOwnerRes === 'all' || effectiveOwner === filterOwnerRes);
     });
-  }, [baseTenants, filterYear, filterMonth, filterProv]);
+  }, [baseTenants, filterYear, filterMonth, filterProv, filterOwnerRes, properties]);
  
   const reservationsList = useMemo(() => {
     return filteredData.filter(t => {
@@ -955,6 +965,7 @@ const App = () => {
   const saveRes = async (e) => {
     e.preventDefault();
     if (!formData.propertyId) { alert("⚠️ Vous devez sélectionner un Logement."); return; }
+    if (!formData.owner) { alert("⚠️ Vous devez attribuer la réservation à Anthony ou Camille."); return; }
     if (!formData.name) { alert("⚠️ Vous devez indiquer le nom du Voyageur ou sa Référence."); return; }
     if (!formData.startDate || !formData.endDate) { alert("⚠️ Les dates de séjour sont obligatoires."); return; }
  
@@ -1287,6 +1298,11 @@ const App = () => {
   const RenderFilters = () => (
     <div className="sticky top-0 z-30 bg-[#F8FAFC]/95 backdrop-blur-md pt-2 pb-4 mb-2 px-2 md:px-0">
       <div className="flex flex-wrap items-center gap-2 bg-white/80 p-3 rounded-[28px] border border-white shadow-lg mx-auto max-w-7xl">
+        <div className="flex items-center gap-1 bg-slate-100 rounded-2xl p-1">
+          {[['all', 'Tous'], ['anthony', 'Anthony'], ['camille', 'Camille']].map(([val, label]) => (
+            <button key={val} type="button" onClick={() => setFilterOwnerRes(val)} className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${filterOwnerRes === val ? 'bg-slate-900 text-white shadow' : 'text-slate-500 hover:bg-slate-200'}`}>{label}</button>
+          ))}
+        </div>
         <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
           <Filter size={12} className="text-slate-400" />
           <select value={filterYear} onChange={e => {setFilterYear(e.target.value); setHasScrolledToNext(false);}} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer">
@@ -2140,9 +2156,19 @@ const App = () => {
                </div>
             </div>
             <form onSubmit={saveRes} className="p-6 md:p-10 space-y-8 overflow-y-auto flex-1 custom-scrollbar text-xs touch-manipulation" style={{ touchAction: 'manipulation' }}>
-              
+
+              {/* ATTRIBUTION PROPRIÉTAIRE */}
+              <div className={`flex items-center justify-between p-4 rounded-[24px] border-2 ${!formData.owner ? 'border-rose-300 bg-rose-50' : formData.owner === 'anthony' ? 'border-blue-200 bg-blue-50' : 'border-emerald-200 bg-emerald-50'}`}>
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Réservation de</span>
+                <div className="flex gap-2">
+                  {[['anthony', 'Anthony', 'bg-blue-600 text-white', 'bg-white text-blue-600 border border-blue-200'], ['camille', 'Camille', 'bg-emerald-600 text-white', 'bg-white text-emerald-600 border border-emerald-200']].map(([val, label, activeClass, inactiveClass]) => (
+                    <button key={val} type="button" onClick={() => setFormData({ ...formData, owner: val })} className={`px-5 py-2 rounded-2xl font-black text-xs uppercase transition-all ${formData.owner === val ? activeClass : inactiveClass}`}>{label}</button>
+                  ))}
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                 <div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Logement<select value={formData.propertyId || ''} onChange={e => setFormData({ ...formData, propertyId: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900"><option value="">-- Choisir un logement --</option>{(properties || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+                 <div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Logement<select value={formData.propertyId || ''} onChange={e => { const newOwner = ownerFromProp(e.target.value); setFormData({ ...formData, propertyId: e.target.value, owner: newOwner !== 'other' ? newOwner : formData.owner }); }} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900"><option value="">-- Choisir un logement --</option>{(properties || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
                  <div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Voyageur<input value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" placeholder="Nom du client" /></div>
                  <div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Contact<input value={formData.phone || ''} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" placeholder="Tél / Email" /></div>
                  <div className="space-y-1 uppercase font-black tracking-widest text-slate-400 text-[10px]">Début<input type="date" value={formData.startDate || ''} onChange={e => setFormData({ ...formData, startDate: e.target.value })} className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[24px] font-black text-slate-900" /></div>
