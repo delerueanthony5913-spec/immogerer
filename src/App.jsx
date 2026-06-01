@@ -363,7 +363,14 @@ const App = () => {
       }
     }
     setEditingResId(t.id);
-    setFormData(t);
+    if (t.platform === 'En direct') {
+      const g = parseFloat(t.grossAmount) || 0;
+      const a1 = parseFloat(t.acompte1Amount) || 0;
+      const a2 = parseFloat(t.acompte2Amount) || 0;
+      setFormData({ ...t, soldeAmount: Math.max(0, g - a1 - a2) });
+    } else {
+      setFormData(t);
+    }
     setIsModalOpen(true);
 
     const updatedExpenses = (t.resExpenses || []).map(exp => ({ ...exp }));
