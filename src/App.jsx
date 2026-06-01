@@ -624,10 +624,14 @@ const App = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayStr = today.toISOString().substring(0, 10);
+    const selectedYear = filterYear === 'all' ? today.getFullYear() : parseInt(filterYear);
     const nextMonths = [];
-    for (let i = 0; i < 6; i++) {
-      const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
-      nextMonths.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    for (let y = today.getFullYear(); y <= selectedYear; y++) {
+      const mStart = (y === today.getFullYear()) ? today.getMonth() : 0;
+      const mEnd = (y === selectedYear) ? 11 : 11;
+      for (let mo = mStart; mo <= mEnd; mo++) {
+        nextMonths.push(`${y}-${String(mo + 1).padStart(2, '0')}`);
+      }
     }
     const monthStats = {};
     const items = [];
@@ -671,7 +675,7 @@ const App = () => {
       months: nextMonths.filter(m => monthStats[m]).map(m => ({ month: m, ...monthStats[m], profit: monthStats[m].totalBank - monthStats[m].taxes - monthStats[m].charges })),
       items: items.sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))
     };
-  }, [financeBaseTenants, properties]);
+  }, [financeBaseTenants, properties, filterYear]);
 
   const statsCalculations = useMemo(() => {
     const year = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
@@ -822,6 +826,10 @@ const App = () => {
     const timer = setTimeout(() => { scrollToCurrentRes(false); setHasScrolledToNext(true); }, 500);
     return () => clearTimeout(timer);
   }, [activeTab, reservationsList, hasScrolledToNext, todayStr, isUnlocked]);
+
+  useEffect(() => {
+    if (activeTab === 'finances') setFilterYear(String(new Date().getFullYear()));
+  }, [activeTab]);
  
  
   // 5. FONCTIONS OUTILS ET LOGIQUE METIER
@@ -1754,7 +1762,7 @@ const App = () => {
               {previsionData.months.length > 0 && (
                 <div className="bg-white rounded-[24px] md:rounded-[40px] shadow-2xl overflow-hidden text-xs border border-amber-100 mx-2 md:mx-0">
                   <div className="p-3 md:p-8 bg-amber-500 text-white font-black uppercase flex justify-between items-center text-[10px] md:text-xs">
-                    <div>Prévisionnel — 6 prochains mois</div>
+                    <div>Prévisionnel — jusqu'en déc. {filterYear === 'all' ? new Date().getFullYear() : filterYear}</div>
                     <div className="text-amber-200 font-black">{previsionData.months.reduce((s, m) => s + m.profit, 0).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€ net estimé</div>
                   </div>
                   <div className="overflow-x-auto custom-scrollbar">
