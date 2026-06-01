@@ -364,10 +364,13 @@ const App = () => {
     }
     setEditingResId(t.id);
     if (t.platform === 'En direct') {
-      const g = parseFloat(t.grossAmount) || 0;
+      let g = parseFloat(t.grossAmount) || 0;
       const a1 = parseFloat(t.acompte1Amount) || 0;
       const a2 = parseFloat(t.acompte2Amount) || 0;
-      setFormData({ ...t, soldeAmount: Math.max(0, g - a1 - a2) });
+      const s = parseFloat(t.soldeAmount) || 0;
+      // Pas de montant global mais solde renseigné sans acomptes → global = solde
+      if (!g && !a1 && !a2 && s > 0) g = s;
+      setFormData({ ...t, grossAmount: g || t.grossAmount, soldeAmount: g > 0 ? Math.max(0, g - a1 - a2) : s });
     } else {
       setFormData(t);
     }
