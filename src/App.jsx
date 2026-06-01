@@ -40,6 +40,7 @@ const App = () => {
   const [filterPlat, setFilterPlat] = useState('all');
   const [filterProv, setFilterProv] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [filterOwner, setFilterOwner] = useState('global');
  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingResId, setEditingResId] = useState(null);
@@ -456,11 +457,27 @@ const App = () => {
  
   // 3. MEMOIZATION (CALCULS) 
   const baseTenants = useMemo(() => {
-    return (tenants || []).filter(t => 
+    return (tenants || []).filter(t =>
        (filterProp === 'all' || t.propertyId === filterProp) &&
        (filterPlat === 'all' || t.platform === filterPlat)
     );
   }, [tenants, filterProp, filterPlat]);
+
+  const ownerOfProp = (propName = '') => {
+    const n = propName.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    if (n.includes('cocon') || n.includes('kadelia')) return 'camille';
+    if (n.includes('cadelio') || n.includes('signes')) return 'anthony';
+    if (n.includes('villa') || n.includes('cadelia')) return 'anthony';
+    return 'other';
+  };
+
+  const financeBaseTenants = useMemo(() => {
+    if (filterOwner === 'global') return baseTenants;
+    return baseTenants.filter(t => {
+      const prop = properties.find(p => p.id === t.propertyId);
+      return ownerOfProp(prop?.name) === filterOwner;
+    });
+  }, [baseTenants, filterOwner, properties]);
  
   const filteredData = useMemo(() => {
     return baseTenants.filter(t => {
@@ -526,8 +543,8 @@ const App = () => {
   const monthlyRecapData = useMemo(() => {
     const stats = {};
     const initStats = (m) => { if(!stats[m]) stats[m] = { totalBank: 0, urssafGross: 0, directNet: 0, charges: 0, taxes: 0, platforms: {} }; };
- 
-    baseTenants.forEach(t => {
+
+    financeBaseTenants.forEach(t => {
       if (t.platform === 'En direct') {
            const a1 = parseFloat(t.acompte1Amount) || 0;
            const a2 = parseFloat(t.acompte2Amount) || 0;
@@ -554,11 +571,11 @@ const App = () => {
       });
     });
     return Object.entries(stats).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [baseTenants, filterYear, filterMonth, filterProv]);
- 
+  }, [financeBaseTenants, filterYear, filterMonth, filterProv]);
+
   const detailedExpenses = useMemo(() => {
     const list = [];
-    baseTenants.forEach(t => {
+    financeBaseTenants.forEach(t => {
       (t.resExpenses || []).forEach(exp => {
         if (filterProv === 'all' || exp.person === filterProv) {
           const refDate = exp.paymentDate || t.startDate;
@@ -569,8 +586,87 @@ const App = () => {
       });
     });
     return list.sort((a, b) => b.dateRes.localeCompare(a.dateRes));
-  }, [baseTenants, properties, filterProv, filterYear, filterMonth]);
- 
+  }, [financeBaseTenants, properties, filterProv, filterYear, filterMonth]);
+
+  const [expandedFinanceMonth, setExpandedFinanceMonth] = useState(null);
+  const [expandedPrevMonth, setExpandedPrevMonth] = useState(null);
+
+  const MONTH_PALETTE = [
+    { row: 'bg-amber-50', expanded: 'bg-amber-50/80', header: 'bg-amber-100', text: 'text-amber-700', badge: 'bg-amber-200 text-amber-800', dot: 'bg-amber-400', border: 'border-amber-200' },
+    { row: 'bg-blue-50', expanded: 'bg-blue-50/80', header: 'bg-blue-100', text: 'text-blue-700', badge: 'bg-blue-200 text-blue-800', dot: 'bg-blue-400', border: 'border-blue-200' },
+    { row: 'bg-emerald-50', expanded: 'bg-emerald-50/80', header: 'bg-emerald-100', text: 'text-emerald-700', badge: 'bg-emerald-200 text-emerald-800', dot: 'bg-emerald-400', border: 'border-emerald-200' },
+    { row: 'bg-violet-50', expanded: 'bg-violet-50/80', header: 'bg-violet-100', text: 'text-violet-700', badge: 'bg-violet-200 text-violet-800', dot: 'bg-violet-400', border: 'border-violet-200' },
+    { row: 'bg-rose-50', expanded: 'bg-rose-50/80', header: 'bg-rose-100', text: 'text-rose-700', badge: 'bg-rose-200 text-rose-800', dot: 'bg-rose-400', border: 'border-rose-200' },
+    { row: 'bg-teal-50', expanded: 'bg-teal-50/80', header: 'bg-teal-100', text: 'text-teal-700', badge: 'bg-teal-200 text-teal-800', dot: 'bg-teal-400', border: 'border-teal-200' },
+  ];
+
+  const financeMonthMap = useMemo(() => {
+    const map = {};
+    financeBaseTenants.forEach(t => {
+      const prop = properties.find(p => p.id === t.propertyId);
+      const propName = prop?.name || '--';
+      const addToMonth = (monthKey, entry) => {
+        if (!map[monthKey]) map[monthKey] = [];
+        map[monthKey].push(entry);
+      };
+      if (t.platform === 'En direct') {
+        if (t.acompte1Date && checkDateFilter(t.acompte1Date)) addToMonth(t.acompte1Date.substring(0,7), { tenant: t, propName, label: 'Acompte 1', date: t.acompte1Date, amount: parseFloat(t.acompte1Amount) || 0 });
+        if (t.acompte2Date && checkDateFilter(t.acompte2Date)) addToMonth(t.acompte2Date.substring(0,7), { tenant: t, propName, label: 'Acompte 2', date: t.acompte2Date, amount: parseFloat(t.acompte2Amount) || 0 });
+        if (t.soldeDate && checkDateFilter(t.soldeDate)) addToMonth(t.soldeDate.substring(0,7), { tenant: t, propName, label: 'Solde', date: t.soldeDate, amount: parseFloat(t.soldeAmount) || 0 });
+      } else {
+        if (t.paymentDate && checkDateFilter(t.paymentDate)) addToMonth(t.paymentDate.substring(0,7), { tenant: t, propName, label: t.platform, date: t.paymentDate, amount: parseFloat(t.netAmount) || 0 });
+      }
+    });
+    return map;
+  }, [financeBaseTenants, properties, filterYear, filterMonth]);
+
+  const previsionData = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = today.toISOString().substring(0, 10);
+    const nextMonths = [];
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+      nextMonths.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    }
+    const monthStats = {};
+    const items = [];
+    const addEntry = (monthKey, entry) => {
+      if (!nextMonths.includes(monthKey)) return;
+      if (!monthStats[monthKey]) monthStats[monthKey] = { income: 0, taxes: 0, charges: 0 };
+      monthStats[monthKey].income += entry.income;
+      monthStats[monthKey].taxes += entry.taxes;
+      monthStats[monthKey].charges += entry.charges;
+      items.push({ ...entry, month: monthKey });
+    };
+    financeBaseTenants.forEach(t => {
+      const prop = properties.find(p => p.id === t.propertyId);
+      const propName = prop?.name || '--';
+      const base = { id: t.id, tenant: t, name: t.name, propName, startDate: t.startDate, endDate: t.endDate };
+      if (t.platform === 'En direct') {
+        const a1 = parseFloat(t.acompte1Amount) || 0;
+        const a2 = parseFloat(t.acompte2Amount) || 0;
+        const s = parseFloat(t.soldeAmount) || 0;
+        const tax = t.isUrssaf !== false ? (parseFloat(t.grossAmount) || 0) * 0.077 : 0;
+        const charges = (t.resExpenses || []).filter(e => !e.paymentDate).reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+        if (a1 > 0 && !t.acompte1Date) { const d = t.acompte1DueDate || t.startDate || ''; if (d >= todayStr) addEntry(d.substring(0, 7), { ...base, label: 'Acompte 1', dueDate: d, income: a1, taxes: 0, charges: 0 }); }
+        if (a2 > 0 && !t.acompte2Date) { const d = t.acompte2DueDate || t.startDate || ''; if (d >= todayStr) addEntry(d.substring(0, 7), { ...base, label: 'Acompte 2', dueDate: d, income: a2, taxes: 0, charges: 0 }); }
+        if (s > 0 && !t.soldeDate) { const d = t.soldeDueDate || t.endDate || ''; if (d >= todayStr) addEntry(d.substring(0, 7), { ...base, label: 'Solde', dueDate: d, income: s, taxes: tax, charges }); }
+      } else {
+        const d = t.endDate || t.startDate || '';
+        if (d >= todayStr) {
+          const tax = t.isUrssaf !== false ? (parseFloat(t.grossAmount) || 0) * 0.077 : 0;
+          const charges = (t.resExpenses || []).filter(e => !e.paymentDate).reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+          addEntry(d.substring(0, 7), { ...base, label: t.platform, dueDate: d, income: parseFloat(t.netAmount) || 0, taxes: tax, charges });
+        }
+      }
+    });
+    return {
+      months: nextMonths.filter(m => monthStats[m]).map(m => ({ month: m, ...monthStats[m], profit: monthStats[m].income - monthStats[m].taxes - monthStats[m].charges })),
+      items: items.sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))
+    };
+  }, [financeBaseTenants, properties]);
+
   const statsCalculations = useMemo(() => {
     const year = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
     const prevYear = year - 1;
@@ -1640,26 +1736,126 @@ const App = () => {
           {/* 4. ONGLET FINANCES */}
           <div className="flex-none w-full max-w-full overflow-y-auto snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border">
              <div className="max-w-7xl mx-auto pb-32 space-y-10">
-              <h2 className="text-3xl font-black uppercase mx-2 md:mx-0">Comptabilité</h2>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mx-2 md:mx-0">
+                <h2 className="text-3xl font-black uppercase">Comptabilité</h2>
+                <div className="flex items-center gap-1 bg-slate-100 rounded-2xl p-1 self-start md:self-auto">
+                  {[['global', 'Global'], ['anthony', 'Anthony'], ['camille', 'Camille']].map(([val, label]) => (
+                    <button key={val} onClick={() => setFilterOwner(val)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${filterOwner === val ? 'bg-slate-900 text-white shadow' : 'text-slate-500 hover:bg-slate-200'}`}>{label}</button>
+                  ))}
+                </div>
+              </div>
+              {/* PRÉVISIONNEL */}
+              {previsionData.months.length > 0 && (
+                <div className="bg-white rounded-[24px] md:rounded-[40px] shadow-2xl overflow-hidden text-xs border border-amber-100 mx-2 md:mx-0">
+                  <div className="p-3 md:p-8 bg-amber-500 text-white font-black uppercase flex justify-between items-center text-[10px] md:text-xs">
+                    <div>Prévisionnel — 6 prochains mois</div>
+                    <div className="text-amber-200 font-black">{previsionData.months.reduce((s, m) => s + m.profit, 0).toLocaleString('fr-FR')}€ net estimé</div>
+                  </div>
+                  <div className="overflow-x-auto custom-scrollbar">
+                    <table className="w-full text-left min-w-[280px] md:min-w-[600px]">
+                      <thead className="bg-amber-50 uppercase text-amber-600 border-b text-[6px] md:text-xs tracking-tighter md:tracking-normal">
+                        <tr><th className="p-1 md:p-5">Mois</th><th className="p-1 md:p-5 text-right">Attendu</th><th className="p-1 md:p-5 text-right text-rose-400">Cotis.</th><th className="p-1 md:p-5 text-right text-slate-400">Prest.</th><th className="p-1 md:p-5 text-right font-black text-amber-700">Net estimé</th></tr>
+                      </thead>
+                      <tbody>
+                        {previsionData.months.map((m, idx) => {
+                          const pal = MONTH_PALETTE[idx % MONTH_PALETTE.length];
+                          const isExp = expandedPrevMonth === m.month;
+                          const monthItems = previsionData.items.filter(it => it.month === m.month);
+                          return (
+                            <React.Fragment key={m.month}>
+                              <tr onClick={() => setExpandedPrevMonth(isExp ? null : m.month)} className={`cursor-pointer font-bold transition-colors border-b ${isExp ? pal.row : 'hover:bg-slate-50/50'}`}>
+                                <td className="p-1 md:p-5 capitalize text-[8px] md:text-sm">
+                                  <span className="inline-flex items-center gap-1.5">
+                                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${pal.dot}`}></span>
+                                    {isExp ? '▾' : '▸'} {formatMonthYear(m.month)}
+                                  </span>
+                                </td>
+                                <td className="p-1 md:p-5 text-right text-indigo-600 text-[8px] md:text-sm">{m.income.toLocaleString('fr-FR')}€</td>
+                                <td className="p-1 md:p-5 text-right text-rose-400 text-[8px] md:text-sm">-{m.taxes.toFixed(0)}€</td>
+                                <td className="p-1 md:p-5 text-right text-slate-400 text-[8px] md:text-sm">-{m.charges.toLocaleString('fr-FR')}€</td>
+                                <td className={`p-1 md:p-5 text-right font-black text-[8px] md:text-sm ${m.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{m.profit.toLocaleString('fr-FR')}€</td>
+                              </tr>
+                              {isExp && (
+                                <tr>
+                                  <td colSpan={5} className={`p-0 ${pal.expanded}`}>
+                                    <table className="w-full text-left">
+                                      <thead className={`${pal.header} uppercase text-[6px] md:text-[9px] tracking-wider`}>
+                                        <tr className={pal.text}><th className="pl-4 md:pl-8 py-2 md:py-3">Logement</th><th className="py-2 md:py-3">Client</th><th className="py-2 md:py-3 hidden md:table-cell">Séjour</th><th className="py-2 md:py-3">Type</th><th className="py-2 md:py-3 text-right pr-4 md:pr-8">Attendu</th></tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-white/50">
+                                        {monthItems.map((item, i) => (
+                                          <tr key={i} onClick={() => openReservation(item.tenant)} className="cursor-pointer hover:brightness-95 transition-all">
+                                            <td className="pl-4 md:pl-8 py-2 md:py-3 uppercase text-[7px] md:text-[10px] font-black text-slate-700">{item.propName}</td>
+                                            <td className="py-2 md:py-3 text-[7px] md:text-[10px] font-bold">{item.name}</td>
+                                            <td className="py-2 md:py-3 text-[7px] md:text-[10px] text-slate-500 hidden md:table-cell">{formatDateFr(item.startDate)} → {formatDateFr(item.endDate)}</td>
+                                            <td className="py-2 md:py-3"><span className={`${pal.badge} text-[6px] md:text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full`}>{item.label}</span></td>
+                                            <td className="py-2 md:py-3 text-right pr-4 md:pr-8 font-black text-indigo-600 text-[8px] md:text-xs">{item.income.toLocaleString('fr-FR')}€</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               <div className="bg-white rounded-[24px] md:rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100 mx-2 md:mx-0">
-                <div className="p-3 md:p-8 bg-slate-900 text-white font-black uppercase flex justify-between items-center text-[10px] md:text-xs"><div>Bilan Global</div></div>
+                <div className="p-3 md:p-8 bg-slate-900 text-white font-black uppercase flex justify-between items-center text-[10px] md:text-xs"><div>Bilan {filterOwner === 'global' ? 'Global' : filterOwner === 'anthony' ? 'Anthony' : 'Camille'}</div></div>
                 <div className="max-h-[60vh] overflow-y-auto overflow-x-auto custom-scrollbar relative">
                   <table className="w-full text-left min-w-[280px] md:min-w-[700px]">
                     <thead className="bg-slate-50 uppercase text-slate-400 border-b sticky top-0 z-10 shadow-sm text-[6px] md:text-xs tracking-tighter md:tracking-normal">
                       <tr><th className="p-1 md:p-6">Période</th><th className="p-1 md:p-6 text-right">Brut URSSAF</th><th className="p-1 md:p-6 text-right text-emerald-600">Direct (hors URSSAF)</th><th className="p-1 md:p-6 text-right text-indigo-600">Virement</th><th className="p-1 md:p-6 text-right text-slate-500">Prest.</th><th className="p-1 md:p-6 text-right text-rose-500">Cotis.</th><th className="p-1 md:p-6 text-right font-black">Profit</th></tr>
                     </thead>
                     <tbody className="divide-y font-bold">
-                      {(monthlyRecapData || []).map(([m, d]) => (
-                        <tr key={m} className="group hover:bg-slate-50/50 transition-colors">
-                          <td className="p-1 md:p-6 capitalize text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{formatMonthYear(m)}</td>
-                          <td className="p-1 md:p-6 text-right text-slate-500"><div className="text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{d.urssafGross.toLocaleString('fr-FR')}€</div></td>
-                          <td className="p-1 md:p-6 text-right text-emerald-600 font-black text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{d.directNet > 0 ? `${d.directNet.toLocaleString('fr-FR')}€` : '-'}</td>
-                          <td className="p-1 md:p-6 text-right text-indigo-600 font-black text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{d.totalBank.toLocaleString('fr-FR')}€</td>
-                          <td className="p-1 md:p-6 text-right text-slate-500 text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">-{d.charges.toLocaleString('fr-FR')}€</td>
-                          <td className="p-1 md:p-6 text-right text-rose-500 text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">-{d.taxes.toFixed(2)}€</td>
-                          <td className={`p-1 md:p-6 text-right font-black text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal ${d.totalBank - d.taxes - d.charges >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{(d.totalBank - d.taxes - d.charges).toLocaleString('fr-FR')}€</td>
-                        </tr>
-                      ))}
+                      {(monthlyRecapData || []).map(([m, d], idx) => {
+                        const isExpanded = expandedFinanceMonth === m;
+                        const monthItems = financeMonthMap[m] || [];
+                        const pal = MONTH_PALETTE[idx % MONTH_PALETTE.length];
+                        return (
+                          <React.Fragment key={m}>
+                            <tr onClick={() => setExpandedFinanceMonth(isExpanded ? null : m)} className={`cursor-pointer transition-colors ${isExpanded ? pal.row : 'hover:bg-slate-50/50'}`}>
+                              <td className="p-1 md:p-6 capitalize text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">
+                                <span className="inline-flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full flex-shrink-0 ${pal.dot}`}></span>{isExpanded ? '▾' : '▸'} {formatMonthYear(m)}</span>
+                              </td>
+                              <td className="p-1 md:p-6 text-right text-slate-500"><div className="text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{d.urssafGross.toLocaleString('fr-FR')}€</div></td>
+                              <td className="p-1 md:p-6 text-right text-emerald-600 font-black text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{d.directNet > 0 ? `${d.directNet.toLocaleString('fr-FR')}€` : '-'}</td>
+                              <td className="p-1 md:p-6 text-right text-indigo-600 font-black text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{d.totalBank.toLocaleString('fr-FR')}€</td>
+                              <td className="p-1 md:p-6 text-right text-slate-500 text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">-{d.charges.toLocaleString('fr-FR')}€</td>
+                              <td className="p-1 md:p-6 text-right text-rose-500 text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">-{d.taxes.toFixed(2)}€</td>
+                              <td className={`p-1 md:p-6 text-right font-black text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal ${d.totalBank - d.taxes - d.charges >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{(d.totalBank - d.taxes - d.charges).toLocaleString('fr-FR')}€</td>
+                            </tr>
+                            {isExpanded && (
+                              <tr>
+                                <td colSpan={7} className={`p-0 ${pal.expanded}`}>
+                                  <table className="w-full text-left">
+                                    <thead className={`${pal.header} uppercase text-[6px] md:text-[9px] tracking-wider`}>
+                                      <tr className={pal.text}><th className="pl-4 md:pl-10 py-2 md:py-3">Logement</th><th className="py-2 md:py-3">Client</th><th className="py-2 md:py-3 hidden md:table-cell">Séjour</th><th className="py-2 md:py-3">Type</th><th className="py-2 md:py-3 text-right pr-4 md:pr-8">Montant</th></tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-white/50">
+                                      {monthItems.map((item, i) => (
+                                        <tr key={i} onClick={() => openReservation(item.tenant)} className="cursor-pointer hover:brightness-95 transition-all">
+                                          <td className="pl-4 md:pl-10 py-2 md:py-3 uppercase text-[7px] md:text-[10px] font-black text-slate-700">{item.propName}</td>
+                                          <td className="py-2 md:py-3 text-[7px] md:text-[10px] font-bold">{item.tenant.name}</td>
+                                          <td className="py-2 md:py-3 text-[7px] md:text-[10px] text-slate-500 hidden md:table-cell">{formatDateFr(item.tenant.startDate)} → {formatDateFr(item.tenant.endDate)}</td>
+                                          <td className="py-2 md:py-3"><span className={`${pal.badge} text-[6px] md:text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full`}>{item.label}</span></td>
+                                          <td className="py-2 md:py-3 text-right pr-4 md:pr-8 font-black text-[8px] md:text-xs">{item.amount.toLocaleString('fr-FR')}€</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
                     </tbody>
                     <tfoot className="bg-indigo-600 text-white font-black text-[10px] md:text-lg sticky bottom-0 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
                       <tr>
