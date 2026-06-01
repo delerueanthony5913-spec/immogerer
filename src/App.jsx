@@ -1604,6 +1604,7 @@ const App = () => {
                             <div className="flex items-center gap-1.5 mt-1 leading-tight"><span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{t.platform}</span><span className="text-[11px] font-black text-slate-700">{t.name}</span></div>
                           </div>
                           <div className="flex flex-col items-end gap-1">
+                            {(() => { const o = t.owner || ownerFromProp(t.propertyId); return o === 'anthony' ? <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[9px] font-black flex items-center justify-center flex-shrink-0">A</span> : o === 'camille' ? <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[9px] font-black flex items-center justify-center flex-shrink-0">C</span> : null; })()}
                             <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>{getStatusProps(t).label}</span>
                             {t.paymentDate && t.platform !== 'En direct' && <span className="text-[7px] text-slate-400 font-bold">{formatDateFr(t.paymentDate)}</span>}
                             {t.platform === 'En direct' && t.soldeDate && <span className="text-[7px] text-slate-400 font-bold">{formatDateFr(t.soldeDate)}</span>}
@@ -1648,7 +1649,7 @@ const App = () => {
                           
                           return (
                           <tr key={t.id} data-res-id={t.id} onClick={() => openReservation(t)} className={`${colors.bg} ${colors.hover} cursor-pointer transition-colors`}>
-                              <td className="p-4 uppercase"><div className="font-black">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</div><div className="text-blue-600 text-xs font-black tracking-widest mt-0.5">{t.platform}</div></td>
+                              <td className="p-4 uppercase"><div className="flex items-center gap-2"><div className="font-black">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</div>{(() => { const o = t.owner || ownerFromProp(t.propertyId); return o === 'anthony' ? <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[9px] font-black flex items-center justify-center flex-shrink-0">A</span> : o === 'camille' ? <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[9px] font-black flex items-center justify-center flex-shrink-0">C</span> : null; })()}</div><div className="text-blue-600 text-xs font-black tracking-widest mt-0.5">{t.platform}</div></td>
 
                               <td className="p-4"><div className="text-sm font-black">{t.name}</div>{t.phone && <div className="text-slate-400 text-[10px] mt-0.5">{t.phone}</div>}</td>
                               <td className="p-4 text-center text-slate-500 whitespace-nowrap">{formatDateFr(t.startDate)} <ArrowRight size={10} className="inline text-slate-300" /> {formatDateFr(t.endDate)}</td>
