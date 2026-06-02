@@ -664,6 +664,50 @@ const Statistiques = ({ tenants, properties, availablePlatforms }) => {
         </div>
       </div>
 
+      {/* ══ TAUX D'OCCUPATION ══ */}
+      {(() => {
+        const year = selYears.length===1 ? parseInt(selYears[0]) : new Date().getFullYear();
+        const isLeap = (year%4===0&&year%100!==0)||(year%400===0);
+        const available = isLeap ? 366 : 365;
+        const propStats = (properties||[]).map(prop => {
+          const res = tenants.filter(t => t.propertyId===prop.id && t.startDate && t.startDate.startsWith(String(year)));
+          const nights = res.reduce((s,t)=>s+Math.max(0,Math.round((new Date(t.endDate)-new Date(t.startDate))/86400000)),0);
+          const revenue = res.reduce((s,t)=>s+(parseFloat(t.grossAmount)||0),0);
+          const rate = Math.round((nights/available)*100);
+          const rpn = nights>0 ? Math.round(revenue/nights) : 0;
+          return {name:prop.name, nights, rate, rpn, count:res.length};
+        }).filter(p=>p.count>0);
+        if (propStats.length===0) return null;
+        return (
+          <div className="bg-white rounded-[28px] shadow-lg overflow-hidden">
+            <div className="p-4 bg-slate-900 text-white font-black uppercase text-[10px] tracking-widest">Taux d'occupation {year}</div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left min-w-[400px]">
+                <thead className="bg-slate-50 text-slate-400 text-[9px] font-black uppercase border-b">
+                  <tr><th className="p-3">Logement</th><th className="p-3 text-right">Nuits</th><th className="p-3 text-right">Taux</th><th className="p-3 text-right">Rev. / nuit</th><th className="p-3 text-right">Réservations</th></tr>
+                </thead>
+                <tbody className="divide-y font-bold text-[10px]">
+                  {propStats.map(p=>(
+                    <tr key={p.name}>
+                      <td className="p-3 font-black uppercase text-slate-800">{p.name}</td>
+                      <td className="p-3 text-right">{p.nights}</td>
+                      <td className="p-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full rounded-full bg-blue-500" style={{width:`${Math.min(p.rate,100)}%`}}/></div>
+                          <span className={`font-black ${p.rate>=70?'text-emerald-600':p.rate>=40?'text-amber-600':'text-rose-500'}`}>{p.rate}%</span>
+                        </div>
+                      </td>
+                      <td className="p-3 text-right font-black text-slate-700">{p.rpn}€</td>
+                      <td className="p-3 text-right text-slate-500">{p.count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
+
     </div>
   );
 };

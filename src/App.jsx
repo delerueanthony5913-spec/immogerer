@@ -5,7 +5,8 @@ import {
   Key, Lock, Loader2, Filter, List, CalendarRange, BarChart2, Calculator, Settings,
   Menu, X, Euro, Search, ArrowRight, LocateFixed, ChevronLeft, ChevronRight,
   Mail, CheckCircle, Clock, TrendingUp, TrendingDown, UploadCloud, AlertTriangle,
-  Check, Trash2, CalendarCheck, Calendar as CalendarIcon, FileText
+  Check, Trash2, CalendarCheck, Calendar as CalendarIcon, FileText, CreditCard,
+  Home, LayoutGrid
 } from 'lucide-react';
 
 import { auth, db, appId } from './firebaseConfig';
@@ -29,7 +30,7 @@ const App = () => {
   const [properties, setProperties] = useState([]);
   const [tenants, setTenants] = useState([]);
   
-  const [availablePlatforms, setAvailablePlatforms] = useState(['Airbnb', 'Booking', 'Abritel', 'En direct']);
+  const [availablePlatforms, setAvailablePlatforms] = useState(['Airbnb', 'Booking', 'Abritel', 'En direct', 'GreenGo']);
   const [availableProviders, setAvailableProviders] = useState(['Justine', 'Marc']);
   const [providerEmails, setProviderEmails] = useState({});
   const [availableServiceTypes, setAvailableServiceTypes] = useState(['Ménage', 'Entrée/Sortie']);
@@ -39,7 +40,13 @@ const App = () => {
   const [filterProp, setFilterProp] = useState('all');
   const [filterPlat, setFilterPlat] = useState('all');
   const [filterProv, setFilterProv] = useState('all');
+  const [filterProvSuivi, setFilterProvSuivi] = useState('all');
+  const [filterProvStatus, setFilterProvStatus] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [groupedPayConfig, setGroupedPayConfig] = useState(null);
+  const [showPlanning, setShowPlanning] = useState(false);
+  const [dashboardModal, setDashboardModal] = useState(null);
+  const [selectedExpenseIds, setSelectedExpenseIds] = useState([]);
   const [filterOwner, setFilterOwner] = useState('global');
  
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -47,8 +54,9 @@ const App = () => {
   const [formData, setFormData] = useState({ 
     propertyId: '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', 
     platform: 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', 
-    bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '',
+    bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], resDeposits: [], comment: '',
     acompte1Amount: '', acompte1Date: '', acompte1DueDate: '', acompte2Amount: '', acompte2Date: '', acompte2DueDate: '', soldeAmount: '', soldeDate: '', soldeDueDate: '',
+    acompte1Owner: '', acompte2Owner: '', soldeOwner: '',
     owner: ''
   });
  
@@ -97,7 +105,7 @@ const App = () => {
   // --- REFS POUR LE CARROUSEL NATIF ---
   const scrollContainerRef = useRef(null);
   const isScrollingRef = useRef(false);
-  const TABS_ORDER = ['reservations', 'agenda', 'statistiques', 'finances', 'settings'];
+  const TABS_ORDER = ['dashboard', 'reservations', 'agenda', 'statistiques', 'finances', 'settings'];
  
   // 2. EFFETS FIREBASE
   useEffect(() => {
@@ -489,11 +497,47 @@ const App = () => {
     return ownerOfProp(prop?.name);
   };
 
+  const getResOwnerBadges = (t) => {
+    const base = t.owner || ownerFromProp(t.propertyId);
+    if (t.platform !== 'En direct') return base === 'anthony' || base === 'camille' ? [base] : [];
+    const owners = new Set();
+    const resolve = o => (o === 'anthony' || o === 'camille') ? o : base;
+    if (t.acompte1Amount) owners.add(resolve(t.acompte1Owner));
+    if (t.acompte2Amount) owners.add(resolve(t.acompte2Owner));
+    if (t.soldeAmount)    owners.add(resolve(t.soldeOwner));
+    if (owners.size === 0 && (base === 'anthony' || base === 'camille')) owners.add(base);
+    return [...owners].filter(o => o === 'anthony' || o === 'camille');
+  };
+
+  const OwnerBadges = ({ t }) => {
+    const owners = getResOwnerBadges(t);
+    return (
+      <div className="flex gap-0.5">
+        {owners.includes('anthony') && <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[9px] font-black flex items-center justify-center flex-shrink-0">A</span>}
+        {owners.includes('camille') && <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[9px] font-black flex items-center justify-center flex-shrink-0">C</span>}
+      </div>
+    );
+  };
+
+  const getOverdueAlerts = (t) => {
+    if (t.platform !== 'En direct') return [];
+    const alerts = [];
+    if (t.acompte1Amount && !t.acompte1Date && t.acompte1DueDate && t.acompte1DueDate < todayStr) alerts.push('Acompte 1');
+    if (t.acompte2Amount && !t.acompte2Date && t.acompte2DueDate && t.acompte2DueDate < todayStr) alerts.push('Acompte 2');
+    if (t.soldeAmount && !t.soldeDate && t.soldeDueDate && t.soldeDueDate < todayStr) alerts.push('Solde');
+    return alerts;
+  };
+
+
   const financeBaseTenants = useMemo(() => {
     if (filterOwner === 'global') return baseTenants;
     return baseTenants.filter(t => {
       const effectiveOwner = t.owner || ownerFromProp(t.propertyId);
-      return effectiveOwner === filterOwner;
+      if (t.platform !== 'En direct') return effectiveOwner === filterOwner;
+      const a1O = t.acompte1Owner || effectiveOwner;
+      const a2O = t.acompte2Owner || effectiveOwner;
+      const sO  = t.soldeOwner   || effectiveOwner;
+      return a1O === filterOwner || a2O === filterOwner || sO === filterOwner;
     });
   }, [baseTenants, filterOwner, properties]);
  
@@ -566,15 +610,22 @@ const App = () => {
 
     financeBaseTenants.forEach(t => {
       if (t.platform === 'En direct') {
-           const a1 = parseFloat(t.acompte1Amount) || 0;
-           const a2 = parseFloat(t.acompte2Amount) || 0;
-           const s = parseFloat(t.soldeAmount) || 0;
- 
-           if (t.acompte1Date && checkDateFilter(t.acompte1Date)) { const m = t.acompte1Date.substring(0,7); initStats(m); stats[m].totalBank += a1; if (t.isUrssaf === false) stats[m].directNet += a1; }
-           if (t.acompte2Date && checkDateFilter(t.acompte2Date)) { const m = t.acompte2Date.substring(0,7); initStats(m); stats[m].totalBank += a2; if (t.isUrssaf === false) stats[m].directNet += a2; }
+           const eo  = t.owner || ownerFromProp(t.propertyId);
+           const a1O = t.acompte1Owner || eo;
+           const a2O = t.acompte2Owner || eo;
+           const sO  = t.soldeOwner   || eo;
+           const cA1 = filterOwner === 'global' || a1O === filterOwner;
+           const cA2 = filterOwner === 'global' || a2O === filterOwner;
+           const cS  = filterOwner === 'global' || sO  === filterOwner;
+           const a1 = cA1 ? (parseFloat(t.acompte1Amount) || 0) : 0;
+           const a2 = cA2 ? (parseFloat(t.acompte2Amount) || 0) : 0;
+           const s  = cS  ? (parseFloat(t.soldeAmount)    || 0) : 0;
+
+           if (a1 && t.acompte1Date && checkDateFilter(t.acompte1Date)) { const m = t.acompte1Date.substring(0,7); initStats(m); stats[m].totalBank += a1; if (t.isUrssaf === false) { stats[m].directNet += a1; } else { stats[m].urssafGross += a1; stats[m].taxes += a1 * 0.077; stats[m].platforms[t.platform] = (stats[m].platforms[t.platform] || 0) + a1; } }
+           if (a2 && t.acompte2Date && checkDateFilter(t.acompte2Date)) { const m = t.acompte2Date.substring(0,7); initStats(m); stats[m].totalBank += a2; if (t.isUrssaf === false) { stats[m].directNet += a2; } else { stats[m].urssafGross += a2; stats[m].taxes += a2 * 0.077; stats[m].platforms[t.platform] = (stats[m].platforms[t.platform] || 0) + a2; } }
            if (t.soldeDate && checkDateFilter(t.soldeDate)) {
-               const m = t.soldeDate.substring(0,7); initStats(m); stats[m].totalBank += s; if (t.isUrssaf === false) stats[m].directNet += s;
-               if (t.isUrssaf !== false) { stats[m].urssafGross += (parseFloat(t.grossAmount) || 0); stats[m].taxes += (parseFloat(t.grossAmount) || 0) * 0.077; stats[m].platforms[t.platform] = (stats[m].platforms[t.platform] || 0) + (parseFloat(t.grossAmount) || 0); }
+               const m = t.soldeDate.substring(0,7); initStats(m);
+               if (s) { stats[m].totalBank += s; if (t.isUrssaf === false) { stats[m].directNet += s; } else { stats[m].urssafGross += s; stats[m].taxes += s * 0.077; stats[m].platforms[t.platform] = (stats[m].platforms[t.platform] || 0) + s; } }
            }
       } else {
           if (t.paymentDate && checkDateFilter(t.paymentDate)) {
@@ -591,22 +642,24 @@ const App = () => {
       });
     });
     return Object.entries(stats).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [financeBaseTenants, filterYear, filterMonth, filterProv]);
+  }, [financeBaseTenants, filterYear, filterMonth, filterProv, filterOwner, properties]);
 
   const detailedExpenses = useMemo(() => {
     const list = [];
     financeBaseTenants.forEach(t => {
       (t.resExpenses || []).forEach(exp => {
-        if (filterProv === 'all' || exp.person === filterProv) {
-          const refDate = exp.paymentDate || t.startDate;
-          if (checkDateFilter(refDate)) {
-            list.push({ id: `${t.id}-${exp.id}`, propertyName: properties.find(p => p.id === t.propertyId)?.name || '--', dateRes: t.startDate, person: exp.person, type: exp.type, amount: parseFloat(exp.amount) || 0, paymentDate: exp.paymentDate || '' });
+        if (filterProvSuivi === 'all' || exp.person === filterProvSuivi) {
+          if (filterProvStatus === 'all' || (filterProvStatus === 'paid' ? !!exp.paymentDate : !exp.paymentDate)) {
+            const refDate = exp.paymentDate || t.startDate;
+            if (checkDateFilter(refDate)) {
+              list.push({ id: `${t.id}-${exp.id}`, propertyName: properties.find(p => p.id === t.propertyId)?.name || '--', dateRes: t.startDate, person: exp.person, type: exp.type, amount: parseFloat(exp.amount) || 0, paymentDate: exp.paymentDate || '' });
+            }
           }
         }
       });
     });
     return list.sort((a, b) => b.dateRes.localeCompare(a.dateRes));
-  }, [financeBaseTenants, properties, filterProv, filterYear, filterMonth]);
+  }, [financeBaseTenants, properties, filterProvSuivi, filterProvStatus, filterYear, filterMonth]);
 
   const [expandedFinanceMonth, setExpandedFinanceMonth] = useState(null);
   const [expandedPrevMonth, setExpandedPrevMonth] = useState(null);
@@ -670,23 +723,25 @@ const App = () => {
       const propName = prop?.name || '--';
       const base = { id: t.id, tenant: t, name: t.name, propName, startDate: t.startDate, endDate: t.endDate };
       const isUrssaf = t.isUrssaf !== false;
-      // Si la date est dans le passé ou absente → mois courant
       const clampDate = (d) => (!d || d < todayStr) ? todayStr : d;
       if (t.platform === 'En direct') {
-        const a1 = parseFloat(t.acompte1Amount) || 0;
-        const a2 = parseFloat(t.acompte2Amount) || 0;
+        const eo  = t.owner || ownerFromProp(t.propertyId);
+        const a1O = t.acompte1Owner || eo;
+        const a2O = t.acompte2Owner || eo;
+        const sO  = t.soldeOwner   || eo;
+        const cA1 = filterOwner === 'global' || a1O === filterOwner;
+        const cA2 = filterOwner === 'global' || a2O === filterOwner;
+        const cS  = filterOwner === 'global' || sO  === filterOwner;
+        const a1 = cA1 ? (parseFloat(t.acompte1Amount) || 0) : 0;
+        const a2 = cA2 ? (parseFloat(t.acompte2Amount) || 0) : 0;
         const gross = parseFloat(t.grossAmount) || (parseFloat(t.soldeAmount) || 0);
-        // Solde effectif = ce qui est stocké, sinon calculé depuis le global
-        const storedSolde = parseFloat(t.soldeAmount) || 0;
-        const s = storedSolde > 0 ? storedSolde : Math.max(0, gross - a1 - a2);
-        const tax = isUrssaf ? gross * 0.077 : 0;
-        const charges = (t.resExpenses || []).filter(e => !e.paymentDate).reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-        // Date du solde = référence de repli pour les acomptes en retard
+        const rawSolde = parseFloat(t.soldeAmount) || 0;
+        const s = cS ? (rawSolde > 0 ? rawSolde : Math.max(0, gross - (parseFloat(t.acompte1Amount)||0) - (parseFloat(t.acompte2Amount)||0))) : 0;
+        const charges = cS ? (t.resExpenses || []).filter(e => !e.paymentDate).reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0) : 0;
         const dSolde = clampDate(t.soldeDueDate || t.endDate);
-        // Acompte : date limite si future, sinon regroupé avec le solde
-        if (a1 > 0 && !t.acompte1Date) { const d = (t.acompte1DueDate && t.acompte1DueDate >= todayStr) ? t.acompte1DueDate : dSolde; addEntry(d.substring(0, 7), { ...base, label: 'Acompte 1', dueDate: d, urssafGross: 0, directNet: isUrssaf ? 0 : a1, totalBank: a1, taxes: 0, charges: 0 }); }
-        if (a2 > 0 && !t.acompte2Date) { const d = (t.acompte2DueDate && t.acompte2DueDate >= todayStr) ? t.acompte2DueDate : dSolde; addEntry(d.substring(0, 7), { ...base, label: 'Acompte 2', dueDate: d, urssafGross: 0, directNet: isUrssaf ? 0 : a2, totalBank: a2, taxes: 0, charges: 0 }); }
-        if (s > 0 && !t.soldeDate) { addEntry(dSolde.substring(0, 7), { ...base, label: 'Solde', dueDate: dSolde, urssafGross: isUrssaf ? gross : 0, directNet: isUrssaf ? 0 : s, totalBank: s, taxes: tax, charges }); }
+        if (a1 > 0 && !t.acompte1Date) { const d = (t.acompte1DueDate && t.acompte1DueDate >= todayStr) ? t.acompte1DueDate : dSolde; addEntry(d.substring(0, 7), { ...base, label: 'Acompte 1', dueDate: d, urssafGross: isUrssaf ? a1 : 0, directNet: isUrssaf ? 0 : a1, totalBank: a1, taxes: isUrssaf ? a1 * 0.077 : 0, charges: 0 }); }
+        if (a2 > 0 && !t.acompte2Date) { const d = (t.acompte2DueDate && t.acompte2DueDate >= todayStr) ? t.acompte2DueDate : dSolde; addEntry(d.substring(0, 7), { ...base, label: 'Acompte 2', dueDate: d, urssafGross: isUrssaf ? a2 : 0, directNet: isUrssaf ? 0 : a2, totalBank: a2, taxes: isUrssaf ? a2 * 0.077 : 0, charges: 0 }); }
+        if (s > 0 && !t.soldeDate) { addEntry(dSolde.substring(0, 7), { ...base, label: 'Solde', dueDate: dSolde, urssafGross: (cS && isUrssaf) ? s : 0, directNet: isUrssaf ? 0 : s, totalBank: s, taxes: (cS && isUrssaf) ? s * 0.077 : 0, charges }); }
       } else {
         const d = t.endDate || '';
         if (d >= todayStr) {
@@ -702,7 +757,7 @@ const App = () => {
       months: nextMonths.filter(m => monthStats[m]).map(m => ({ month: m, ...monthStats[m], profit: monthStats[m].totalBank - monthStats[m].taxes - monthStats[m].charges })),
       items: items.sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))
     };
-  }, [financeBaseTenants, properties, filterYear]);
+  }, [financeBaseTenants, properties, filterYear, filterOwner]);
 
   const statsCalculations = useMemo(() => {
     const year = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
@@ -1139,7 +1194,29 @@ const App = () => {
       setQuickPayConfig(null);
     } catch (err) {}
   };
- 
+
+  const handleGroupedPay = async () => {
+    if (!groupedPayConfig || !groupedPayConfig.date || selectedExpenseIds.length === 0) return;
+    const byTenant = {};
+    selectedExpenseIds.forEach(compositeId => {
+      const dashIndex = compositeId.indexOf('-');
+      const tenantId = compositeId.substring(0, dashIndex);
+      const expId = compositeId.substring(dashIndex + 1);
+      const tenant = financeBaseTenants.find(t => t.id === tenantId);
+      if (!tenant) return;
+      if (!byTenant[tenantId]) byTenant[tenantId] = { tenant, expIds: [] };
+      byTenant[tenantId].expIds.push(expId);
+    });
+    try {
+      for (const [tenantId, { tenant, expIds }] of Object.entries(byTenant)) {
+        const newExpenses = tenant.resExpenses.map(exp => expIds.includes(exp.id) ? { ...exp, paymentDate: groupedPayConfig.date } : exp);
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', tenantId), { resExpenses: newExpenses }, { merge: true });
+      }
+      setGroupedPayConfig(null);
+      setSelectedExpenseIds([]);
+    } catch (err) {}
+  };
+
   const updateDiasField = (expId, field, value) => {
     setFormData(prev => {
         const newExpenses = (prev.resExpenses || []).map(x => {
@@ -1368,7 +1445,7 @@ const App = () => {
           <button onClick={() => { localStorage.removeItem('cadel_unlocked'); setIsUnlocked(false); }} className="absolute top-4 right-4 p-2 text-slate-300 hover:text-slate-900 transition-colors" title="Verrouiller l'application"><Lock size={16} /></button>
         </div>
         <nav className="flex-1 p-6 space-y-2 overflow-y-auto">
-          {[{ id: 'reservations', label: 'Réservations', icon: <List size={18}/> }, { id: 'agenda', label: 'Agenda', icon: <CalendarRange size={18}/> }, { id: 'statistiques', label: 'Statistiques', icon: <BarChart2 size={18}/> }, { id: 'finances', label: 'Finances', icon: <Calculator size={18}/> }, { id: 'settings', label: 'Paramètres', icon: <Settings size={18}/> }].map(item => (
+          {[{ id: 'dashboard', label: 'Accueil', icon: <Home size={18}/> }, { id: 'reservations', label: 'Réservations', icon: <List size={18}/> }, { id: 'agenda', label: 'Agenda', icon: <CalendarRange size={18}/> }, { id: 'statistiques', label: 'Statistiques', icon: <BarChart2 size={18}/> }, { id: 'finances', label: 'Finances', icon: <Calculator size={18}/> }, { id: 'settings', label: 'Paramètres', icon: <Settings size={18}/> }].map(item => (
             <button key={item.id} onClick={() => changeTab(item.id)} className={`w-full text-left px-5 py-4 rounded-[20px] font-black text-[11px] uppercase tracking-widest transition-all flex items-center gap-4 ${activeTab === item.id ? 'bg-slate-900 text-white shadow-2xl' : 'text-slate-400 hover:bg-slate-50'}`}>{item.icon} {item.label}</button>
           ))}
         </nav>
@@ -1377,7 +1454,7 @@ const App = () => {
       <div className="md:hidden flex justify-between p-5 bg-white border-b sticky top-0 z-40 shadow-sm">
         <div className="flex items-center gap-3">
             <img src="/icon.svg" alt="Logo" className="w-10 h-10 rounded-[12px] shadow-sm object-contain" />
-            <h1 className="font-black text-sm uppercase">CADEL MANAGER</h1>
+            <h1 className="font-black text-sm uppercase">CADEL MANAGER <span className="text-slate-400 font-bold text-[9px] normal-case">v2.6</span></h1>
         </div>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2">{isMobileMenuOpen ? <X /> : <Menu />}</button>
       </div>
@@ -1527,7 +1604,84 @@ const App = () => {
              </div>
           </div>
         )}
- 
+
+        {groupedPayConfig && (() => {
+          const selectedItems = detailedExpenses.filter(e => selectedExpenseIds.includes(e.id));
+          const total = selectedItems.reduce((s, e) => s + (e.amount || 0), 0);
+          return (
+            <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in p-3 md:p-6">
+              <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-2xl max-h-[95dvh] border border-slate-100 flex flex-col animate-in zoom-in-95 overflow-hidden">
+                <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 flex-shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-blue-50 text-blue-600 w-10 h-10 rounded-2xl flex items-center justify-center"><CreditCard size={20}/></div>
+                    <div>
+                      <h3 className="font-black text-base uppercase tracking-tighter">Règlement groupé</h3>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">{selectedItems.length} prestation(s) — {total.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€ dû</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setGroupedPayConfig(null)} className="p-2 text-slate-400 hover:text-slate-900 transition-colors"><X size={20}/></button>
+                </div>
+                <div className="flex-1 overflow-y-auto divide-y divide-slate-100" style={{WebkitOverflowScrolling:'touch'}}>
+                  {selectedItems.map(item => (
+                    <div key={item.id} className="flex justify-between items-center px-6 py-3">
+                      <div>
+                        <div className="text-xs font-black text-slate-800 uppercase">{item.person}</div>
+                        <div className="text-[10px] font-bold text-slate-400 uppercase">{formatDateFr(item.dateRes)} — {item.propertyName}</div>
+                      </div>
+                      <span className="text-sm font-black text-slate-900">{(item.amount || 0).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex-shrink-0 border-t border-slate-100 px-6 py-4 bg-slate-50 flex flex-col gap-3">
+                  <div className="flex items-center justify-between bg-slate-900 text-white rounded-2xl px-5 py-3">
+                    <span className="font-black uppercase text-[10px] text-slate-400">Total dû</span>
+                    <span className="font-black text-2xl">{total.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</span>
+                  </div>
+                  <input type="date" value={groupedPayConfig.date} onChange={e => setGroupedPayConfig({...groupedPayConfig, date: e.target.value})} className="w-full p-4 bg-white border border-slate-200 rounded-2xl font-black text-center text-base outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50" />
+                  <div className="flex gap-3">
+                    <button onClick={() => setGroupedPayConfig(null)} className="flex-1 p-4 rounded-2xl font-black uppercase text-[10px] text-slate-400 bg-white border border-slate-200 hover:bg-slate-100 transition-colors">Annuler</button>
+                    <button onClick={handleGroupedPay} className="flex-1 p-4 rounded-2xl font-black uppercase text-[10px] text-white bg-blue-500 shadow-xl shadow-blue-200 hover:bg-blue-600 transition-all hover:-translate-y-0.5">Valider ({selectedItems.length})</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {dashboardModal && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in p-4">
+            <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-lg max-h-[85dvh] flex flex-col border border-slate-100 overflow-hidden animate-in zoom-in-95">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0 bg-slate-900 text-white">
+                <div>
+                  <div className="font-black uppercase text-xs tracking-widest">{dashboardModal.title}</div>
+                  <div className="text-[9px] text-slate-400 font-bold mt-0.5">{dashboardModal.items.length} réservation(s)</div>
+                </div>
+                <button onClick={()=>setDashboardModal(null)} className="p-2 text-slate-400 hover:text-white transition-colors"><X size={18}/></button>
+              </div>
+              <div className="flex-1 overflow-y-auto divide-y divide-slate-100" style={{WebkitOverflowScrolling:'touch'}}>
+                {dashboardModal.items.map(t => {
+                  const prop = properties.find(p=>p.id===t.propertyId);
+                  const alerts = getOverdueAlerts(t);
+                  return (
+                    <div key={t.id} onClick={()=>{setDashboardModal(null);changeTab('reservations');openReservation(t);}} className="flex justify-between items-center px-5 py-3.5 cursor-pointer hover:bg-blue-50 transition-colors">
+                      <div>
+                        <div className="font-black text-sm text-slate-900">{t.name}</div>
+                        <div className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{prop?.name||'--'} — {t.platform}</div>
+                        <div className="text-[9px] text-slate-400 mt-0.5">{formatDateFr(t.startDate)} → {formatDateFr(t.endDate)}</div>
+                        {alerts.length>0 && <div className="text-[8px] font-black text-rose-500 uppercase mt-0.5">{alerts.join(' · ')}</div>}
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                        <OwnerBadges t={t} />
+                        <span className="text-slate-300"><ChevronRight size={16}/></span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
         {statsDetailConfig && (
            <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-in fade-in">
               <div className="bg-[#F8FAFC] rounded-[40px] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-slate-100 overflow-hidden relative">
@@ -1565,6 +1719,84 @@ const App = () => {
           className="flex-1 w-full flex overflow-x-auto overflow-y-hidden snap-x snap-mandatory hide-scroll"
         >
  
+          {/* 0. ONGLET DASHBOARD */}
+          <div className="flex-none w-full max-w-full overflow-y-auto snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border" style={{WebkitOverflowScrolling:'touch'}}>
+            <div className="max-w-7xl mx-auto pb-32 space-y-4 px-2 md:px-0">
+              <h2 className="text-3xl font-black uppercase">Accueil</h2>
+              {(() => {
+                const cm = todayStr.substring(0,7);
+                const thisMonth = (monthlyRecapData.find(([m])=>m===cm)||[])[1];
+                const encaisse = thisMonth?.totalBank||0;
+                const prevNet = previsionData.months.reduce((s,m)=>s+m.profit,0);
+                const overdueRes = baseTenants.filter(t=>getOverdueAlerts(t).length>0);
+                const prestDues = baseTenants.reduce((sum,t)=>sum+(t.resExpenses||[]).filter(e=>!e.paymentDate).reduce((s,e)=>s+(parseFloat(e.amount)||0),0),0);
+                const d7 = new Date(); d7.setDate(d7.getDate()+7);
+                const d7str = d7.toISOString().split('T')[0];
+                const arrivals = baseTenants.filter(t=>t.startDate>=todayStr&&t.startDate<=d7str).sort((a,b)=>a.startDate.localeCompare(b.startDate));
+                return (<>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {[
+                      {label:'Encaissé ce mois',value:`${encaisse.toLocaleString('fr-FR',{maximumFractionDigits:0})}€`,color:'text-emerald-600',bg:'bg-white',border:'border-slate-100',
+                        getItems:()=>{ const cm=todayStr.substring(0,7); return baseTenants.filter(t=>{ if(t.platform==='En direct') return [t.acompte1Date,t.acompte2Date,t.soldeDate].some(d=>d&&d.startsWith(cm)); return t.paymentDate&&t.paymentDate.startsWith(cm); }); }},
+                      {label:'Prévisionnel net',value:`${prevNet.toLocaleString('fr-FR',{maximumFractionDigits:0})}€`,color:'text-blue-600',bg:'bg-white',border:'border-slate-100',
+                        getItems:()=>[...new Map(previsionData.items.map(i=>[i.id,i.tenant])).values()]},
+                      {label:'Acomptes en retard',value:overdueRes.length,color:overdueRes.length>0?'text-rose-600':'text-slate-300',bg:overdueRes.length>0?'bg-rose-50':'bg-white',border:overdueRes.length>0?'border-rose-200':'border-slate-100',
+                        getItems:()=>overdueRes},
+                      {label:'Prestations à payer',value:`${prestDues.toLocaleString('fr-FR',{maximumFractionDigits:0})}€`,color:prestDues>0?'text-orange-600':'text-slate-300',bg:prestDues>0?'bg-orange-50':'bg-white',border:prestDues>0?'border-orange-200':'border-slate-100',
+                        getItems:()=>baseTenants.filter(t=>(t.resExpenses||[]).some(e=>!e.paymentDate))},
+                    ].map(k=>(
+                      <div key={k.label} onClick={()=>{ const items=k.getItems(); if(items.length===1){changeTab('reservations');openReservation(items[0]);}else if(items.length>1){setDashboardModal({title:k.label,items});}}} className={`${k.bg} rounded-[20px] shadow-lg p-4 border ${k.border} cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all`}>
+                        <div className="text-[9px] font-black uppercase text-slate-400 mb-1">{k.label}</div>
+                        <div className={`text-2xl font-black ${k.color}`}>{k.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {arrivals.length>0&&(
+                    <div className="bg-white rounded-[20px] shadow-lg border border-slate-100 overflow-hidden">
+                      <div className="p-3 bg-slate-900 text-white font-black uppercase text-[10px]">Arrivées dans 7 jours ({arrivals.length})</div>
+                      <div className="divide-y">
+                        {arrivals.map(t=>{
+                          const prop=properties.find(p=>p.id===t.propertyId);
+                          return(<div key={t.id} onClick={()=>{changeTab('reservations');openReservation(t);}} className="flex justify-between items-center px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors">
+                            <div><div className="font-black text-sm">{t.name}</div><div className="text-[10px] text-slate-400 uppercase font-bold">{prop?.name||'--'} — {t.platform}</div></div>
+                            <div className="text-right"><div className="font-black text-sm text-blue-600">{formatDateFr(t.startDate)}</div><div className="text-[10px] text-slate-400">→ {formatDateFr(t.endDate)}</div></div>
+                          </div>);
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {previsionData.items.length>0&&(
+                    <div className="bg-white rounded-[20px] shadow-lg border border-amber-100 overflow-hidden">
+                      <div className="p-3 bg-amber-500 text-white font-black uppercase text-[10px]">Encaissements à venir</div>
+                      <div className="divide-y">
+                        {previsionData.items.slice(0,8).map((item,i)=>(
+                          <div key={i} onClick={()=>{changeTab('reservations');openReservation(item.tenant);}} className="flex justify-between items-center px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors">
+                            <div><div className="font-black text-sm">{item.name}</div><div className="text-[10px] text-slate-400 uppercase font-bold">{item.propName} — {item.label}</div></div>
+                            <div className="text-right"><div className="font-black text-sm text-amber-600">{(item.totalBank||0).toLocaleString('fr-FR',{maximumFractionDigits:0})}€</div><div className="text-[10px] text-slate-400">{formatDateFr(item.dueDate)}</div></div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {overdueRes.length>0&&(
+                    <div className="bg-white rounded-[20px] shadow-lg border border-rose-200 overflow-hidden">
+                      <div className="p-3 bg-rose-600 text-white font-black uppercase text-[10px]">Paiements en retard</div>
+                      <div className="divide-y">
+                        {overdueRes.map(t=>{
+                          const prop=properties.find(p=>p.id===t.propertyId);
+                          return(<div key={t.id} onClick={()=>{changeTab('reservations');openReservation(t);}} className="flex justify-between items-center px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors">
+                            <div><div className="font-black text-sm">{t.name}</div><div className="text-[10px] text-slate-400 uppercase font-bold">{prop?.name||'--'} — {formatDateFr(t.startDate)}</div></div>
+                            <span className="text-[9px] font-black text-rose-600 uppercase">{getOverdueAlerts(t).join(' · ')}</span>
+                          </div>);
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>);
+              })()}
+            </div>
+          </div>
+
           {/* 1. ONGLETS RESERVATIONS */}
           <div className="flex-none w-full max-w-full snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border">
             <div className="max-w-7xl mx-auto">
@@ -1604,7 +1836,7 @@ const App = () => {
                             <div className="flex items-center gap-1.5 mt-1 leading-tight"><span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{t.platform}</span><span className="text-[11px] font-black text-slate-700">{t.name}</span></div>
                           </div>
                           <div className="flex flex-col items-end gap-1">
-                            {(() => { const o = t.owner || ownerFromProp(t.propertyId); return o === 'anthony' ? <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[9px] font-black flex items-center justify-center flex-shrink-0">A</span> : o === 'camille' ? <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[9px] font-black flex items-center justify-center flex-shrink-0">C</span> : null; })()}
+                            <div className="flex items-center gap-1"><OwnerBadges t={t} />{getOverdueAlerts(t).length>0&&<span className="flex items-center gap-0.5 bg-rose-600 text-white text-[7px] font-black px-1.5 py-0.5 rounded-full"><AlertTriangle size={7}/>{getOverdueAlerts(t).length}</span>}</div>
                             <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>{getStatusProps(t).label}</span>
                             {t.paymentDate && t.platform !== 'En direct' && <span className="text-[7px] text-slate-400 font-bold">{formatDateFr(t.paymentDate)}</span>}
                             {t.platform === 'En direct' && t.soldeDate && <span className="text-[7px] text-slate-400 font-bold">{formatDateFr(t.soldeDate)}</span>}
@@ -1649,7 +1881,7 @@ const App = () => {
                           
                           return (
                           <tr key={t.id} data-res-id={t.id} onClick={() => openReservation(t)} className={`${colors.bg} ${colors.hover} cursor-pointer transition-colors`}>
-                              <td className="p-4 uppercase"><div className="flex items-center gap-2"><div className="font-black">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</div>{(() => { const o = t.owner || ownerFromProp(t.propertyId); return o === 'anthony' ? <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[9px] font-black flex items-center justify-center flex-shrink-0">A</span> : o === 'camille' ? <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[9px] font-black flex items-center justify-center flex-shrink-0">C</span> : null; })()}</div><div className="text-blue-600 text-xs font-black tracking-widest mt-0.5">{t.platform}</div></td>
+                              <td className="p-4 uppercase"><div className="flex items-center gap-2"><div className="font-black">{(properties || []).find(p => p.id === t.propertyId)?.name || '--'}</div><OwnerBadges t={t} /></div><div className="text-blue-600 text-xs font-black tracking-widest mt-0.5">{t.platform}</div></td>
 
                               <td className="p-4"><div className="text-sm font-black">{t.name}</div>{t.phone && <div className="text-slate-400 text-[10px] mt-0.5">{t.phone}</div>}</td>
                               <td className="p-4 text-center text-slate-500 whitespace-nowrap">{formatDateFr(t.startDate)} <ArrowRight size={10} className="inline text-slate-300" /> {formatDateFr(t.endDate)}</td>
@@ -1685,9 +1917,67 @@ const App = () => {
           </div>
  
           {/* 2. ONGLET AGENDA */}
-          <div className="flex-none w-full max-w-full overflow-y-auto snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border">
+          <div className="flex-none w-full max-w-full overflow-y-auto snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border" style={{WebkitOverflowScrolling:'touch'}}>
             <div className="max-w-7xl mx-auto pb-32">
-              <div className="flex justify-between items-center mx-2 md:mx-0 mb-6"><div><h2 className="text-2xl md:text-3xl font-black uppercase">Agenda</h2></div><div className="flex items-center gap-4 bg-white px-4 py-2 rounded-2xl shadow-lg"><button onClick={()=>handleMonthChange('prev')}><ChevronLeft/></button><div className="text-center font-black min-w-[120px] uppercase text-xs">{['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][filterMonth==='all'?new Date().getMonth():parseInt(filterMonth)]}</div><button onClick={()=>handleMonthChange('next')}><ChevronRight/></button></div></div>
+              <div className="flex justify-between items-center mx-2 md:mx-0 mb-6">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-2xl md:text-3xl font-black uppercase">Agenda</h2>
+                  <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+                    <button onClick={()=>setShowPlanning(false)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${!showPlanning?'bg-white shadow text-slate-900':'text-slate-400'}`}><CalendarRange size={12} className="inline mr-1"/>Calendrier</button>
+                    <button onClick={()=>setShowPlanning(true)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${showPlanning?'bg-white shadow text-slate-900':'text-slate-400'}`}><LayoutGrid size={12} className="inline mr-1"/>Planning</button>
+                  </div>
+                </div>
+                {!showPlanning&&<div className="flex items-center gap-4 bg-white px-4 py-2 rounded-2xl shadow-lg"><button onClick={()=>handleMonthChange('prev')}><ChevronLeft/></button><div className="text-center font-black min-w-[120px] uppercase text-xs">{['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'][filterMonth==='all'?new Date().getMonth():parseInt(filterMonth)]}</div><button onClick={()=>handleMonthChange('next')}><ChevronRight/></button></div>}
+              </div>
+              {showPlanning&&(()=>{
+                const PLT_COLORS={'Airbnb':'#f43f5e','Booking':'#3b82f6','Abritel':'#8b5cf6','En direct':'#10b981','GreenGo':'#22c55e'};
+                const start=new Date(todayStr); start.setDate(start.getDate()-7);
+                const days=[]; for(let i=0;i<90;i++){const d=new Date(start);d.setDate(d.getDate()+i);days.push(d.toISOString().split('T')[0]);}
+                const months=[...new Set(days.map(d=>d.substring(0,7)))];
+                return(
+                  <div className="bg-white rounded-[24px] md:rounded-[40px] shadow-2xl overflow-hidden mx-2 md:mx-0">
+                    <div className="overflow-x-auto" style={{WebkitOverflowScrolling:'touch'}}>
+                      <div style={{minWidth:`${(properties||[]).length>0?600:400}px`}}>
+                        <div className="flex border-b bg-slate-50">
+                          <div className="w-28 flex-shrink-0 p-2 text-[8px] font-black uppercase text-slate-400 border-r">Logement</div>
+                          <div className="flex flex-1">
+                            {months.map(m=>{
+                              const cnt=days.filter(d=>d.startsWith(m)).length;
+                              return<div key={m} className="text-[8px] font-black uppercase text-slate-500 border-r p-1 text-center" style={{width:`${cnt*24}px`,flexShrink:0}}>{m.replace('-','/')}</div>;
+                            })}
+                          </div>
+                        </div>
+                        <div className="flex border-b bg-slate-50/50">
+                          <div className="w-28 flex-shrink-0 border-r"/>
+                          <div className="flex flex-1">
+                            {days.map(d=>(
+                              <div key={d} className={`w-6 flex-shrink-0 text-center border-r text-[7px] font-bold py-1 ${d===todayStr?'bg-blue-100 text-blue-700 font-black':d.endsWith('-01')?'text-slate-600 font-black':'text-slate-300'}`}>{d.split('-')[2]}</div>
+                            ))}
+                          </div>
+                        </div>
+                        {(properties||[]).map(prop=>(
+                          <div key={prop.id} className="flex border-b hover:bg-slate-50/50 transition-colors">
+                            <div className="w-28 flex-shrink-0 p-2 text-[8px] font-black uppercase text-slate-700 border-r flex items-center leading-tight">{prop.name}</div>
+                            <div className="flex flex-1 relative" style={{height:'36px'}}>
+                              {days.map(d=><div key={d} className={`w-6 flex-shrink-0 h-full border-r ${d===todayStr?'bg-blue-50':''}`}/>)}
+                              {baseTenants.filter(t=>t.propertyId===prop.id).map(t=>{
+                                const si=days.indexOf(t.startDate); const ei=days.indexOf(t.endDate);
+                                if(si===-1&&ei===-1)return null;
+                                const s=si===-1?0:si; const e=ei===-1?days.length-1:ei;
+                                const w=(e-s+1)*24; const l=s*24;
+                                const col=PLT_COLORS[t.platform]||'#94a3b8';
+                                return(<div key={t.id} title={`${t.name} (${t.platform})`} style={{position:'absolute',left:`${l}px`,width:`${w}px`,top:'4px',height:'28px',background:col,borderRadius:'6px',overflow:'hidden',cursor:'pointer',minWidth:'24px'}} className="flex items-center px-1">
+                                  <span style={{color:'white',fontSize:'7px',fontWeight:900,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{t.name}</span>
+                                </div>);
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="bg-white p-4 md:p-6 rounded-[32px] md:rounded-[40px] shadow-2xl overflow-x-auto mx-2 md:mx-0">
                 <div className="min-w-[320px] md:min-w-[700px]">
                   <div className="grid grid-cols-7 text-center font-black text-slate-300 text-[8px] md:text-[10px] uppercase mb-2 md:mb-4">
@@ -1772,7 +2062,7 @@ const App = () => {
           </div>
  
           {/* 3. ONGLET STATISTIQUES */}
-          <div className="flex-none w-full max-w-full overflow-y-auto snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border">
+          <div className="flex-none w-full max-w-full overflow-y-auto snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border" style={{WebkitOverflowScrolling:'touch'}}>
              <div className="max-w-7xl mx-auto">
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mx-2 md:mx-0 mb-6">
                    <div><h2 className="text-3xl md:text-4xl font-black uppercase text-slate-900 tracking-tighter leading-none mb-2">Statistiques</h2><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tableau de bord interactif</p></div>
@@ -1782,11 +2072,13 @@ const App = () => {
           </div>
  
           {/* 4. ONGLET FINANCES */}
-          <div className="flex-none w-full max-w-full overflow-y-auto snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border">
+          <div className="flex-none w-full max-w-full overflow-y-auto snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border" style={{WebkitOverflowScrolling:'touch'}}>
              <div className="max-w-7xl mx-auto pb-32 space-y-10">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mx-2 md:mx-0">
                 <h2 className="text-3xl font-black uppercase">Comptabilité</h2>
-                <div className="flex items-center gap-1 bg-slate-100 rounded-2xl p-1 self-start md:self-auto">
+              </div>
+              <div className="sticky top-0 z-30 bg-[#F8FAFC]/95 backdrop-blur-md py-2 -mt-4 mx-2 md:mx-0">
+                <div className="flex items-center gap-1 bg-slate-100 rounded-2xl p-1 self-start w-fit">
                   {[['global', 'Global'], ['anthony', 'Anthony'], ['camille', 'Camille']].map(([val, label]) => (
                     <button key={val} onClick={() => setFilterOwner(val)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${filterOwner === val ? 'bg-slate-900 text-white shadow' : 'text-slate-500 hover:bg-slate-200'}`}>{label}</button>
                   ))}
@@ -1800,15 +2092,17 @@ const App = () => {
                     <div className="text-amber-200 font-black">{previsionData.months.reduce((s, m) => s + m.profit, 0).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€ net estimé</div>
                   </div>
                   <div className="overflow-x-auto custom-scrollbar">
-                    <table className="w-full text-left min-w-[320px] md:min-w-[700px]">
+                    <table className="w-full text-left min-w-[500px] md:min-w-[700px]" style={{tableLayout:'fixed'}}>
+                      <colgroup><col style={{width:'20%'}}/><col style={{width:'12%'}}/><col style={{width:'16%'}}/><col style={{width:'13%'}}/><col style={{width:'11%'}}/><col style={{width:'12%'}}/><col style={{width:'16%'}}/></colgroup>
                       <thead className="bg-amber-50 uppercase text-amber-600 border-b text-[6px] md:text-xs tracking-tighter md:tracking-normal">
                         <tr>
-                          <th className="p-1 md:p-5">Mois</th>
-                          <th className="p-1 md:p-5 text-right text-slate-500">Brut URSSAF</th>
-                          <th className="p-1 md:p-5 text-right text-emerald-600">Direct</th>
-                          <th className="p-1 md:p-5 text-right text-rose-400">Cotis.</th>
-                          <th className="p-1 md:p-5 text-right text-slate-400">Prest.</th>
-                          <th className="p-1 md:p-5 text-right font-black text-amber-700">Net estimé</th>
+                          <th className="p-1 md:p-6">Mois</th>
+                          <th className="p-1 md:p-6 text-right text-slate-500">Brut URSSAF</th>
+                          <th className="p-1 md:p-6 text-right text-emerald-600">Direct (hors URSSAF)</th>
+                          <th className="p-1 md:p-6 text-right text-indigo-500">Virement att.</th>
+                          <th className="p-1 md:p-6 text-right text-slate-500">Prest.</th>
+                          <th className="p-1 md:p-6 text-right text-rose-500">Cotis.</th>
+                          <th className="p-1 md:p-6 text-right font-black text-amber-700">Net estimé</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1819,21 +2113,22 @@ const App = () => {
                           return (
                             <React.Fragment key={m.month}>
                               <tr onClick={() => setExpandedPrevMonth(isExp ? null : m.month)} className={`cursor-pointer font-bold transition-colors border-b ${isExp ? pal.row : 'hover:bg-slate-50/50'}`}>
-                                <td className="p-1 md:p-5 capitalize text-[8px] md:text-sm">
+                                <td className="p-1 md:p-6 capitalize text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">
                                   <span className="inline-flex items-center gap-1.5">
                                     <span className={`w-2 h-2 rounded-full flex-shrink-0 ${pal.dot}`}></span>
                                     {isExp ? '▾' : '▸'} {formatMonthYear(m.month)}
                                   </span>
                                 </td>
-                                <td className="p-1 md:p-5 text-right text-slate-500 text-[8px] md:text-sm">{m.urssafGross > 0 ? `${m.urssafGross.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€` : '-'}</td>
-                                <td className="p-1 md:p-5 text-right text-emerald-600 font-black text-[8px] md:text-sm">{m.directNet > 0 ? `${m.directNet.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€` : '-'}</td>
-                                <td className="p-1 md:p-5 text-right text-rose-400 text-[8px] md:text-sm">{m.taxes > 0 ? `-${m.taxes.toFixed(2)}€` : '-'}</td>
-                                <td className="p-1 md:p-5 text-right text-slate-400 text-[8px] md:text-sm">{m.charges > 0 ? `-${m.charges.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€` : '-'}</td>
-                                <td className={`p-1 md:p-5 text-right font-black text-[8px] md:text-sm ${m.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{m.profit.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
+                                <td className="p-1 md:p-6 text-right text-slate-500 text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{m.urssafGross > 0 ? `${m.urssafGross.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€` : '-'}</td>
+                                <td className="p-1 md:p-6 text-right text-emerald-600 font-black text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{m.directNet > 0 ? `${m.directNet.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€` : '-'}</td>
+                                <td className="p-1 md:p-6 text-right text-indigo-600 font-black text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{m.totalBank > 0 ? `${m.totalBank.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€` : '-'}</td>
+                                <td className="p-1 md:p-6 text-right text-slate-500 text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{m.charges > 0 ? `-${m.charges.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€` : '-'}</td>
+                                <td className="p-1 md:p-6 text-right text-rose-500 text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{m.taxes > 0 ? `-${m.taxes.toFixed(2)}€` : '-'}</td>
+                                <td className={`p-1 md:p-6 text-right font-black text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal ${m.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{m.profit.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
                               </tr>
                               {isExp && (
                                 <tr>
-                                  <td colSpan={6} className={`p-0 ${pal.expanded}`}>
+                                  <td colSpan={7} className={`p-0 ${pal.expanded}`}>
                                     <table className="w-full text-left">
                                       <thead className={`${pal.header} uppercase text-[6px] md:text-[9px] tracking-wider`}>
                                         <tr className={pal.text}><th className="pl-4 md:pl-8 py-2 md:py-3">Logement</th><th className="py-2 md:py-3">Client</th><th className="py-2 md:py-3 hidden md:table-cell">Séjour</th><th className="py-2 md:py-3">Type</th><th className="py-2 md:py-3 text-right pr-4 md:pr-8">Virement att.</th></tr>
@@ -1857,14 +2152,15 @@ const App = () => {
                           );
                         })}
                       </tbody>
-                      <tfoot className="bg-amber-600 text-white font-black text-[10px] md:text-sm sticky bottom-0 z-10">
+                      <tfoot className="bg-amber-500 text-white font-black sticky bottom-0 z-10">
                         <tr>
-                          <td className="p-1.5 md:p-5 uppercase text-[6px] md:text-[10px]">Total prévisionnel</td>
-                          <td className="p-1.5 md:p-5 text-right opacity-90 text-[8px] md:text-sm">{previsionData.months.reduce((s,m)=>s+m.urssafGross,0).toLocaleString('fr-FR',{maximumFractionDigits:2})}€</td>
-                          <td className="p-1.5 md:p-5 text-right text-amber-200 text-[8px] md:text-sm">{previsionData.months.reduce((s,m)=>s+m.directNet,0).toLocaleString('fr-FR',{maximumFractionDigits:2})}€</td>
-                          <td className="p-1.5 md:p-5 text-right text-rose-200 text-[8px] md:text-sm">-{previsionData.months.reduce((s,m)=>s+m.taxes,0).toFixed(2)}€</td>
-                          <td className="p-1.5 md:p-5 text-right text-amber-200 text-[8px] md:text-sm">-{previsionData.months.reduce((s,m)=>s+m.charges,0).toLocaleString('fr-FR',{maximumFractionDigits:2})}€</td>
-                          <td className="p-1.5 md:p-5 text-right bg-amber-700/40 font-black text-[8px] md:text-sm">{previsionData.months.reduce((s,m)=>s+m.profit,0).toLocaleString('fr-FR',{maximumFractionDigits:2})}€</td>
+                          <td className="p-1.5 md:p-8 uppercase text-[6px] md:text-[10px] leading-tight tracking-tighter md:tracking-normal">Total prévisionnel</td>
+                          <td className="p-1.5 md:p-8 text-right opacity-90"><div className="leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{previsionData.months.reduce((s,m)=>s+m.urssafGross,0).toLocaleString('fr-FR',{maximumFractionDigits:2})}€</div></td>
+                          <td className="p-1.5 md:p-8 text-right text-amber-100 leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{previsionData.months.reduce((s,m)=>s+m.directNet,0).toLocaleString('fr-FR',{maximumFractionDigits:2})}€</td>
+                          <td className="p-1.5 md:p-8 text-right leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{previsionData.months.reduce((s,m)=>s+m.totalBank,0).toLocaleString('fr-FR',{maximumFractionDigits:2})}€</td>
+                          <td className="p-1.5 md:p-8 text-right text-amber-200 leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">-{previsionData.months.reduce((s,m)=>s+m.charges,0).toLocaleString('fr-FR',{maximumFractionDigits:2})}€</td>
+                          <td className="p-1.5 md:p-8 text-right text-rose-200 leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">-{previsionData.months.reduce((s,m)=>s+m.taxes,0).toFixed(2)}€</td>
+                          <td className="p-1.5 md:p-8 text-right bg-amber-600/40 leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{previsionData.months.reduce((s,m)=>s+m.profit,0).toLocaleString('fr-FR',{maximumFractionDigits:2})}€</td>
                         </tr>
                       </tfoot>
                     </table>
@@ -1875,7 +2171,8 @@ const App = () => {
               <div className="bg-white rounded-[24px] md:rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100 mx-2 md:mx-0">
                 <div className="p-3 md:p-8 bg-slate-900 text-white font-black uppercase flex justify-between items-center text-[10px] md:text-xs"><div>Bilan {filterOwner === 'global' ? 'Global' : filterOwner === 'anthony' ? 'Anthony' : 'Camille'}</div></div>
                 <div className="max-h-[60vh] overflow-y-auto overflow-x-auto custom-scrollbar relative">
-                  <table className="w-full text-left min-w-[280px] md:min-w-[700px]">
+                  <table className="w-full text-left min-w-[500px] md:min-w-[700px]" style={{tableLayout:'fixed'}}>
+                    <colgroup><col style={{width:'20%'}}/><col style={{width:'12%'}}/><col style={{width:'16%'}}/><col style={{width:'13%'}}/><col style={{width:'11%'}}/><col style={{width:'12%'}}/><col style={{width:'16%'}}/></colgroup>
                     <thead className="bg-slate-50 uppercase text-slate-400 border-b sticky top-0 z-10 shadow-sm text-[6px] md:text-xs tracking-tighter md:tracking-normal">
                       <tr><th className="p-1 md:p-6">Période</th><th className="p-1 md:p-6 text-right">Brut URSSAF</th><th className="p-1 md:p-6 text-right text-emerald-600">Direct (hors URSSAF)</th><th className="p-1 md:p-6 text-right text-indigo-600">Virement</th><th className="p-1 md:p-6 text-right text-slate-500">Prest.</th><th className="p-1 md:p-6 text-right text-rose-500">Cotis.</th><th className="p-1 md:p-6 text-right font-black">Profit</th></tr>
                     </thead>
@@ -1937,54 +2234,91 @@ const App = () => {
                   </table>
                 </div>
                 {previsionData.months.length > 0 && (() => {
-                  const bilanProfit = monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank - d.taxes - d.charges, 0);
-                  const prevProfit = previsionData.months.reduce((s, m) => s + m.profit, 0);
-                  const grandTotal = bilanProfit + prevProfit;
+                  const tUrssaf  = monthlyRecapData.reduce((a,[,d])=>a+d.urssafGross,0) + previsionData.months.reduce((a,m)=>a+m.urssafGross,0);
+                  const tDirect  = monthlyRecapData.reduce((a,[,d])=>a+d.directNet,0)   + previsionData.months.reduce((a,m)=>a+m.directNet,0);
+                  const tBank    = monthlyRecapData.reduce((a,[,d])=>a+d.totalBank,0)   + previsionData.months.reduce((a,m)=>a+m.totalBank,0);
+                  const tCharges = monthlyRecapData.reduce((a,[,d])=>a+d.charges,0)     + previsionData.months.reduce((a,m)=>a+m.charges,0);
+                  const tTaxes   = monthlyRecapData.reduce((a,[,d])=>a+d.taxes,0)       + previsionData.months.reduce((a,m)=>a+m.taxes,0);
+                  const tProfit  = tBank - tTaxes - tCharges;
+                  const fmt = v => v.toLocaleString('fr-FR',{maximumFractionDigits:2});
                   return (
-                    <div className="border-t-4 border-slate-700 bg-gradient-to-r from-slate-900 to-indigo-900 text-white px-4 md:px-8 py-4 md:py-6 flex flex-col md:flex-row md:items-center justify-between gap-2">
-                      <div>
-                        <div className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-slate-400">Bilan réalisé + Prévisionnel</div>
-                        <div className="flex gap-4 mt-1 text-[8px] md:text-xs text-slate-300">
-                          <span>Réalisé : <span className="text-indigo-300 font-black">{bilanProfit.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</span></span>
-                          <span>+</span>
-                          <span>Prévi : <span className="text-amber-300 font-black">{prevProfit.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</span></span>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-slate-400">Total estimé</div>
-                        <div className={`text-xl md:text-3xl font-black ${grandTotal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{grandTotal.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</div>
-                      </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left min-w-[500px] md:min-w-[700px]" style={{tableLayout:'fixed'}}>
+                        <colgroup><col style={{width:'20%'}}/><col style={{width:'12%'}}/><col style={{width:'16%'}}/><col style={{width:'13%'}}/><col style={{width:'11%'}}/><col style={{width:'12%'}}/><col style={{width:'16%'}}/></colgroup>
+                        <tbody>
+                          <tr className="bg-slate-900 text-white font-black">
+                            <td className="p-1.5 md:p-8 uppercase text-[6px] md:text-[10px] leading-tight tracking-tighter md:tracking-normal">Total annuel</td>
+                            <td className="p-1.5 md:p-8 text-right text-[8px] md:text-lg leading-tight tracking-tighter md:tracking-normal opacity-90">{fmt(tUrssaf)}€</td>
+                            <td className="p-1.5 md:p-8 text-right text-emerald-400 text-[8px] md:text-lg leading-tight tracking-tighter md:tracking-normal">{fmt(tDirect)}€</td>
+                            <td className="p-1.5 md:p-8 text-right text-indigo-400 text-[8px] md:text-lg leading-tight tracking-tighter md:tracking-normal">{fmt(tBank)}€</td>
+                            <td className="p-1.5 md:p-8 text-right text-rose-300 text-[8px] md:text-lg leading-tight tracking-tighter md:tracking-normal">-{fmt(tCharges)}€</td>
+                            <td className="p-1.5 md:p-8 text-right text-rose-300 text-[8px] md:text-lg leading-tight tracking-tighter md:tracking-normal">-{tTaxes.toFixed(2)}€</td>
+                            <td className={`p-1.5 md:p-8 text-right bg-slate-800 text-[8px] md:text-xl leading-tight tracking-tighter md:tracking-normal ${tProfit>=0?'text-emerald-400':'text-rose-400'}`}>{fmt(tProfit)}€</td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
                   );
                 })()}
               </div>
 
               <div className="bg-white rounded-[24px] md:rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100 mx-2 md:mx-0">
-                <div className="p-3 md:p-8 bg-slate-900 text-white font-black uppercase flex justify-between text-[10px] md:text-xs">Suivi Prestataires</div>
-                <div className="max-h-[60vh] overflow-y-auto overflow-x-auto custom-scrollbar relative">
+                <div className="p-3 md:p-5 bg-slate-900 text-white font-black uppercase flex items-center justify-between text-[10px] md:text-xs">
+                  <span>Suivi Prestataires</span>
+                  <button onClick={() => selectedExpenseIds.length > 0 && setGroupedPayConfig({ date: new Date().toISOString().split('T')[0] })} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${selectedExpenseIds.length > 0 ? 'bg-blue-500 hover:bg-blue-400 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}>
+                    <CreditCard size={12}/> {selectedExpenseIds.length > 0 ? `Règlement groupé (${selectedExpenseIds.length})` : 'Règlement groupé'}
+                  </button>
+                </div>
+                <div className="flex gap-3 p-3 bg-blue-600 border-b border-blue-700">
+                  <select value={filterProvSuivi} onChange={e => setFilterProvSuivi(e.target.value)} className="flex-1 px-3 py-2 bg-white rounded-xl text-xs font-black uppercase outline-none cursor-pointer shadow-sm">
+                    <option value="all">Tous prestataires</option>
+                    {(availableProviders || []).map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                  <select value={filterProvStatus} onChange={e => setFilterProvStatus(e.target.value)} className="flex-1 px-3 py-2 bg-white rounded-xl text-xs font-black uppercase outline-none cursor-pointer shadow-sm">
+                    <option value="all">Tous statuts</option>
+                    <option value="unpaid">Non payé</option>
+                    <option value="paid">Payé</option>
+                  </select>
+                </div>
+                <div className="overflow-x-auto overflow-y-auto custom-scrollbar" style={{maxHeight:'45vh', WebkitOverflowScrolling:'touch'}}>
                     <table className="w-full text-left min-w-[280px] md:min-w-[700px]">
-                        <thead className="bg-slate-50 uppercase text-slate-400 border-b sticky top-0 z-10 shadow-sm text-[6px] md:text-xs tracking-tighter md:tracking-normal">
-                            <tr><th className="p-1 md:p-6">Date</th><th className="p-1 md:p-6">Logement</th><th className="p-1 md:p-6">Prestataire</th><th className="p-1 md:p-6 text-right">Montant</th><th className="p-1 md:p-6 text-center">Statut</th></tr>
+                        <thead className="bg-slate-50 uppercase text-slate-400 border-b text-[6px] md:text-xs tracking-tighter md:tracking-normal">
+                            <tr>
+                              <th className="p-1 md:p-4 text-center w-8">
+                                <input type="checkbox" className="cursor-pointer" checked={detailedExpenses.length > 0 && selectedExpenseIds.length === detailedExpenses.length} onChange={e => setSelectedExpenseIds(e.target.checked ? detailedExpenses.map(x => x.id) : [])} />
+                              </th>
+                              <th className="p-1 md:p-6">Date</th><th className="p-1 md:p-6">Logement</th><th className="p-1 md:p-6">Prestataire</th><th className="p-1 md:p-6 text-right">Montant</th><th className="p-1 md:p-6 text-center">Statut</th>
+                            </tr>
                         </thead>
                         <tbody className="divide-y font-bold">
-                            {(detailedExpenses || []).map((exp) => (
-                                <tr key={exp.id}>
+                            {(detailedExpenses || []).map((exp) => {
+                              const isSelected = selectedExpenseIds.includes(exp.id);
+                              return (
+                                <tr key={exp.id} onClick={() => setSelectedExpenseIds(prev => prev.includes(exp.id) ? prev.filter(x => x !== exp.id) : [...prev, exp.id])} className={`cursor-pointer transition-colors ${isSelected ? 'bg-blue-50' : 'hover:bg-slate-50/50'}`}>
+                                    <td className="p-1 md:p-4 text-center" onClick={e => e.stopPropagation()}>
+                                      <input type="checkbox" className="cursor-pointer" checked={isSelected} onChange={() => setSelectedExpenseIds(prev => prev.includes(exp.id) ? prev.filter(x => x !== exp.id) : [...prev, exp.id])} />
+                                    </td>
                                     <td className="p-1 md:p-6 text-[8px] md:text-sm tracking-tighter md:tracking-normal">{formatDateFr(exp.dateRes)}</td>
                                     <td className="p-1 md:p-6 uppercase text-[8px] md:text-xs tracking-tighter md:tracking-normal">{exp.propertyName}</td>
                                     <td className="p-1 md:p-6 text-blue-600 uppercase text-[8px] md:text-xs tracking-tighter md:tracking-normal">{exp.person}</td>
                                     <td className="p-1 md:p-6 text-right text-[8px] md:text-sm tracking-tighter md:tracking-normal">{(exp.amount || 0).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
                                     <td className="p-1 md:p-6 text-center"><span className={`px-1.5 py-0.5 md:px-3 md:py-1 rounded-full text-[6px] md:text-[9px] font-black uppercase tracking-tighter md:tracking-normal ${exp.paymentDate ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>{exp.paymentDate ? 'Payé' : 'Attente'}</span></td>
                                 </tr>
-                            ))}
+                              );
+                            })}
                         </tbody>
                     </table>
+                </div>
+                <div className="flex items-center justify-between bg-blue-600 text-white px-4 py-4 md:px-6 md:py-5">
+                  <span className="font-black uppercase text-xs text-blue-200">{(detailedExpenses || []).length} prestation(s)</span>
+                  <span className="font-black text-xl md:text-2xl">{(detailedExpenses || []).reduce((s, e) => s + (e.amount || 0), 0).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</span>
                 </div>
               </div>
             </div>
           </div>
  
           {/* 5. ONGLET SETTINGS */}
-          <div className="flex-none w-full max-w-full overflow-y-auto snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border">
+          <div className="flex-none w-full max-w-full overflow-y-auto snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border" style={{WebkitOverflowScrolling:'touch'}}>
             <div className="max-w-7xl mx-auto pb-32 space-y-10">
               <h2 className="text-3xl font-black uppercase mx-2 md:mx-0">Paramètres</h2>
               <div className="bg-white p-8 rounded-[40px] border-2 border-dashed shadow-xl flex flex-col items-center justify-center text-center mx-2 md:mx-0">
@@ -2209,7 +2543,10 @@ const App = () => {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                        <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
-                           <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">Acompte 1</label>
+                           <div className="flex items-center justify-between mb-2">
+                             <label className="text-[10px] font-black uppercase text-slate-400">Acompte 1</label>
+                             <div className="flex gap-1">{[['', 'Auto'], ['anthony', 'A'], ['camille', 'C']].map(([v, l]) => <button key={v} type="button" onClick={() => setFormData({...formData, acompte1Owner: v})} className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase transition-all ${formData.acompte1Owner === v ? (v === 'anthony' ? 'bg-blue-600 text-white' : v === 'camille' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-white') : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}>{l}</button>)}</div>
+                           </div>
                            <input type="number" step="0.01" value={formData.acompte1Amount || ''} onChange={e => { const g = parseFloat(formData.grossAmount) || 0; const a1 = parseFloat(e.target.value) || 0; const a2 = parseFloat(formData.acompte2Amount) || 0; setFormData({ ...formData, acompte1Amount: e.target.value, soldeAmount: Math.max(0, g - a1 - a2) }); }} placeholder="Montant €" className="w-full p-3 border border-slate-100 rounded-xl font-black mb-2 text-slate-700 outline-none" />
                            <label className="text-[9px] font-black uppercase text-slate-300 mb-1 block">Date reçu</label>
                            <input type="date" value={formData.acompte1Date || ''} onChange={e => setFormData({ ...formData, acompte1Date: e.target.value })} className="w-full p-3 border border-slate-100 rounded-xl font-black text-slate-500 outline-none cursor-pointer mb-2" />
@@ -2217,7 +2554,10 @@ const App = () => {
                            <input type="date" value={formData.acompte1DueDate || ''} onChange={e => setFormData({ ...formData, acompte1DueDate: e.target.value })} className="w-full p-3 border border-blue-100 rounded-xl font-black text-blue-500 outline-none cursor-pointer bg-blue-50/30" />
                        </div>
                        <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
-                           <label className="text-[10px] font-black uppercase text-slate-400 mb-2 block">Acompte 2</label>
+                           <div className="flex items-center justify-between mb-2">
+                             <label className="text-[10px] font-black uppercase text-slate-400">Acompte 2</label>
+                             <div className="flex gap-1">{[['', 'Auto'], ['anthony', 'A'], ['camille', 'C']].map(([v, l]) => <button key={v} type="button" onClick={() => setFormData({...formData, acompte2Owner: v})} className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase transition-all ${formData.acompte2Owner === v ? (v === 'anthony' ? 'bg-blue-600 text-white' : v === 'camille' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-white') : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}>{l}</button>)}</div>
+                           </div>
                            <input type="number" step="0.01" value={formData.acompte2Amount || ''} onChange={e => { const g = parseFloat(formData.grossAmount) || 0; const a1 = parseFloat(formData.acompte1Amount) || 0; const a2 = parseFloat(e.target.value) || 0; setFormData({ ...formData, acompte2Amount: e.target.value, soldeAmount: Math.max(0, g - a1 - a2) }); }} placeholder="Montant €" className="w-full p-3 border border-slate-100 rounded-xl font-black mb-2 text-slate-700 outline-none" />
                            <label className="text-[9px] font-black uppercase text-slate-300 mb-1 block">Date reçu</label>
                            <input type="date" value={formData.acompte2Date || ''} onChange={e => setFormData({ ...formData, acompte2Date: e.target.value })} className="w-full p-3 border border-slate-100 rounded-xl font-black text-slate-500 outline-none cursor-pointer mb-2" />
@@ -2225,13 +2565,34 @@ const App = () => {
                            <input type="date" value={formData.acompte2DueDate || ''} onChange={e => setFormData({ ...formData, acompte2DueDate: e.target.value })} className="w-full p-3 border border-blue-100 rounded-xl font-black text-blue-500 outline-none cursor-pointer bg-blue-50/30" />
                        </div>
                        <div className="bg-emerald-50/50 p-4 rounded-3xl border border-emerald-100 shadow-sm">
-                           <label className="text-[10px] font-black uppercase text-emerald-600 mb-2 block">Solde (Validation)</label>
+                           <div className="flex items-center justify-between mb-2">
+                             <label className="text-[10px] font-black uppercase text-emerald-600">Solde (Validation)</label>
+                             <div className="flex gap-1">{[['', 'Auto'], ['anthony', 'A'], ['camille', 'C']].map(([v, l]) => <button key={v} type="button" onClick={() => setFormData({...formData, soldeOwner: v})} className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase transition-all ${formData.soldeOwner === v ? (v === 'anthony' ? 'bg-blue-600 text-white' : v === 'camille' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-white') : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}>{l}</button>)}</div>
+                           </div>
                            <input type="number" step="0.01" value={formData.soldeAmount || ''} onChange={e => setFormData({ ...formData, soldeAmount: e.target.value })} placeholder="Montant €" className="w-full p-3 border border-emerald-200 rounded-xl font-black mb-2 text-emerald-700 outline-none bg-white" />
                            <label className="text-[9px] font-black uppercase text-slate-300 mb-1 block">Date reçu</label>
                            <input type="date" value={formData.soldeDate || ''} onChange={e => setFormData({ ...formData, soldeDate: e.target.value })} className="w-full p-3 border border-emerald-200 rounded-xl font-black text-emerald-700 outline-none cursor-pointer bg-white mb-2" />
                            <label className="text-[9px] font-black uppercase text-blue-400 mb-1 block">Date limite (contrat)</label>
                            <input type="date" value={formData.soldeDueDate || ''} onChange={e => setFormData({ ...formData, soldeDueDate: e.target.value })} className="w-full p-3 border border-blue-100 rounded-xl font-black text-blue-500 outline-none cursor-pointer bg-blue-50/30" />
                        </div>
+                    </div>
+                    <div className="mt-4 bg-amber-50/60 p-4 rounded-3xl border border-amber-100">
+                      <div className="flex items-center justify-between mb-3">
+                        <label className="text-[10px] font-black uppercase text-amber-700">Cautions</label>
+                        <button type="button" onClick={() => setFormData({...formData, resDeposits: [...(formData.resDeposits||[]), {id: Date.now().toString(), label: '', amount: ''}]})} className="flex items-center gap-1 text-[9px] font-black uppercase text-amber-700 bg-amber-100 px-3 py-1.5 rounded-xl hover:bg-amber-200 transition-colors">
+                          <span className="text-base leading-none">+</span> Ajouter
+                        </button>
+                      </div>
+                      {(formData.resDeposits || []).length === 0 && <p className="text-[9px] text-amber-400 font-bold uppercase">Aucune caution — cliquez sur Ajouter</p>}
+                      <div className="space-y-2">
+                        {(formData.resDeposits || []).map(dep => (
+                          <div key={dep.id} className="flex gap-2 items-center">
+                            <input type="text" value={dep.label} onChange={e => setFormData({...formData, resDeposits: formData.resDeposits.map(d => d.id === dep.id ? {...d, label: e.target.value} : d)})} placeholder="Ex : Appartement" className="flex-1 p-2.5 border border-amber-200 rounded-xl font-black text-slate-700 outline-none text-sm bg-white" />
+                            <input type="number" value={dep.amount} onChange={e => setFormData({...formData, resDeposits: formData.resDeposits.map(d => d.id === dep.id ? {...d, amount: e.target.value} : d)})} placeholder="€" className="w-20 p-2.5 border border-amber-200 rounded-xl font-black text-slate-700 outline-none text-sm bg-white" />
+                            <button type="button" onClick={() => setFormData({...formData, resDeposits: formData.resDeposits.filter(d => d.id !== dep.id)})} className="p-2 text-rose-400 hover:text-rose-600 transition-colors">✕</button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 ) : isCplxFormModale ? (
