@@ -50,7 +50,6 @@ const App = () => {
   const [filterOwner, setFilterOwner] = useState('global');
  
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isExtractingFromImage, setIsExtractingFromImage] = useState(false);
   const [editingResId, setEditingResId] = useState(null);
   const [formData, setFormData] = useState({ 
     propertyId: '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', 
@@ -106,7 +105,6 @@ const App = () => {
   // --- REFS POUR LE CARROUSEL NATIF ---
   const scrollContainerRef = useRef(null);
   const isScrollingRef = useRef(false);
-  const imageInputRef = useRef(null);
   const TABS_ORDER = ['dashboard', 'reservations', 'agenda', 'statistiques', 'finances', 'settings'];
  
   // 2. EFFETS FIREBASE
@@ -745,14 +743,13 @@ const App = () => {
         if (a2 > 0 && !t.acompte2Date) { const d = (t.acompte2DueDate && t.acompte2DueDate >= todayStr) ? t.acompte2DueDate : dSolde; addEntry(d.substring(0, 7), { ...base, label: 'Acompte 2', dueDate: d, urssafGross: isUrssaf ? a2 : 0, directNet: isUrssaf ? 0 : a2, totalBank: a2, taxes: isUrssaf ? a2 * 0.077 : 0, charges: 0 }); }
         if (s > 0 && !t.soldeDate) { addEntry(dSolde.substring(0, 7), { ...base, label: 'Solde', dueDate: dSolde, urssafGross: (cS && isUrssaf) ? s : 0, directNet: isUrssaf ? 0 : s, totalBank: s, taxes: (cS && isUrssaf) ? s * 0.077 : 0, charges }); }
       } else {
-        if (!t.paymentDate) {
-          const d = t.endDate || '';
-          const effectiveDate = d >= todayStr ? d : todayStr;
+        const d = t.endDate || '';
+        if (d >= todayStr) {
           const gross = parseFloat(t.grossAmount) || 0;
           const net = parseFloat(t.netAmount) || 0;
           const tax = isUrssaf ? gross * 0.077 : 0;
           const charges = (t.resExpenses || []).filter(e => !e.paymentDate).reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-          addEntry(effectiveDate.substring(0, 7), { ...base, label: t.platform, dueDate: effectiveDate, urssafGross: isUrssaf ? gross : 0, directNet: isUrssaf ? 0 : net, totalBank: net, taxes: tax, charges });
+          addEntry(d.substring(0, 7), { ...base, label: t.platform, dueDate: d, urssafGross: isUrssaf ? gross : 0, directNet: isUrssaf ? 0 : net, totalBank: net, taxes: tax, charges });
         }
       }
     });
@@ -1020,78 +1017,6 @@ const App = () => {
     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), n, { merge: true });
   };
  
-  const extractFromImage = async (file) => {
-    if (!file) return;
-    setIsExtractingFromImage(true);
-    try {
-      const base64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result.split(',')[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': import.meta.env.VITE_ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-allow-browser': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 1024,
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'image', source: { type: 'base64', media_type: file.type, data: base64 } },
-              { type: 'text', text: `Analyse cette confirmation de réservation et extrais les informations. Réponds UNIQUEMENT avec un objet JSON valide (sans markdown), avec ces champs:
-{"name":"Prénom Nom du client","platform":"Booking|Airbnb|Abritel|En direct|GreenGo","startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","displayedAmount":"montant total chiffres seulement","cityTax":"taxe séjour chiffres seulement","platformFees":"commission chiffres seulement","comment":"nb personnes et autres infos utiles","bookingPropertyId":"identifiant numérique de la propriété visible dans les numéros de tarif ou URL (ex: 1661275001 → extrais uniquement les chiffres)"}
-Si un champ est absent mets null. Pour platform détecte d'après le logo ou texte visible.` }
-            ]
-          }]
-        })
-      });
-      const data = await response.json();
-      const extracted = JSON.parse(data.content[0].text);
-      const platformMap = { 'booking': 'Booking', 'booking.com': 'Booking', 'airbnb': 'Airbnb', 'abritel': 'Abritel', 'en direct': 'En direct', 'greengо': 'GreenGo' };
-      const detectedPlatform = extracted.platform
-        ? (platformMap[extracted.platform.toLowerCase()] || extracted.platform)
-        : formData.platform;
-      // Auto-détection du logement via bookingPropertyId
-      let detectedPropertyId = null;
-      if (extracted.bookingPropertyId) {
-        const extractedId = String(extracted.bookingPropertyId).replace(/\D/g, '');
-        const matchedProp = (propertiesRef.current || []).find(p =>
-          p.bookingPropertyId && String(p.bookingPropertyId).replace(/\D/g, '') &&
-          (extractedId.includes(String(p.bookingPropertyId).replace(/\D/g, '')) ||
-           String(p.bookingPropertyId).replace(/\D/g, '').includes(extractedId))
-        );
-        if (matchedProp) detectedPropertyId = matchedProp.id;
-      }
-      const newOwner = detectedPropertyId ? ownerFromProp(detectedPropertyId) : null;
-      setFormData(prev => ({
-        ...prev,
-        name: extracted.name || prev.name,
-        startDate: extracted.startDate || prev.startDate,
-        endDate: extracted.endDate || prev.endDate,
-        platform: detectedPlatform || prev.platform,
-        displayedAmount: extracted.displayedAmount != null ? String(extracted.displayedAmount) : prev.displayedAmount,
-        cityTax: extracted.cityTax != null ? String(extracted.cityTax) : prev.cityTax,
-        platformFees: extracted.platformFees != null ? String(extracted.platformFees) : prev.platformFees,
-        comment: extracted.comment || prev.comment,
-        ...(detectedPropertyId && { propertyId: detectedPropertyId }),
-        ...(detectedPropertyId && newOwner && newOwner !== 'other' && { owner: newOwner }),
-      }));
-    } catch (err) {
-      console.error('Erreur extraction image:', err);
-      alert('Impossible de lire la confirmation. Vérifiez la clé VITE_ANTHROPIC_API_KEY dans votre .env');
-    } finally {
-      setIsExtractingFromImage(false);
-      if (imageInputRef.current) imageInputRef.current.value = '';
-    }
-  };
-
   const saveRes = async (e) => {
     e.preventDefault();
     if (!formData.propertyId) { alert("⚠️ Vous devez sélectionner un Logement."); return; }
@@ -2465,7 +2390,6 @@ Si un champ est absent mets null. Pour platform détecte d'après le logo ou tex
                     <div key={p.id} className="flex flex-col md:flex-row md:items-center gap-2 bg-slate-50 p-3 rounded-2xl">
                       <span className="text-[10px] font-black uppercase text-slate-700 min-w-[140px]">{p.name}</span>
                       <input defaultValue={p.calendarId || ""} onBlur={e => { if (e.target.value !== (p.calendarId || "")) updatePropCalendar(p.id, { calendarId: e.target.value.trim() }); }} placeholder="Collez l ID du calendrier Google" className="flex-1 p-2 bg-white border border-slate-200 rounded-xl text-[9px] font-mono outline-none focus:border-blue-400" />
-                      <input defaultValue={p.bookingPropertyId || ""} onBlur={e => { if (e.target.value !== (p.bookingPropertyId || "")) updatePropCalendar(p.id, { bookingPropertyId: e.target.value.trim() }); }} placeholder="ID Booking" className="w-28 p-2 bg-white border border-orange-200 rounded-xl text-[9px] font-mono outline-none focus:border-orange-400" title="Numéro de propriété Booking.com" />
                       <select defaultValue={p.colorId || ""} onChange={e => updatePropCalendar(p.id, { colorId: e.target.value || null })} className="p-2 bg-white border border-slate-200 rounded-xl text-[9px] font-black outline-none focus:border-blue-400">
                         <option value="">Couleur défaut</option>
                         <option value="4">🔴 Rouge clair (Flamingo)</option>
@@ -2567,12 +2491,6 @@ Si un champ est absent mets null. Pour platform détecte d'après le logo ou tex
                </div>
             </div>
             <form onSubmit={saveRes} className="p-6 md:p-10 space-y-8 overflow-y-auto flex-1 custom-scrollbar text-xs touch-manipulation" style={{ touchAction: 'manipulation' }}>
-
-              {/* IMPORT DEPUIS PHOTO */}
-              <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={e => extractFromImage(e.target.files[0])} />
-              <button type="button" onClick={() => imageInputRef.current?.click()} disabled={isExtractingFromImage} className={`w-full flex items-center justify-center gap-3 p-4 rounded-[24px] border-2 border-dashed transition-all font-black text-[11px] uppercase tracking-widest ${isExtractingFromImage ? 'border-blue-300 bg-blue-50 text-blue-400 cursor-wait' : 'border-slate-200 bg-slate-50 text-slate-400 hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600'}`}>
-                {isExtractingFromImage ? <><Loader2 size={16} className="animate-spin" /> Analyse en cours…</> : <><UploadCloud size={16} /> Scanner une confirmation (photo / capture d'écran)</>}
-              </button>
 
               {/* ATTRIBUTION PROPRIÉTAIRE */}
               <div className={`flex items-center justify-between p-4 rounded-[24px] border-2 ${!formData.owner ? 'border-rose-300 bg-rose-50' : formData.owner === 'anthony' ? 'border-blue-200 bg-blue-50' : 'border-emerald-200 bg-emerald-50'}`}>
