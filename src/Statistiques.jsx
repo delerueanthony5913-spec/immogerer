@@ -28,7 +28,8 @@ const getMonthly = (tenants, selY, selP, selPl, metric, chargeType = 'all') => {
   const data = Array(12).fill(0);
   tenants.filter(t => matchMulti(t, selY, selP, selPl)).forEach(t => {
     const sm  = t.startDate ? parseInt(t.startDate.slice(5,7))-1 : -1;
-    const g   = parseFloat(t.grossAmount)||0;
+    const optTotal = (t.resOptions||[]).reduce((s,o)=>s+(parseFloat(o.amount)||0),0);
+    const g   = (parseFloat(t.grossAmount)||0) + optTotal;
 
     const addDate = (date, amt) => {
       if (!date || !amt) return;
@@ -72,7 +73,7 @@ const getForecast = (tenants, year, selP, selPl, metric) => {
     const m = parseInt(t.startDate.slice(5,7))-1;
     if (metric === 'nights') data[m] += Math.max(0, Math.round((new Date(t.endDate)-new Date(t.startDate))/86400000));
     else if (metric === 'count') data[m]++;
-    else data[m] += parseFloat(t.grossAmount)||0;
+    else data[m] += (parseFloat(t.grossAmount)||0) + (t.resOptions||[]).reduce((s,o)=>s+(parseFloat(o.amount)||0),0);
   });
   return data;
 };
@@ -82,13 +83,14 @@ const getForecast = (tenants, year, selP, selPl, metric) => {
 const computeKPIs = (tenants, selY, selP, selPl, chargeType = 'all') => {
   let gross=0, nights=0, charges=0, count=0;
   tenants.filter(t => matchMulti(t, selY, selP, selPl)).forEach(t => {
+    const optTotal = (t.resOptions||[]).reduce((s,o)=>s+(parseFloat(o.amount)||0),0);
     count++;
-    gross  += parseFloat(t.grossAmount)||0;
+    gross  += (parseFloat(t.grossAmount)||0) + optTotal;
     nights += Math.max(0, Math.round((new Date(t.endDate)-new Date(t.startDate))/86400000));
     if (chargeType !== 'urssaf')
       (t.resExpenses||[]).forEach(e => { charges += parseFloat(e.amount)||0; });
     if (chargeType !== 'prestataires' && t.isUrssaf !== false)
-      charges += (parseFloat(t.grossAmount)||0)*0.077;
+      charges += ((parseFloat(t.grossAmount)||0) + optTotal)*0.077;
   });
   return { gross, nights, charges, profit: gross-charges, count, rpn: nights>0?gross/nights:0 };
 };
@@ -100,14 +102,16 @@ const trend = (a, b) => b > 0 ? Math.round(((a-b)/b)*100) : null;
 const getPlatBreak = (tenants, selY, selP) =>
   Object.entries(
     tenants.filter(t => matchMulti(t, selY, selP, [])).reduce((m,t) => {
-      m[t.platform] = (m[t.platform]||0)+(parseFloat(t.grossAmount)||0); return m;
+      const optTotal = (t.resOptions||[]).reduce((s,o)=>s+(parseFloat(o.amount)||0),0);
+      m[t.platform] = (m[t.platform]||0)+(parseFloat(t.grossAmount)||0)+optTotal; return m;
     }, {})
   ).sort((a,b)=>b[1]-a[1]);
 
 const getPropBreak = (tenants, props, selY, selPl) =>
   Object.entries(
     tenants.filter(t => matchMulti(t, selY, [], selPl)).reduce((m,t) => {
-      m[t.propertyId] = (m[t.propertyId]||0)+(parseFloat(t.grossAmount)||0); return m;
+      const optTotal = (t.resOptions||[]).reduce((s,o)=>s+(parseFloat(o.amount)||0),0);
+      m[t.propertyId] = (m[t.propertyId]||0)+(parseFloat(t.grossAmount)||0)+optTotal; return m;
     }, {})
   ).map(([id,v])=>[props.find(p=>p.id===id)?.name||id, v]).sort((a,b)=>b[1]-a[1]);
 

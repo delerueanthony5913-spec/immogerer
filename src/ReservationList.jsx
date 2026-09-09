@@ -71,7 +71,9 @@ const ReservationList = ({ groupedList, properties, getRowColors, getStatusProps
                       })}
                     </div>
                   </td>
-                  <td className="p-4 text-right font-black">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</td>
+                  <td className="p-4 text-right font-black">
+                    {((parseFloat(t.netAmount) || 0) + (t.resOptions || []).reduce((s, o) => s + (parseFloat(o.amount) || 0), 0)).toFixed(2)}€
+                  </td>
                   <td className="p-4 text-center">
                     <span onClick={(e) => onQuickPay(e, t, 'global')} className={`px-4 py-2 rounded-full text-[9px] uppercase inline-block ${status.color}`}>
                       {status.label}

@@ -6,7 +6,7 @@ import {
   Menu, X, Euro, Search, ArrowRight, LocateFixed, ChevronLeft, ChevronRight,
   Mail, CheckCircle, Clock, TrendingUp, TrendingDown, UploadCloud, AlertTriangle,
   Check, Trash2, CalendarCheck, Calendar as CalendarIcon, FileText, CreditCard,
-  Home, LayoutGrid
+  Home, LayoutGrid, Printer
 } from 'lucide-react';
 
 import { auth, db, appId } from './firebaseConfig';
@@ -44,6 +44,7 @@ const App = () => {
   const [filterProvStatus, setFilterProvStatus] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [groupedPayConfig, setGroupedPayConfig] = useState(null);
+  const [showPrintDoc, setShowPrintDoc] = useState(false);
   const [showPlanning, setShowPlanning] = useState(false);
   const [dashboardModal, setDashboardModal] = useState(null);
   const [selectedExpenseIds, setSelectedExpenseIds] = useState([]);
@@ -54,7 +55,7 @@ const App = () => {
   const [formData, setFormData] = useState({ 
     propertyId: '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', 
     platform: 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', 
-    bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], resDeposits: [], comment: '',
+    bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], resDeposits: [], resOptions: [], comment: '',
     acompte1Amount: '', acompte1Date: '', acompte1DueDate: '', acompte2Amount: '', acompte2Date: '', acompte2DueDate: '', soldeAmount: '', soldeDate: '', soldeDueDate: '',
     acompte1Owner: '', acompte2Owner: '', soldeOwner: '',
     owner: ''
@@ -101,6 +102,38 @@ const App = () => {
   const diasCalendarIdRef = useRef(diasCalendarId);
 
   const todayStr = new Date().toISOString().split('T')[0];
+
+  // --- GESTION DU BOUTON RETOUR MOBILE ---
+  const skipNextPopState = useRef(false);
+
+  // Initialise l'état history pour éviter de quitter l'app au 1er "retour"
+  useEffect(() => {
+    window.history.replaceState({ immogerer: 'root' }, '');
+  }, []);
+
+  // Pousse un état dans l'historique à chaque ouverture de modal
+  useEffect(() => { if (isModalOpen)      window.history.pushState({ modal: 'reservation' }, ''); }, [isModalOpen]);
+  useEffect(() => { if (dashboardModal)   window.history.pushState({ modal: 'dashboard' }, '');   }, [dashboardModal]);
+  useEffect(() => { if (contratModalData) window.history.pushState({ modal: 'contrat' }, '');     }, [contratModalData]);
+
+  // Intercepte le bouton retour : ferme le modal ouvert au lieu de quitter l'app
+  useEffect(() => {
+    const handlePopState = () => {
+      if (skipNextPopState.current) { skipNextPopState.current = false; return; }
+      if (contratModalData)   { setContratModalData(null); }
+      else if (isModalOpen)   { setIsModalOpen(false); }
+      else if (dashboardModal){ setDashboardModal(null); }
+      else { window.history.pushState({ immogerer: 'root' }, ''); }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [contratModalData, isModalOpen, dashboardModal]);
+
+  const closeModal = () => {
+    skipNextPopState.current = true;
+    setIsModalOpen(false);
+    window.history.back();
+  };
 
   // --- REFS POUR LE CARROUSEL NATIF ---
   const scrollContainerRef = useRef(null);
@@ -592,13 +625,20 @@ const App = () => {
  
   const getTenantProfitForFilters = (t) => {
     let profit = 0;
+    const optTotal = (t.resOptions || []).reduce((s, o) => s + (parseFloat(o.amount) || 0), 0);
     if (t.platform === 'En direct') {
         const a1 = parseFloat(t.acompte1Amount) || 0, a2 = parseFloat(t.acompte2Amount) || 0, s = parseFloat(t.soldeAmount) || 0;
         if (t.acompte1Date && checkDateFilter(t.acompte1Date)) profit += a1;
         if (t.acompte2Date && checkDateFilter(t.acompte2Date)) profit += a2;
-        if (t.soldeDate && checkDateFilter(t.soldeDate)) { profit += s; if (t.isUrssaf !== false) profit -= (parseFloat(t.grossAmount) || 0) * 0.077; }
+        if (t.soldeDate && checkDateFilter(t.soldeDate)) {
+          profit += s + optTotal;
+          if (t.isUrssaf !== false) profit -= ((parseFloat(t.grossAmount) || 0) + optTotal) * 0.077;
+        }
     } else {
-        if (t.paymentDate && checkDateFilter(t.paymentDate)) { profit += (parseFloat(t.netAmount) || 0); if (t.isUrssaf !== false) profit -= (parseFloat(t.grossAmount) || 0) * 0.077; }
+        if (t.paymentDate && checkDateFilter(t.paymentDate)) {
+          profit += (parseFloat(t.netAmount) || 0) + optTotal;
+          if (t.isUrssaf !== false) profit -= ((parseFloat(t.grossAmount) || 0) + optTotal) * 0.077;
+        }
     }
     (t.resExpenses || []).forEach(exp => { if (exp.paymentDate && checkDateFilter(exp.paymentDate)) { profit -= (parseFloat(exp.amount) || 0); } });
     return profit;
@@ -621,17 +661,23 @@ const App = () => {
            const a2 = cA2 ? (parseFloat(t.acompte2Amount) || 0) : 0;
            const s  = cS  ? (parseFloat(t.soldeAmount)    || 0) : 0;
 
+           const optTotalED = (t.resOptions || []).reduce((s, o) => s + (parseFloat(o.amount) || 0), 0);
            if (a1 && t.acompte1Date && checkDateFilter(t.acompte1Date)) { const m = t.acompte1Date.substring(0,7); initStats(m); stats[m].totalBank += a1; if (t.isUrssaf === false) { stats[m].directNet += a1; } else { stats[m].urssafGross += a1; stats[m].taxes += a1 * 0.077; stats[m].platforms[t.platform] = (stats[m].platforms[t.platform] || 0) + a1; } }
            if (a2 && t.acompte2Date && checkDateFilter(t.acompte2Date)) { const m = t.acompte2Date.substring(0,7); initStats(m); stats[m].totalBank += a2; if (t.isUrssaf === false) { stats[m].directNet += a2; } else { stats[m].urssafGross += a2; stats[m].taxes += a2 * 0.077; stats[m].platforms[t.platform] = (stats[m].platforms[t.platform] || 0) + a2; } }
            if (t.soldeDate && checkDateFilter(t.soldeDate)) {
                const m = t.soldeDate.substring(0,7); initStats(m);
                if (s) { stats[m].totalBank += s; if (t.isUrssaf === false) { stats[m].directNet += s; } else { stats[m].urssafGross += s; stats[m].taxes += s * 0.077; stats[m].platforms[t.platform] = (stats[m].platforms[t.platform] || 0) + s; } }
+               if (optTotalED > 0) { stats[m].totalBank += optTotalED; if (t.isUrssaf === false) { stats[m].directNet += optTotalED; } else { stats[m].urssafGross += optTotalED; stats[m].taxes += optTotalED * 0.077; stats[m].platforms[t.platform] = (stats[m].platforms[t.platform] || 0) + optTotalED; } }
            }
       } else {
+          const optTotal = (t.resOptions || []).reduce((s, o) => s + (parseFloat(o.amount) || 0), 0);
           if (t.paymentDate && checkDateFilter(t.paymentDate)) {
-              const m = t.paymentDate.substring(0, 7); initStats(m); stats[m].totalBank += (parseFloat(t.netAmount) || 0);
-              if (t.isUrssaf !== false) { stats[m].urssafGross += (parseFloat(t.grossAmount) || 0); stats[m].taxes += (parseFloat(t.grossAmount) || 0) * 0.077; stats[m].platforms[t.platform] = (stats[m].platforms[t.platform] || 0) + (parseFloat(t.grossAmount) || 0); }
-              else { stats[m].directNet += (parseFloat(t.netAmount) || 0); }
+              const m = t.paymentDate.substring(0, 7); initStats(m);
+              const grossWithOpts = (parseFloat(t.grossAmount) || 0) + optTotal;
+              const netWithOpts = (parseFloat(t.netAmount) || 0) + optTotal;
+              stats[m].totalBank += netWithOpts;
+              if (t.isUrssaf !== false) { stats[m].urssafGross += grossWithOpts; stats[m].taxes += grossWithOpts * 0.077; stats[m].platforms[t.platform] = (stats[m].platforms[t.platform] || 0) + grossWithOpts; }
+              else { stats[m].directNet += netWithOpts; }
           }
       }
       (t.resExpenses || []).forEach(exp => {
@@ -652,7 +698,7 @@ const App = () => {
           if (filterProvStatus === 'all' || (filterProvStatus === 'paid' ? !!exp.paymentDate : !exp.paymentDate)) {
             const refDate = exp.paymentDate || t.startDate;
             if (checkDateFilter(refDate)) {
-              list.push({ id: `${t.id}-${exp.id}`, propertyName: properties.find(p => p.id === t.propertyId)?.name || '--', dateRes: t.startDate, person: exp.person, type: exp.type, amount: parseFloat(exp.amount) || 0, paymentDate: exp.paymentDate || '' });
+              list.push({ id: `${t.id}-${exp.id}`, propertyName: properties.find(p => p.id === t.propertyId)?.name || '--', dateRes: t.startDate, dateEnd: t.endDate, person: exp.person, type: exp.type, amount: parseFloat(exp.amount) || 0, paymentDate: exp.paymentDate || '', hoursEntry: parseFloat(exp.hoursEntry) || 0, rateEntry: parseFloat(exp.rateEntry) || 0, hoursExit: parseFloat(exp.hoursExit) || 0, rateExit: parseFloat(exp.rateExit) || 0, dateEntry: exp.dateEntry || '', dateExit: exp.dateExit || '', hasEntry: exp.hasEntry !== false, hasExit: exp.hasExit !== false });
             }
           }
         }
@@ -683,15 +729,25 @@ const App = () => {
         map[monthKey].push(entry);
       };
       if (t.platform === 'En direct') {
-        if (t.acompte1Date && checkDateFilter(t.acompte1Date)) addToMonth(t.acompte1Date.substring(0,7), { tenant: t, propName, label: 'Acompte 1', date: t.acompte1Date, amount: parseFloat(t.acompte1Amount) || 0 });
-        if (t.acompte2Date && checkDateFilter(t.acompte2Date)) addToMonth(t.acompte2Date.substring(0,7), { tenant: t, propName, label: 'Acompte 2', date: t.acompte2Date, amount: parseFloat(t.acompte2Amount) || 0 });
-        if (t.soldeDate && checkDateFilter(t.soldeDate)) addToMonth(t.soldeDate.substring(0,7), { tenant: t, propName, label: 'Solde', date: t.soldeDate, amount: parseFloat(t.soldeAmount) || 0 });
+        const eo = t.owner || ownerFromProp(t.propertyId);
+        const a1O = t.acompte1Owner || eo;
+        const a2O = t.acompte2Owner || eo;
+        const sO  = t.soldeOwner   || eo;
+        const showA1 = filterOwner === 'global' || a1O === filterOwner;
+        const showA2 = filterOwner === 'global' || a2O === filterOwner;
+        const showS  = filterOwner === 'global' || sO  === filterOwner;
+        if (showA1 && t.acompte1Date && checkDateFilter(t.acompte1Date)) addToMonth(t.acompte1Date.substring(0,7), { tenant: t, propName, label: 'Acompte 1', date: t.acompte1Date, amount: parseFloat(t.acompte1Amount) || 0 });
+        if (showA2 && t.acompte2Date && checkDateFilter(t.acompte2Date)) addToMonth(t.acompte2Date.substring(0,7), { tenant: t, propName, label: 'Acompte 2', date: t.acompte2Date, amount: parseFloat(t.acompte2Amount) || 0 });
+        if (showS  && t.soldeDate    && checkDateFilter(t.soldeDate))    addToMonth(t.soldeDate.substring(0,7),    { tenant: t, propName, label: 'Solde',    date: t.soldeDate,    amount: parseFloat(t.soldeAmount)    || 0 });
       } else {
-        if (t.paymentDate && checkDateFilter(t.paymentDate)) addToMonth(t.paymentDate.substring(0,7), { tenant: t, propName, label: t.platform, date: t.paymentDate, amount: parseFloat(t.netAmount) || 0 });
+        if (t.paymentDate && checkDateFilter(t.paymentDate)) {
+          const optTotal = (t.resOptions || []).reduce((s, o) => s + (parseFloat(o.amount) || 0), 0);
+          addToMonth(t.paymentDate.substring(0,7), { tenant: t, propName, label: t.platform, date: t.paymentDate, amount: (parseFloat(t.netAmount) || 0) + optTotal });
+        }
       }
     });
     return map;
-  }, [financeBaseTenants, properties, filterYear, filterMonth]);
+  }, [financeBaseTenants, properties, filterYear, filterMonth, filterOwner]);
 
   const previsionData = useMemo(() => {
     const today = new Date();
@@ -745,8 +801,9 @@ const App = () => {
       } else {
         const d = t.endDate || '';
         if (d >= todayStr) {
-          const gross = parseFloat(t.grossAmount) || 0;
-          const net = parseFloat(t.netAmount) || 0;
+          const optTotal = (t.resOptions || []).reduce((s, o) => s + (parseFloat(o.amount) || 0), 0);
+          const gross = (parseFloat(t.grossAmount) || 0) + optTotal;
+          const net = (parseFloat(t.netAmount) || 0) + optTotal;
           const tax = isUrssaf ? gross * 0.077 : 0;
           const charges = (t.resExpenses || []).filter(e => !e.paymentDate).reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
           addEntry(d.substring(0, 7), { ...base, label: t.platform, dueDate: d, urssafGross: isUrssaf ? gross : 0, directNet: isUrssaf ? 0 : net, totalBank: net, taxes: tax, charges });
@@ -769,7 +826,8 @@ const App = () => {
        if (!t.startDate) return;
        const resYear = parseInt(t.startDate.split('-')[0], 10), resMonth = parseInt(t.startDate.split('-')[1], 10) - 1;
        const nights = t.endDate ? Math.max(1, Math.round((new Date(t.endDate) - new Date(t.startDate)) / 86400000)) : 1;
-       const gross = parseFloat(t.grossAmount) || 0, exp = (t.resExpenses || []).reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+       const optTotal = (t.resOptions || []).reduce((s, o) => s + (parseFloat(o.amount) || 0), 0);
+       const gross = (parseFloat(t.grossAmount) || 0) + optTotal, exp = (t.resExpenses || []).reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
  
        let isFullyPaid = false;
        if (t.platform === 'En direct') isFullyPaid = !!t.soldeDate; else isFullyPaid = !!t.paymentDate;
@@ -1053,8 +1111,8 @@ const App = () => {
       acompte1Amount: a1,
       acompte2Amount: a2,
       soldeAmount: s,
-      resExpenses: (formData.resExpenses || []).map(r => ({ 
-          ...r, 
+      resExpenses: (formData.resExpenses || []).map(r => ({
+          ...r,
           amount: parseFloat(r.amount) || 0,
           hoursEntry: parseFloat(r.hoursEntry) || 0,
           rateEntry: parseFloat(r.rateEntry) || 0,
@@ -1066,7 +1124,8 @@ const App = () => {
           providerNoteExit: r.providerNoteExit !== undefined ? r.providerNoteExit : (r.providerNote || ''),
           hasEntry: r.hasEntry !== false,
           hasExit: r.hasExit !== false
-      })) 
+      })),
+      resOptions: (formData.resOptions || []).map(o => ({ ...o, amount: parseFloat(o.amount) || 0 }))
     };
     
     delete d.id;
@@ -1134,7 +1193,7 @@ const App = () => {
           await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', savedId), { resExpenses: updatedExpenses }, { merge: true });
         }
       }
-      setIsModalOpen(false);
+      closeModal();
     } catch (error) { alert("Erreur technique : " + error.message); }
   };
  
@@ -1154,7 +1213,7 @@ const App = () => {
         }
       }
       await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tenants', id));
-      setIsModalOpen(false);
+      closeModal();
     }
   };
  
@@ -1423,9 +1482,10 @@ const App = () => {
   if (loading) return <div className="h-screen w-full flex items-center justify-center bg-slate-50 font-black uppercase text-xs"><Loader2 className="animate-spin text-blue-600 mr-2" /> CADEL MANAGER...</div>;
  
   const curChargesModale = (formData?.resExpenses || []).reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+  const curOptionsModale = (formData?.resOptions || []).reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
   const isDirectFormModale = formData?.platform === 'En direct';
   const isCplxFormModale = formData?.platform === 'Booking' || formData?.platform === 'Abritel';
-  const nModale = isDirectFormModale ? (parseFloat(formData?.grossAmount) || 0) : isCplxFormModale ? (parseFloat(formData?.displayedAmount || 0) - parseFloat(formData?.cityTax || 0)) - (parseFloat(formData?.platformFees || 0) + parseFloat(formData?.bankFees || 0)) : (parseFloat(formData?.grossAmount || 0) - parseFloat(formData?.platformFees || 0));
+  const nModale = isDirectFormModale ? (parseFloat(formData?.grossAmount) || 0) + curOptionsModale : isCplxFormModale ? (parseFloat(formData?.displayedAmount || 0) - parseFloat(formData?.cityTax || 0)) - (parseFloat(formData?.platformFees || 0) + parseFloat(formData?.bankFees || 0)) + curOptionsModale : (parseFloat(formData?.grossAmount || 0) - parseFloat(formData?.platformFees || 0)) + curOptionsModale;
  
   // --- RENDU PRINCIPAL DE L'APPLICATION ---
   return (
@@ -1621,16 +1681,50 @@ const App = () => {
                   </div>
                   <button onClick={() => setGroupedPayConfig(null)} className="p-2 text-slate-400 hover:text-slate-900 transition-colors"><X size={20}/></button>
                 </div>
-                <div className="flex-1 overflow-y-auto divide-y divide-slate-100" style={{WebkitOverflowScrolling:'touch'}}>
-                  {selectedItems.map(item => (
-                    <div key={item.id} className="flex justify-between items-center px-6 py-3">
-                      <div>
-                        <div className="text-xs font-black text-slate-800 uppercase">{item.person}</div>
-                        <div className="text-[10px] font-bold text-slate-400 uppercase">{formatDateFr(item.dateRes)} — {item.propertyName}</div>
+                <div className="flex-1 overflow-y-auto" style={{WebkitOverflowScrolling:'touch'}}>
+                  {selectedItems.map(item => {
+                    const hasDiasDetail = (item.hoursEntry > 0 || item.hoursExit > 0);
+                    return (
+                      <div key={item.id} className="px-6 py-4 border-b border-slate-100">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <div className="text-xs font-black text-slate-800 uppercase">{item.person}</div>
+                            <div className="text-[10px] font-bold text-slate-400 uppercase">{item.propertyName}</div>
+                            <div className="text-[10px] font-bold text-slate-400">{formatDateFr(item.dateRes)}{item.dateEnd && item.dateEnd !== item.dateRes ? ` → ${formatDateFr(item.dateEnd)}` : ''}</div>
+                          </div>
+                          <span className="text-sm font-black text-slate-900">{(item.amount || 0).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</span>
+                        </div>
+                        {hasDiasDetail && (
+                          <div className="bg-slate-50 rounded-2xl p-3 space-y-2">
+                            {item.hoursEntry > 0 && (
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <div className="text-[10px] font-black text-slate-500 uppercase tracking-wide">Ménage d'entrée</div>
+                                  {item.dateEntry && <div className="text-[10px] text-slate-400">{formatDateFr(item.dateEntry)}</div>}
+                                  <div className="text-[10px] text-slate-400">{item.hoursEntry}h × {item.rateEntry}€/h</div>
+                                </div>
+                                <span className="text-xs font-black text-blue-600">{(item.hoursEntry * item.rateEntry).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</span>
+                              </div>
+                            )}
+                            {item.hoursEntry > 0 && item.hoursExit > 0 && <div className="border-t border-slate-200"/>}
+                            {item.hoursExit > 0 && (
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <div className="text-[10px] font-black text-slate-500 uppercase tracking-wide">Ménage de sortie</div>
+                                  {item.dateExit && <div className="text-[10px] text-slate-400">{formatDateFr(item.dateExit)}</div>}
+                                  <div className="text-[10px] text-slate-400">{item.hoursExit}h × {item.rateExit}€/h</div>
+                                </div>
+                                <span className="text-xs font-black text-emerald-600">{(item.hoursExit * item.rateExit).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {!hasDiasDetail && item.type && (
+                          <div className="text-[10px] font-bold text-slate-400 uppercase">{item.type}</div>
+                        )}
                       </div>
-                      <span className="text-sm font-black text-slate-900">{(item.amount || 0).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <div className="flex-shrink-0 border-t border-slate-100 px-6 py-4 bg-slate-50 flex flex-col gap-3">
                   <div className="flex items-center justify-between bg-slate-900 text-white rounded-2xl px-5 py-3">
@@ -1638,10 +1732,101 @@ const App = () => {
                     <span className="font-black text-2xl">{total.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</span>
                   </div>
                   <input type="date" value={groupedPayConfig.date} onChange={e => setGroupedPayConfig({...groupedPayConfig, date: e.target.value})} className="w-full p-4 bg-white border border-slate-200 rounded-2xl font-black text-center text-base outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50" />
+                  <button onClick={() => setShowPrintDoc(true)} className="w-full p-3.5 rounded-2xl font-black uppercase text-[10px] text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 transition-colors flex items-center justify-center gap-2">
+                    <FileText size={13}/> Générer le document
+                  </button>
                   <div className="flex gap-3">
                     <button onClick={() => setGroupedPayConfig(null)} className="flex-1 p-4 rounded-2xl font-black uppercase text-[10px] text-slate-400 bg-white border border-slate-200 hover:bg-slate-100 transition-colors">Annuler</button>
                     <button onClick={handleGroupedPay} className="flex-1 p-4 rounded-2xl font-black uppercase text-[10px] text-white bg-blue-500 shadow-xl shadow-blue-200 hover:bg-blue-600 transition-all hover:-translate-y-0.5">Valider ({selectedItems.length})</button>
                   </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {showPrintDoc && groupedPayConfig && (() => {
+          const selectedItems = detailedExpenses.filter(e => selectedExpenseIds.includes(e.id));
+          const total = selectedItems.reduce((s, e) => s + (e.amount || 0), 0);
+          const providerName = selectedItems[0]?.person || 'Prestataire';
+          const payDate = groupedPayConfig.date;
+          const today = new Date().toISOString().split('T')[0];
+          return (
+            <div className="fixed inset-0 z-[300] bg-white overflow-y-auto">
+              <div className="no-print sticky top-0 z-10 flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 shadow-sm">
+                <button onClick={() => setShowPrintDoc(false)} className="flex items-center gap-1.5 text-sm font-black text-slate-600 hover:text-slate-900 transition-colors">
+                  <ChevronLeft size={16}/> Retour
+                </button>
+                <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black hover:bg-slate-700 transition-colors">
+                  <Printer size={13}/> Imprimer / Partager
+                </button>
+              </div>
+              <div className="printable max-w-2xl mx-auto px-6 py-8">
+                <div className="border-b-4 border-slate-900 pb-5 mb-7">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Cadel Manager</div>
+                  <h1 className="text-2xl font-black uppercase tracking-tight text-slate-900">Détail de prestation</h1>
+                </div>
+                <div className="flex justify-between items-start mb-8">
+                  <div>
+                    <div className="text-[10px] font-black uppercase text-slate-400 mb-1">Prestataire</div>
+                    <div className="text-xl font-black text-slate-900 uppercase">{providerName}</div>
+                  </div>
+                  {payDate && (
+                    <div className="text-right">
+                      <div className="text-[10px] font-black uppercase text-slate-400 mb-1">Date de règlement</div>
+                      <div className="text-base font-black text-slate-900">{formatDateFr(payDate)}</div>
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-4 mb-8">
+                  {selectedItems.map((item) => {
+                    const hasDiasDetail = item.hoursEntry > 0 || item.hoursExit > 0;
+                    return (
+                      <div key={item.id} className="border-2 border-slate-200 rounded-2xl overflow-hidden">
+                        <div className="bg-slate-100 px-5 py-3 flex justify-between items-center">
+                          <div>
+                            <div className="font-black uppercase text-sm text-slate-900">{item.propertyName}</div>
+                            <div className="text-xs text-slate-500 font-bold">{formatDateFr(item.dateRes)}{item.dateEnd && item.dateEnd !== item.dateRes ? ` → ${formatDateFr(item.dateEnd)}` : ''}</div>
+                          </div>
+                          <div className="text-lg font-black text-slate-900">{(item.amount || 0).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</div>
+                        </div>
+                        {hasDiasDetail && (
+                          <div className="divide-y divide-slate-100">
+                            {item.hoursEntry > 0 && (
+                              <div className="px-5 py-3 flex justify-between items-center">
+                                <div>
+                                  <div className="text-sm font-black text-slate-700">Ménage d'entrée</div>
+                                  {item.dateEntry && <div className="text-xs text-slate-400 font-bold">{formatDateFr(item.dateEntry)}</div>}
+                                  <div className="text-xs font-bold text-slate-500">{item.hoursEntry} {item.hoursEntry > 1 ? 'heures' : 'heure'} × {item.rateEntry}€/h</div>
+                                </div>
+                                <div className="text-sm font-black text-blue-600">{(item.hoursEntry * item.rateEntry).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</div>
+                              </div>
+                            )}
+                            {item.hoursExit > 0 && (
+                              <div className="px-5 py-3 flex justify-between items-center">
+                                <div>
+                                  <div className="text-sm font-black text-slate-700">Ménage de sortie</div>
+                                  {item.dateExit && <div className="text-xs text-slate-400 font-bold">{formatDateFr(item.dateExit)}</div>}
+                                  <div className="text-xs font-bold text-slate-500">{item.hoursExit} {item.hoursExit > 1 ? 'heures' : 'heure'} × {item.rateExit}€/h</div>
+                                </div>
+                                <div className="text-sm font-black text-emerald-600">{(item.hoursExit * item.rateExit).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {!hasDiasDetail && item.type && (
+                          <div className="px-5 py-3 text-sm text-slate-500 font-bold">{item.type}</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="bg-slate-900 text-white rounded-2xl px-6 py-5 flex justify-between items-center mb-8">
+                  <span className="text-xs font-black uppercase tracking-widest text-slate-400">Total à régler</span>
+                  <span className="text-3xl font-black">{total.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</span>
+                </div>
+                <div className="text-center text-[10px] text-slate-400 font-bold uppercase tracking-wide">
+                  Document généré le {formatDateFr(today)} — Cadel Manager
                 </div>
               </div>
             </div>
@@ -1860,7 +2045,7 @@ const App = () => {
                             ))}
                           </div>
                         )}
-                        <div className="text-right font-black text-sm">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</div>
+                        <div className="text-right font-black text-sm">{((parseFloat(t.netAmount) || 0) + (t.resOptions || []).reduce((s, o) => s + (parseFloat(o.amount) || 0), 0)).toFixed(2)}€</div>
                       </div>
                     )})}
                   </div>
@@ -1899,7 +2084,7 @@ const App = () => {
                                   ))}
                               </div>
                               </td>
-                              <td className="p-4 text-right font-black">{(parseFloat(t.netAmount) || 0).toFixed(2)}€</td>
+                              <td className="p-4 text-right font-black">{((parseFloat(t.netAmount) || 0) + (t.resOptions || []).reduce((s, o) => s + (parseFloat(o.amount) || 0), 0)).toFixed(2)}€</td>
                               <td className="p-4 text-center">
                               <div className="flex flex-col items-center">
                                   <span onClick={(e) => handleQuickPayToggle(e, t, 'global')} className={`px-4 py-2 rounded-full text-[9px] uppercase cursor-pointer hover:scale-105 transition-transform inline-block ${getStatusProps(t).color}`}>{getStatusProps(t).label}</span>
@@ -2479,7 +2664,7 @@ const App = () => {
       {/* MODALE DE RESERVATION SECURISEE */}
       {isModalOpen && formData && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
-          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setIsModalOpen(false)}></div>
+          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={closeModal}></div>
           <div className="bg-white rounded-[40px] md:rounded-[60px] shadow-2xl w-full max-w-3xl max-h-[95vh] flex flex-col border border-slate-100 overflow-hidden relative z-10">
             <div className="p-6 md:p-10 border-b flex justify-between items-center bg-white sticky top-0 z-10">
                <div className="flex items-center gap-4 text-blue-600 font-black uppercase leading-none"><CalendarCheck size={28} /> Détails</div>
@@ -2487,7 +2672,7 @@ const App = () => {
                  <a href={getGoogleCalendarUrl(formData, (properties || []).find(p => p.id === formData.propertyId))} target="_blank" rel="noopener noreferrer" title="Ajouter à Google Agenda" className="p-3 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-600 hover:text-white transition-all shadow-sm">
                     <CalendarIcon size={20} />
                  </a>
-                 <button type="button" onClick={() => setIsModalOpen(false)} className="p-3 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900 transition-all duration-300"><X size={20} /></button>
+                 <button type="button" onClick={closeModal} className="p-3 bg-slate-50 rounded-full text-slate-400 hover:text-slate-900 transition-all duration-300"><X size={20} /></button>
                </div>
             </div>
             <form onSubmit={saveRes} className="p-6 md:p-10 space-y-8 overflow-y-auto flex-1 custom-scrollbar text-xs touch-manipulation" style={{ touchAction: 'manipulation' }}>
@@ -2617,7 +2802,38 @@ const App = () => {
                   </div>
                 )}
               </div>
-              
+
+              {/* OPTIONS / VIREMENTS SUPPLÉMENTAIRES */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center font-black uppercase tracking-widest text-slate-400 text-[10px]">
+                  Options (virements banque séparés)
+                  <button type="button" onClick={() => {
+                    const newOpt = { id: Date.now().toString(), label: '', amount: '' };
+                    setFormData({ ...formData, resOptions: [...(formData.resOptions || []), newOpt] });
+                  }} className="bg-amber-500 text-white px-4 py-2 rounded-xl">+ Ajouter</button>
+                </div>
+                {(formData.resOptions || []).map(opt => (
+                  <div key={opt.id} className="flex gap-2 items-center bg-amber-50 p-3 rounded-[20px] border border-amber-100">
+                    <input
+                      type="text"
+                      value={opt.label || ''}
+                      onChange={e => setFormData({ ...formData, resOptions: (formData.resOptions || []).map(x => x.id === opt.id ? { ...x, label: e.target.value } : x) })}
+                      placeholder="Nom de l'option (ex: Frais ménage Airbnb)"
+                      className="flex-1 p-2.5 border border-amber-200 rounded-xl font-black text-[10px] outline-none bg-white"
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={opt.amount || ''}
+                      onChange={e => setFormData({ ...formData, resOptions: (formData.resOptions || []).map(x => x.id === opt.id ? { ...x, amount: e.target.value } : x) })}
+                      placeholder="Montant €"
+                      className="w-28 p-2.5 border border-amber-200 rounded-xl font-black text-right text-[10px] outline-none bg-white"
+                    />
+                    <button type="button" onClick={() => setFormData({ ...formData, resOptions: (formData.resOptions || []).filter(x => x.id !== opt.id) })} className="text-rose-500 font-black px-1 hover:scale-110 transition-transform flex-shrink-0"><Trash2 size={18}/></button>
+                  </div>
+                ))}
+              </div>
+
               <div className="space-y-4">
                   <div className="flex justify-between font-black uppercase tracking-widest text-slate-400 text-[10px]">
                       Prestations
@@ -2788,7 +3004,7 @@ const App = () => {
                  <div className="text-center md:text-left leading-none">
                      <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Net Estimé</p>
                      <p className="text-4xl font-black text-blue-400 tracking-tighter">
-                       {formData.platform === 'En direct' ? (parseFloat(formData?.grossAmount) || 0).toFixed(2) : (nModale - curChargesModale).toFixed(2)}€
+                       {formData.platform === 'En direct' ? ((parseFloat(formData?.grossAmount) || 0) + curOptionsModale).toFixed(2) : (nModale - curChargesModale).toFixed(2)}€
                      </p>
                  </div>
                  <div className="flex items-center gap-4 w-full md:w-auto flex-wrap">

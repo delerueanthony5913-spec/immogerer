@@ -4,11 +4,12 @@ import { TrendingUp, TrendingDown, Euro } from 'lucide-react';
 const Finances = ({ baseTenants, properties }) => {
   // On reprend tes calculs exacts
   const stats = baseTenants.reduce((acc, t) => {
-    const g = parseFloat(t.grossAmount) || 0;
-    const n = parseFloat(t.netAmount) || 0;
+    const optTotal = (t.resOptions || []).reduce((s, o) => s + (parseFloat(o.amount) || 0), 0);
+    const g = (parseFloat(t.grossAmount) || 0) + optTotal;
+    const n = (parseFloat(t.netAmount) || 0) + optTotal;
     const tax = t.isUrssaf !== false ? g * 0.077 : 0;
     const exp = (t.resExpenses || []).reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-    
+
     acc.gross += g;
     acc.net += n - tax - exp;
     acc.tax += tax;
@@ -48,10 +49,11 @@ const Finances = ({ baseTenants, properties }) => {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {baseTenants.map(t => {
-              const g = parseFloat(t.grossAmount) || 0;
+              const optTotal = (t.resOptions || []).reduce((s, o) => s + (parseFloat(o.amount) || 0), 0);
+              const g = (parseFloat(t.grossAmount) || 0) + optTotal;
               const tax = t.isUrssaf !== false ? g * 0.077 : 0;
               const exp = (t.resExpenses || []).reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-              const profit = (parseFloat(t.netAmount) || 0) - tax - exp;
+              const profit = (parseFloat(t.netAmount) || 0) + optTotal - tax - exp;
               
               return (
                 <tr key={t.id} className="hover:bg-slate-50 font-bold">
