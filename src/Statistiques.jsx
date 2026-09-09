@@ -344,7 +344,11 @@ const Statistiques = ({ tenants, properties, availablePlatforms }) => {
   const chartSeries = useMemo(()=>{
     const addYear = (acc, y, color, extraP, extraPl) => {
       const yStr = String(y);
-      if (yStr === String(curYear) && curMonth < 11) {
+      if (yStr > String(curYear)) {
+        // Année future : tout est prévisionnel, basé sur les dates de début
+        const fc = getForecast(tenants, yStr, extraP, extraPl, selMetric);
+        acc.push({ name:yStr, color, data: fc, dashed:true });
+      } else if (yStr === String(curYear) && curMonth < 11) {
         const paid = getMonthly(tenants,[yStr],extraP,extraPl,selMetric,filterCharge);
         const fc   = getForecast(tenants,yStr,extraP,extraPl,selMetric);
         acc.push({ name:yStr, color, data: paid.map((v,m)=>m<curMonth?v:null) });
