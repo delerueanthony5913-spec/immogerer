@@ -604,18 +604,31 @@ const Statistiques = ({ tenants, properties, availablePlatforms }) => {
 
           {/* ── TOTAUX ANNUELS ── */}
           <div className="flex flex-col gap-2 shrink-0" style={{width:'96px'}}>
-            {chartSeries.filter(s=>!s.dashed&&!s.hideLegend).map(s=>{
-              const encaisse = s.data.reduce((a,v)=>a+(v||0), 0);
+            {chartSeries.filter(s=>!s.hideLegend).map(s=>{
+              const fmtT = v => chartUnit==='€'
+                ? (v>=1000?`${(v/1000).toFixed(v>=10000?0:1)}k€`:`${Math.round(v)}€`)
+                : Math.round(v).toString();
 
+              // Année future : toute la série est en pointillé (prévisionnel)
+              if (s.dashed) {
+                const total = s.data.reduce((a,v)=>a+(v||0), 0);
+                return (
+                  <div key={s.name+s.color} className="rounded-xl px-2 py-2"
+                    style={{background:s.color+'15', borderLeft:`3px solid ${s.color}`}}>
+                    <p className="text-[7px] font-black uppercase truncate leading-tight mb-1.5"
+                      style={{color:s.color}}>{s.name}</p>
+                    <p className="text-[6px] font-bold text-slate-400 uppercase leading-none mb-0.5">Prévisionnel</p>
+                    <p className="text-[14px] font-black leading-none" style={{color:s.color}}>{fmtT(total)}</p>
+                  </div>
+                );
+              }
+
+              const encaisse = s.data.reduce((a,v)=>a+(v||0), 0);
               // Cherche la série pointillée associée (même nom + même couleur)
               const dashed = chartSeries.find(d=>d.dashed&&d.hideLegend&&d.name===s.name&&d.color===s.color);
               // Prévisionnel futur = mois curMonth..11 de la série pointillée
               const prevFutur = dashed ? dashed.data.slice(curMonth).reduce((a,v)=>a+(v||0),0) : 0;
               const totalPrev = encaisse + prevFutur;
-
-              const fmtT = v => chartUnit==='€'
-                ? (v>=1000?`${(v/1000).toFixed(v>=10000?0:1)}k€`:`${Math.round(v)}€`)
-                : Math.round(v).toString();
 
               return (
                 <div key={s.name+s.color} className="rounded-xl px-2 py-2"
@@ -625,15 +638,10 @@ const Statistiques = ({ tenants, properties, availablePlatforms }) => {
 
                   {dashed ? (
                     <>
-                      {/* CA encaissé */}
                       <p className="text-[6px] font-bold text-slate-400 uppercase leading-none mb-0.5">Encaissé</p>
                       <p className="text-[14px] font-black leading-none mb-2"
                         style={{color:s.color}}>{fmtT(encaisse)}</p>
-
-                      {/* Séparateur */}
                       <div className="h-px mb-1.5" style={{background:s.color+'44'}}/>
-
-                      {/* Total encaissé + prévisionnel */}
                       <p className="text-[6px] font-bold text-slate-400 uppercase leading-none mb-0.5">Encaissé + Prév.</p>
                       <p className="text-[14px] font-black leading-none"
                         style={{color:s.color}}>{fmtT(totalPrev)}</p>
