@@ -698,7 +698,7 @@ const App = () => {
           if (filterProvStatus === 'all' || (filterProvStatus === 'paid' ? !!exp.paymentDate : !exp.paymentDate)) {
             const refDate = exp.paymentDate || t.startDate;
             if (checkDateFilter(refDate)) {
-              list.push({ id: `${t.id}-${exp.id}`, propertyName: properties.find(p => p.id === t.propertyId)?.name || '--', dateRes: t.startDate, dateEnd: t.endDate, person: exp.person, type: exp.type, amount: parseFloat(exp.amount) || 0, paymentDate: exp.paymentDate || '', hoursEntry: parseFloat(exp.hoursEntry) || 0, rateEntry: parseFloat(exp.rateEntry) || 0, hoursExit: parseFloat(exp.hoursExit) || 0, rateExit: parseFloat(exp.rateExit) || 0, dateEntry: exp.dateEntry || '', dateExit: exp.dateExit || '', hasEntry: exp.hasEntry !== false, hasExit: exp.hasExit !== false });
+              list.push({ id: `${t.id}-${exp.id}`, propertyName: properties.find(p => p.id === t.propertyId)?.name || '--', dateRes: t.startDate, dateEnd: t.endDate, person: exp.person, type: exp.type, amount: parseFloat(exp.amount) || 0, paymentDate: exp.paymentDate || '', hoursEntry: parseFloat(exp.hoursEntry) || 0, rateEntry: parseFloat(exp.rateEntry) || 0, hoursExit: parseFloat(exp.hoursExit) || 0, rateExit: parseFloat(exp.rateExit) || 0, dateEntry: exp.dateEntry || '', dateExit: exp.dateExit || '', timeEntry: exp.timeEntry || '', timeExit: exp.timeExit || '', providerNoteEntry: exp.providerNoteEntry || exp.providerNote || '', providerNoteExit: exp.providerNoteExit || exp.providerNote || '', hasEntry: exp.hasEntry !== false, hasExit: exp.hasExit !== false });
             }
           }
         }
@@ -1747,10 +1747,32 @@ const App = () => {
 
         {showPrintDoc && groupedPayConfig && (() => {
           const selectedItems = detailedExpenses.filter(e => selectedExpenseIds.includes(e.id));
-          const total = selectedItems.reduce((s, e) => s + (e.amount || 0), 0);
           const providerName = selectedItems[0]?.person || 'Prestataire';
           const payDate = groupedPayConfig.date;
           const today = new Date().toISOString().split('T')[0];
+
+          const calcEndTime = (startTime, hours) => {
+            if (!startTime || !hours) return '';
+            const [h, m] = startTime.split(':').map(Number);
+            const endMin = h * 60 + m + Math.round(parseFloat(hours) * 60);
+            const eH = Math.floor(endMin / 60), eM = endMin % 60;
+            const fmt = (hh, mm) => `${hh}H${mm ? String(mm).padStart(2,'0') : ''}`;
+            return `de ${fmt(h, m)} à ${fmt(eH, eM)}`;
+          };
+
+          const rows = [];
+          selectedItems.forEach(item => {
+            const isDias = item.hoursEntry > 0 || item.hoursExit > 0;
+            if (isDias) {
+              if (item.hoursEntry > 0 && item.hasEntry) rows.push({ date: item.dateEntry || item.dateRes, property: item.propertyName, detail: `${item.hoursEntry}h × ${item.rateEntry}€`, timeRange: calcEndTime(item.timeEntry, item.hoursEntry), note: item.providerNoteEntry, amount: item.hoursEntry * item.rateEntry });
+              if (item.hoursExit > 0 && item.hasExit) rows.push({ date: item.dateExit || item.dateRes, property: item.propertyName, detail: `${item.hoursExit}h × ${item.rateExit}€`, timeRange: calcEndTime(item.timeExit, item.hoursExit), note: item.providerNoteExit, amount: item.hoursExit * item.rateExit });
+            } else {
+              rows.push({ date: item.dateRes, property: item.propertyName, detail: item.type || '', timeRange: '', note: '', amount: item.amount });
+            }
+          });
+          rows.sort((a, b) => a.date.localeCompare(b.date));
+          const total = rows.reduce((s, r) => s + (r.amount || 0), 0);
+
           return (
             <div className="fixed inset-0 z-[300] bg-white overflow-y-auto">
               <div className="no-print sticky top-0 z-10 flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 shadow-sm">
@@ -1761,72 +1783,54 @@ const App = () => {
                   <Printer size={13}/> Imprimer / Partager
                 </button>
               </div>
-              <div className="printable max-w-2xl mx-auto px-6 py-8">
-                <div className="border-b-4 border-slate-900 pb-5 mb-7">
-                  <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Cadel Manager</div>
-                  <h1 className="text-2xl font-black uppercase tracking-tight text-slate-900">Détail de prestation</h1>
-                </div>
-                <div className="flex justify-between items-start mb-8">
+              <div className="printable max-w-3xl mx-auto px-6 py-6">
+                <div className="flex justify-between items-end border-b-2 border-slate-900 pb-3 mb-5">
                   <div>
-                    <div className="text-[10px] font-black uppercase text-slate-400 mb-1">Prestataire</div>
-                    <div className="text-xl font-black text-slate-900 uppercase">{providerName}</div>
+                    <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">Cadel Manager</div>
+                    <div className="text-xl font-black uppercase tracking-tight text-slate-900 mt-0.5">Détail de prestation</div>
+                    <div className="text-sm font-black text-slate-700 uppercase mt-1">{providerName}</div>
                   </div>
                   {payDate && (
                     <div className="text-right">
-                      <div className="text-[10px] font-black uppercase text-slate-400 mb-1">Date de règlement</div>
-                      <div className="text-base font-black text-slate-900">{formatDateFr(payDate)}</div>
+                      <div className="text-[9px] font-black uppercase text-slate-400">Règlement prévu</div>
+                      <div className="text-sm font-black text-slate-900 mt-0.5">{formatDateFr(payDate)}</div>
                     </div>
                   )}
                 </div>
-                <div className="space-y-4 mb-8">
-                  {selectedItems.map((item) => {
-                    const hasDiasDetail = item.hoursEntry > 0 || item.hoursExit > 0;
-                    return (
-                      <div key={item.id} className="border-2 border-slate-200 rounded-2xl overflow-hidden">
-                        <div className="bg-slate-100 px-5 py-3 flex justify-between items-center">
-                          <div>
-                            <div className="font-black uppercase text-sm text-slate-900">{item.propertyName}</div>
-                            <div className="text-xs text-slate-500 font-bold">{formatDateFr(item.dateRes)}{item.dateEnd && item.dateEnd !== item.dateRes ? ` → ${formatDateFr(item.dateEnd)}` : ''}</div>
-                          </div>
-                          <div className="text-lg font-black text-slate-900">{(item.amount || 0).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</div>
-                        </div>
-                        {hasDiasDetail && (
-                          <div className="divide-y divide-slate-100">
-                            {item.hoursEntry > 0 && (
-                              <div className="px-5 py-3 flex justify-between items-center">
-                                <div>
-                                  <div className="text-sm font-black text-slate-700">Ménage d'entrée</div>
-                                  {item.dateEntry && <div className="text-xs text-slate-400 font-bold">{formatDateFr(item.dateEntry)}</div>}
-                                  <div className="text-xs font-bold text-slate-500">{item.hoursEntry} {item.hoursEntry > 1 ? 'heures' : 'heure'} × {item.rateEntry}€/h</div>
-                                </div>
-                                <div className="text-sm font-black text-blue-600">{(item.hoursEntry * item.rateEntry).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</div>
-                              </div>
-                            )}
-                            {item.hoursExit > 0 && (
-                              <div className="px-5 py-3 flex justify-between items-center">
-                                <div>
-                                  <div className="text-sm font-black text-slate-700">Ménage de sortie</div>
-                                  {item.dateExit && <div className="text-xs text-slate-400 font-bold">{formatDateFr(item.dateExit)}</div>}
-                                  <div className="text-xs font-bold text-slate-500">{item.hoursExit} {item.hoursExit > 1 ? 'heures' : 'heure'} × {item.rateExit}€/h</div>
-                                </div>
-                                <div className="text-sm font-black text-emerald-600">{(item.hoursExit * item.rateExit).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        {!hasDiasDetail && item.type && (
-                          <div className="px-5 py-3 text-sm text-slate-500 font-bold">{item.type}</div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="bg-slate-900 text-white rounded-2xl px-6 py-5 flex justify-between items-center mb-8">
-                  <span className="text-xs font-black uppercase tracking-widest text-slate-400">Total à régler</span>
-                  <span className="text-3xl font-black">{total.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</span>
-                </div>
-                <div className="text-center text-[10px] text-slate-400 font-bold uppercase tracking-wide">
-                  Document généré le {formatDateFr(today)} — Cadel Manager
+
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-300">
+                      <th className="py-2 px-3 text-left text-[9px] font-black uppercase tracking-widest text-slate-400 w-24">Date</th>
+                      <th className="py-2 px-3 text-left text-[9px] font-black uppercase tracking-widest text-slate-400">Logement</th>
+                      <th className="py-2 px-3 text-left text-[9px] font-black uppercase tracking-widest text-slate-400">Détail</th>
+                      <th className="py-2 px-3 text-right text-[9px] font-black uppercase tracking-widest text-slate-400 w-20">Montant</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, i) => (
+                      <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                        <td className="py-2 px-3 font-bold text-slate-700 whitespace-nowrap">{formatDateFr(row.date)}</td>
+                        <td className="py-2 px-3 font-bold text-slate-700">{row.property}</td>
+                        <td className="py-2 px-3 text-slate-600">
+                          <span className="font-bold">{row.detail}</span>
+                          {row.timeRange && <span className="text-slate-400 ml-1.5">({row.timeRange})</span>}
+                          {row.note && <span className="text-slate-400 ml-1.5">· {row.note}</span>}
+                        </td>
+                        <td className="py-2 px-3 text-right font-black text-slate-900 whitespace-nowrap">{row.amount.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}€</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-slate-900">
+                      <td colSpan={3} className="py-3 px-3 text-xs font-black uppercase tracking-widest text-slate-500 text-right">Total à régler</td>
+                      <td className="py-3 px-3 text-right text-xl font-black text-slate-900 whitespace-nowrap">{total.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}€</td>
+                    </tr>
+                  </tfoot>
+                </table>
+
+                <div className="mt-4 text-center text-[9px] text-slate-400 font-bold uppercase tracking-wide">
+                  Document généré le {formatDateFr(today)} — Cadel Manager · {rows.length} prestation(s)
                 </div>
               </div>
             </div>

@@ -17,6 +17,24 @@
     <meta name="apple-mobile-web-app-title" content="CADEL" />
 
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @media print {
+        body * { visibility: hidden !important; }
+        .printable, .printable * { visibility: visible !important; }
+        .printable {
+          position: absolute !important;
+          top: 0 !important; left: 0 !important;
+          width: 100% !important;
+          background: white !important;
+          padding: 12px 20px !important;
+          font-size: 9.5pt !important;
+          box-sizing: border-box !important;
+        }
+        .printable table { border-collapse: collapse !important; width: 100% !important; }
+        .printable th, .printable td { padding: 4px 8px !important; font-size: 9pt !important; }
+        .no-print { display: none !important; }
+      }
+    </style>
     <script id="gis-script" src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body>
