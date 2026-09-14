@@ -1751,23 +1751,14 @@ const App = () => {
           const payDate = groupedPayConfig.date;
           const today = new Date().toISOString().split('T')[0];
 
-          const calcEndTime = (startTime, hours) => {
-            if (!startTime || !hours) return '';
-            const [h, m] = startTime.split(':').map(Number);
-            const endMin = h * 60 + m + Math.round(parseFloat(hours) * 60);
-            const eH = Math.floor(endMin / 60), eM = endMin % 60;
-            const fmt = (hh, mm) => `${hh}H${mm ? String(mm).padStart(2,'0') : ''}`;
-            return `de ${fmt(h, m)} à ${fmt(eH, eM)}`;
-          };
-
           const rows = [];
           selectedItems.forEach(item => {
             const isDias = item.hoursEntry > 0 || item.hoursExit > 0;
             if (isDias) {
-              if (item.hoursEntry > 0 && item.hasEntry) rows.push({ date: item.dateEntry || item.dateRes, property: item.propertyName, detail: `${item.hoursEntry}h × ${item.rateEntry}€`, timeRange: calcEndTime(item.timeEntry, item.hoursEntry), note: item.providerNoteEntry, amount: item.hoursEntry * item.rateEntry });
-              if (item.hoursExit > 0 && item.hasExit) rows.push({ date: item.dateExit || item.dateRes, property: item.propertyName, detail: `${item.hoursExit}h × ${item.rateExit}€`, timeRange: calcEndTime(item.timeExit, item.hoursExit), note: item.providerNoteExit, amount: item.hoursExit * item.rateExit });
+              if (item.hoursEntry > 0 && item.hasEntry) rows.push({ date: item.dateEntry || item.dateRes, property: item.propertyName, note: item.providerNoteEntry, amount: item.hoursEntry * item.rateEntry });
+              if (item.hoursExit > 0 && item.hasExit) rows.push({ date: item.dateExit || item.dateRes, property: item.propertyName, note: item.providerNoteExit, amount: item.hoursExit * item.rateExit });
             } else {
-              rows.push({ date: item.dateRes, property: item.propertyName, detail: item.type || '', timeRange: '', note: '', amount: item.amount });
+              rows.push({ date: item.dateRes, property: item.propertyName, note: item.type || '', amount: item.amount });
             }
           });
           rows.sort((a, b) => a.date.localeCompare(b.date));
@@ -1812,11 +1803,7 @@ const App = () => {
                       <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                         <td className="py-2 px-3 font-bold text-slate-700 whitespace-nowrap">{formatDateFr(row.date)}</td>
                         <td className="py-2 px-3 font-bold text-slate-700">{row.property}</td>
-                        <td className="py-2 px-3 text-slate-600">
-                          <span className="font-bold">{row.detail}</span>
-                          {row.timeRange && <span className="text-slate-400 ml-1.5">({row.timeRange})</span>}
-                          {row.note && <span className="text-slate-400 ml-1.5">· {row.note}</span>}
-                        </td>
+                        <td className="py-2 px-3 text-slate-500 italic">{row.note || ''}</td>
                         <td className="py-2 px-3 text-right font-black text-slate-900 whitespace-nowrap">{row.amount.toLocaleString('fr-FR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}€</td>
                       </tr>
                     ))}
