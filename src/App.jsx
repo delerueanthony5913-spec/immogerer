@@ -45,6 +45,9 @@ const App = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [groupedPayConfig, setGroupedPayConfig] = useState(null);
   const [showPrintDoc, setShowPrintDoc] = useState(false);
+  const [printScale, setPrintScale] = useState(1);
+  const printScaleRef = useRef(1);
+  const printScrollRef = useRef(null);
   const [showPlanning, setShowPlanning] = useState(false);
   const [dashboardModal, setDashboardModal] = useState(null);
   const [selectedExpenseIds, setSelectedExpenseIds] = useState([]);
@@ -110,6 +113,32 @@ const App = () => {
   useEffect(() => {
     window.history.replaceState({ immogerer: 'root' }, '');
   }, []);
+
+  // Pinch-to-zoom JS sur la vue impression (PWA iOS désactive le zoom viewport)
+  useEffect(() => {
+    if (!showPrintDoc) { setPrintScale(1); printScaleRef.current = 1; return; }
+    const el = printScrollRef.current;
+    if (!el) return;
+    let dist0 = 0, scale0 = 1;
+    const onStart = (e) => {
+      if (e.touches.length === 2) {
+        dist0 = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+        scale0 = printScaleRef.current;
+      }
+    };
+    const onMove = (e) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+        const s = Math.min(Math.max(scale0 * dist / dist0, 0.5), 5);
+        printScaleRef.current = s;
+        setPrintScale(s);
+      }
+    };
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    return () => { el.removeEventListener('touchstart', onStart); el.removeEventListener('touchmove', onMove); };
+  }, [showPrintDoc]);
 
   // Pousse un état dans l'historique à chaque ouverture de modal
   useEffect(() => { if (isModalOpen)      window.history.pushState({ modal: 'reservation' }, ''); }, [isModalOpen]);
@@ -1774,8 +1803,8 @@ const App = () => {
                   <Printer size={13}/> Imprimer / Partager
                 </button>
               </div>
-              <div className="flex-1 min-h-0" style={{overflowY:'scroll',WebkitOverflowScrolling:'touch',touchAction:'pan-y pinch-zoom'}}>
-              <div className="printable max-w-3xl mx-auto px-6 py-6">
+              <div ref={printScrollRef} className="flex-1 min-h-0" style={{overflow:'auto',WebkitOverflowScrolling:'touch'}}>
+              <div className="printable max-w-3xl mx-auto px-6 py-6" style={{zoom:printScale}}>
                 <div className="flex justify-between items-end border-b-2 border-slate-900 pb-3 mb-5">
                   <div>
                     <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">Cadel Manager</div>
