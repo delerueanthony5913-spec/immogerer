@@ -1765,8 +1765,8 @@ const App = () => {
           const total = rows.reduce((s, r) => s + (r.amount || 0), 0);
 
           return (
-            <div className="fixed inset-0 z-[300] bg-white overflow-y-auto">
-              <div className="no-print sticky top-0 z-10 flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 shadow-sm">
+            <div className="fixed inset-0 z-[300] bg-white flex flex-col">
+              <div className="no-print flex-shrink-0 flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 shadow-sm">
                 <button onClick={() => setShowPrintDoc(false)} className="flex items-center gap-1.5 text-sm font-black text-slate-600 hover:text-slate-900 transition-colors">
                   <ChevronLeft size={16}/> Retour
                 </button>
@@ -1774,6 +1774,7 @@ const App = () => {
                   <Printer size={13}/> Imprimer / Partager
                 </button>
               </div>
+              <div className="flex-1 min-h-0" style={{overflowY:'scroll',WebkitOverflowScrolling:'touch',touchAction:'pan-y pinch-zoom'}}>
               <div className="printable max-w-3xl mx-auto px-6 py-6">
                 <div className="flex justify-between items-end border-b-2 border-slate-900 pb-3 mb-5">
                   <div>
@@ -1819,6 +1820,7 @@ const App = () => {
                 <div className="mt-4 text-center text-[9px] text-slate-400 font-bold uppercase tracking-wide">
                   Document généré le {formatDateFr(today)} — Cadel Manager · {rows.length} prestation(s)
                 </div>
+              </div>
               </div>
             </div>
           );
