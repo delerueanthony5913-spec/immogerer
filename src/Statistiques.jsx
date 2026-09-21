@@ -135,7 +135,7 @@ const getPropBreak = (tenants, props, selY, selPl) =>
 
 const LineChart = ({ series, labels, unit='€' }) => {
   const [tip, setTip] = useState(null);
-  const W=720, H=260, PL=58, PR=16, PT=16, PB=28;
+  const W=720, H=278, PL=58, PR=16, PT=16, PB=46;
   const pW=W-PL-PR, pH=H-PT-PB;
   const all = series.flatMap(s=>s.data).filter(v=>v!=null&&v>0);
   const mx  = Math.max(...all, 1);
@@ -162,6 +162,13 @@ const LineChart = ({ series, labels, unit='€' }) => {
     ? (v>=1000?`${(v/1000).toFixed(v>=10000?0:1)}k€`:`${Math.round(v)}€`)
     : Math.round(v).toString();
 
+  // Totaux par mois (somme des séries visibles)
+  const monthTotals = labels.map((_,mi) => {
+    let sum=0, has=false;
+    series.filter(s=>!s.hideLegend).forEach(s=>{ const v=s.data[mi]; if(v!=null){sum+=v;has=true;} });
+    return has ? sum : null;
+  });
+
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{height:H}}>
       <defs>
@@ -184,7 +191,12 @@ const LineChart = ({ series, labels, unit='€' }) => {
         );
       })}
       {labels.map((l,i)=>(
-        <text key={i} x={xS(i)} y={H-5} textAnchor="middle" fontSize="9" fill="#94a3b8" fontFamily="system-ui">{l}</text>
+        <g key={i}>
+          <text x={xS(i)} y={H-25} textAnchor="middle" fontSize="9" fill="#94a3b8" fontFamily="system-ui">{l}</text>
+          {monthTotals[i]!=null && monthTotals[i]>0 && (
+            <text x={xS(i)} y={H-11} textAnchor="middle" fontSize="8" fontWeight="bold" fill="#475569" fontFamily="system-ui">{fmt(monthTotals[i])}</text>
+          )}
+        </g>
       ))}
 
       {/* courbes */}
