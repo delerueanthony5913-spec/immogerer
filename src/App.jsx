@@ -828,13 +828,16 @@ const App = () => {
         if (a2 > 0 && !t.acompte2Date) { const d = (t.acompte2DueDate && t.acompte2DueDate >= todayStr) ? t.acompte2DueDate : dSolde; addEntry(d.substring(0, 7), { ...base, label: 'Acompte 2', dueDate: d, urssafGross: isUrssaf ? a2 : 0, directNet: isUrssaf ? 0 : a2, totalBank: a2, taxes: isUrssaf ? a2 * 0.077 : 0, charges: 0 }); }
         if (s > 0 && !t.soldeDate) { addEntry(dSolde.substring(0, 7), { ...base, label: 'Solde', dueDate: dSolde, urssafGross: (cS && isUrssaf) ? s : 0, directNet: isUrssaf ? 0 : s, totalBank: s, taxes: (cS && isUrssaf) ? s * 0.077 : 0, charges }); }
       } else {
-        const d = t.endDate || '';
-        if (d >= todayStr) {
+        const isFuture = (t.endDate || '') >= todayStr;
+        const isUnpaid = !t.paymentDate;
+        if (isFuture || isUnpaid) {
           const optTotal = (t.resOptions || []).reduce((s, o) => s + (parseFloat(o.amount) || 0), 0);
           const gross = (parseFloat(t.grossAmount) || 0) + optTotal;
           const net = (parseFloat(t.netAmount) || 0) + optTotal;
           const tax = isUrssaf ? gross * 0.077 : 0;
           const charges = (t.resExpenses || []).filter(e => !e.paymentDate).reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+          // Réservation passée non encaissée → placer dans le mois courant
+          const d = isFuture ? t.endDate : todayStr;
           addEntry(d.substring(0, 7), { ...base, label: t.platform, dueDate: d, urssafGross: isUrssaf ? gross : 0, directNet: isUrssaf ? 0 : net, totalBank: net, taxes: tax, charges });
         }
       }
