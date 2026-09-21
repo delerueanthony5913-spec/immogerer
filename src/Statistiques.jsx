@@ -463,6 +463,19 @@ const Statistiques = ({ tenants, properties, availablePlatforms }) => {
   const propData  = useMemo(()=>getPropBreak(tenants,properties,selYears,selPlatforms),[tenants,properties,selYears,selPlatforms]);
   const nightData = useMemo(()=>getMonthly(tenants,selYears,selProps,selPlatforms,'nights'),[tenants,selYears,selProps,selPlatforms]);
 
+  /* ── Revenu moyen mensuel (encaissé + prévisionnel) / 12 ── */
+  const avgMonthlyRevenue = useMemo(() => {
+    if (chartUnit !== '€') return null;
+    let total = 0;
+    for (let mi = 0; mi < 12; mi++) {
+      let sum = 0, has = false;
+      chartSeries.filter(s => !s.hideLegend).forEach(s => { const v = s.data[mi]; if (v != null) { sum += v; has = true; } });
+      if (!has) chartSeries.forEach(s => { const v = s.data[mi]; if (v != null) { sum += v; has = true; } });
+      total += sum;
+    }
+    return total / 12;
+  }, [chartSeries, chartUnit]);
+
   /* ── Titre résumé sélection ── */
   const yearLabel = selYears.length===1?selYears[0]:selYears.join(', ');
 
@@ -690,6 +703,19 @@ const Statistiques = ({ tenants, properties, availablePlatforms }) => {
             <LineChart series={chartSeries} labels={MONTHS} unit={chartUnit}/>
           </div>
         </div>
+
+        {/* Revenu moyen mensuel */}
+        {avgMonthlyRevenue != null && (
+          <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
+            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Revenu moyen mensuel</span>
+            <span className="text-[15px] font-black text-slate-700">
+              {avgMonthlyRevenue >= 1000
+                ? `${(avgMonthlyRevenue/1000).toFixed(avgMonthlyRevenue>=10000?0:1)}k€`
+                : `${Math.round(avgMonthlyRevenue)}€`}
+              <span className="text-[9px] font-bold text-slate-400 ml-1">/ mois</span>
+            </span>
+          </div>
+        )}
       </div>
 
       {/* ══ BAS DE PAGE ══ */}
