@@ -162,10 +162,11 @@ const LineChart = ({ series, labels, unit='€' }) => {
     ? (v>=1000?`${(v/1000).toFixed(v>=10000?0:1)}k€`:`${Math.round(v)}€`)
     : Math.round(v).toString();
 
-  // Totaux par mois (somme des séries visibles)
+  // Totaux par mois : séries visibles en priorité, sinon séries cachées (prévisionnel)
   const monthTotals = labels.map((_,mi) => {
     let sum=0, has=false;
     series.filter(s=>!s.hideLegend).forEach(s=>{ const v=s.data[mi]; if(v!=null){sum+=v;has=true;} });
+    if (!has) series.forEach(s=>{ const v=s.data[mi]; if(v!=null){sum+=v;has=true;} });
     return has ? sum : null;
   });
 
