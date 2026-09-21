@@ -78,6 +78,22 @@ const getForecast = (tenants, year, selP, selPl, metric) => {
   return data;
 };
 
+/* Prévisionnel pour réservations non encore encaissées (aucune date de paiement enregistrée) */
+const getUnpaidForecast = (tenants, year, selP, selPl, metric) => {
+  const data = Array(12).fill(0);
+  tenants.filter(t => {
+    if (!matchMulti(t, [year], selP, selPl)) return false;
+    if (t.platform === 'En direct') return !t.acompte1Date && !t.acompte2Date && !t.soldeDate;
+    return !t.paymentDate;
+  }).forEach(t => {
+    const m = parseInt(t.startDate.slice(5,7))-1;
+    if (metric === 'nights') data[m] += Math.max(0, Math.round((new Date(t.endDate)-new Date(t.startDate))/86400000));
+    else if (metric === 'count') data[m]++;
+    else data[m] += (parseFloat(t.grossAmount)||0) + (t.resOptions||[]).reduce((s,o)=>s+(parseFloat(o.amount)||0),0);
+  });
+  return data;
+};
+
 /* ── KPI ── */
 
 const computeKPIs = (tenants, selY, selP, selPl, chargeType = 'all') => {
@@ -349,11 +365,12 @@ const Statistiques = ({ tenants, properties, availablePlatforms }) => {
         const fc = getForecast(tenants, yStr, extraP, extraPl, selMetric);
         acc.push({ name:yStr, color, data: fc, dashed:true });
       } else if (yStr === String(curYear) && curMonth < 11) {
-        const paid = getMonthly(tenants,[yStr],extraP,extraPl,selMetric,filterCharge);
-        const fc   = getForecast(tenants,yStr,extraP,extraPl,selMetric);
+        const paid   = getMonthly(tenants,[yStr],extraP,extraPl,selMetric,filterCharge);
+        const fc     = getForecast(tenants,yStr,extraP,extraPl,selMetric);
+        const unpaid = getUnpaidForecast(tenants,yStr,extraP,extraPl,selMetric);
         acc.push({ name:yStr, color, data: paid.map((v,m)=>m<curMonth?v:null) });
         acc.push({ name:yStr, color, data: fc.map((v,m)=>{
-          if (m<curMonth-1) return null;
+          if (m<curMonth-1) return unpaid[m] > 0 ? unpaid[m] : null;
           if (m===curMonth-1) return paid[m]||0;
           return v;
         }), dashed:true, hideLegend:true });
@@ -626,8 +643,8 @@ const Statistiques = ({ tenants, properties, availablePlatforms }) => {
               const encaisse = s.data.reduce((a,v)=>a+(v||0), 0);
               // Cherche la série pointillée associée (même nom + même couleur)
               const dashed = chartSeries.find(d=>d.dashed&&d.hideLegend&&d.name===s.name&&d.color===s.color);
-              // Prévisionnel futur = mois curMonth..11 de la série pointillée
-              const prevFutur = dashed ? dashed.data.slice(curMonth).reduce((a,v)=>a+(v||0),0) : 0;
+              // Prévisionnel = mois passés non encaissés + mois futurs (skip curMonth-1 = pont visuel)
+              const prevFutur = dashed ? dashed.data.reduce((a,v,m)=>m===curMonth-1?a:a+(v||0),0) : 0;
               const totalPrev = encaisse + prevFutur;
 
               return (
