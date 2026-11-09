@@ -274,9 +274,11 @@ Retourne uniquement le JSON, sans texte autour.` }
         );
         if (match) matchedPropertyId = match.id;
       }
-      setFormData(prev => ({
+      setFormData(prev => {
+        const ownerFromMatch = matchedPropertyId ? ownerFromProp(matchedPropertyId) : null;
+        return {
         ...prev,
-        ...(matchedPropertyId ? { propertyId: matchedPropertyId } : {}),
+        ...(matchedPropertyId ? { propertyId: matchedPropertyId, ...(ownerFromMatch && ownerFromMatch !== 'other' ? { owner: ownerFromMatch } : {}) } : {}),
         ...(extracted.name ? { name: extracted.name } : {}),
         ...(extracted.phone ? { phone: extracted.phone } : {}),
         ...(extracted.startDate ? { startDate: extracted.startDate } : {}),
@@ -287,7 +289,8 @@ Retourne uniquement le JSON, sans texte autour.` }
         ...(extracted.cityTax != null ? { cityTax: String(extracted.cityTax) } : {}),
         ...(extracted.platform && extracted.platform !== 'null' ? { platform: extracted.platform } : {}),
         ...(extracted.comment ? { comment: extracted.comment } : {}),
-      }));
+      }; });
+
     } catch (e) {
       setScanError('Erreur : ' + e.message);
     } finally {
