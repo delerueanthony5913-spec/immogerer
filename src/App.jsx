@@ -230,7 +230,7 @@ Analyse cette image et retourne UNIQUEMENT un objet JSON valide avec ces champs 
   "cityTax": taxe de séjour en euros ou null,
   "platform": "Airbnb" ou "Booking" ou "Abritel" ou "En direct" ou null,
   "listingName": "nom exact du logement/annonce tel qu'affiché sur la plateforme",
-  "comment": "nombre de voyageurs et remarques"
+  "comment": "nombre de voyageurs uniquement + requêtes spéciales + animaux + heure d'arrivée si précisée + remarques utiles pour l'hôte. Ne pas mettre le nombre de nuits ni le nombre de logements."
 }
 Retourne uniquement le JSON, sans texte autour.` }
           ]
