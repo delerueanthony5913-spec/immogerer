@@ -259,9 +259,9 @@ Retourne uniquement le JSON, sans texte autour.` }
       }
       if (!data) throw new Error('Aucun modèle disponible. Dernière erreur : ' + (lastError || 'inconnue'));
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error('Réponse invalide de Gemini');
-      const extracted = JSON.parse(jsonMatch[0]);
+      const jsonMatch = text.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/) || text.match(/(\{[\s\S]*\})/);
+      if (!jsonMatch) throw new Error('Réponse illisible — réessaie avec une image plus nette');
+      const extracted = JSON.parse(jsonMatch[1]);
       let matchedPropertyId = '';
       if (extracted.listingName) {
         const needle = extracted.listingName.toLowerCase().trim();
