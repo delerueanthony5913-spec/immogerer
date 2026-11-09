@@ -255,7 +255,6 @@ Retourne uniquement le JSON, sans texte autour.` }
         }
       }
       if (!data) throw new Error(lastError || 'Aucun modèle disponible');
-      const data = await response.json();
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error('Réponse invalide de Gemini');
