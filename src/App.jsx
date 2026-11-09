@@ -202,7 +202,7 @@ const App = () => {
     }
     setIsScanning(true);
     setScanError('');
-    const MODELS = ['gemini-1.5-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash-8b'];
+    const MODELS = ['gemini-3.8-flash', 'gemini-1.5-flash', 'gemini-2.0-flash-lite'];
     let lastError = '';
     let data = null;
     try {
@@ -254,7 +254,7 @@ Retourne uniquement le JSON, sans texte autour.` }
           lastError = e.name === 'AbortError' ? 'Délai dépassé (20s)' : e.message;
         }
       }
-      if (!data) throw new Error(lastError || 'Aucun modèle disponible');
+      if (!data) throw new Error('Aucun modèle disponible. Dernière erreur : ' + (lastError || 'inconnue'));
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error('Réponse invalide de Gemini');
