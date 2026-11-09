@@ -224,8 +224,10 @@ Analyse cette image et retourne UNIQUEMENT un objet JSON valide avec ces champs 
   "phone": "téléphone ou email du voyageur",
   "startDate": "date d'arrivée au format YYYY-MM-DD",
   "endDate": "date de départ au format YYYY-MM-DD",
-  "grossAmount": nombre en euros ou null,
-  "platformFees": frais de plateforme en euros ou null,
+  "displayedAmount": montant total affiché au voyageur (prix affiché sur la plateforme) en euros ou null,
+  "grossAmount": montant brut reçu par l'hôte (hors frais plateforme) en euros ou null,
+  "platformFees": frais/commissions plateforme en euros ou null,
+  "cityTax": taxe de séjour en euros ou null,
   "platform": "Airbnb" ou "Booking" ou "Abritel" ou "En direct" ou null,
   "comment": "nombre de voyageurs et remarques"
 }
@@ -265,8 +267,10 @@ Retourne uniquement le JSON, sans texte autour.` }
         ...(extracted.phone ? { phone: extracted.phone } : {}),
         ...(extracted.startDate ? { startDate: extracted.startDate } : {}),
         ...(extracted.endDate ? { endDate: extracted.endDate } : {}),
+        ...(extracted.displayedAmount != null ? { displayedAmount: String(extracted.displayedAmount) } : {}),
         ...(extracted.grossAmount != null ? { grossAmount: String(extracted.grossAmount) } : {}),
         ...(extracted.platformFees != null ? { platformFees: String(extracted.platformFees) } : {}),
+        ...(extracted.cityTax != null ? { cityTax: String(extracted.cityTax) } : {}),
         ...(extracted.platform && extracted.platform !== 'null' ? { platform: extracted.platform } : {}),
         ...(extracted.comment ? { comment: extracted.comment } : {}),
       }));
