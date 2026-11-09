@@ -229,6 +229,7 @@ Analyse cette image et retourne UNIQUEMENT un objet JSON valide avec ces champs 
   "platformFees": frais/commissions plateforme en euros ou null,
   "cityTax": taxe de séjour en euros ou null,
   "platform": "Airbnb" ou "Booking" ou "Abritel" ou "En direct" ou null,
+  "listingName": "nom exact du logement/annonce tel qu'affiché sur la plateforme",
   "comment": "nombre de voyageurs et remarques"
 }
 Retourne uniquement le JSON, sans texte autour.` }
@@ -261,8 +262,21 @@ Retourne uniquement le JSON, sans texte autour.` }
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error('Réponse invalide de Gemini');
       const extracted = JSON.parse(jsonMatch[0]);
+      let matchedPropertyId = '';
+      if (extracted.listingName) {
+        const needle = extracted.listingName.toLowerCase().trim();
+        const match = (properties || []).find(p =>
+          p.name && (
+            p.name.toLowerCase().trim() === needle ||
+            p.name.toLowerCase().includes(needle) ||
+            needle.includes(p.name.toLowerCase().trim())
+          )
+        );
+        if (match) matchedPropertyId = match.id;
+      }
       setFormData(prev => ({
         ...prev,
+        ...(matchedPropertyId ? { propertyId: matchedPropertyId } : {}),
         ...(extracted.name ? { name: extracted.name } : {}),
         ...(extracted.phone ? { phone: extracted.phone } : {}),
         ...(extracted.startDate ? { startDate: extracted.startDate } : {}),
