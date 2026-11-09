@@ -202,6 +202,9 @@ const App = () => {
     }
     setIsScanning(true);
     setScanError('');
+    const MODELS = ['gemini-1.5-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-flash-8b'];
+    let lastError = '';
+    let data = null;
     try {
       const base64 = await new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -210,19 +213,11 @@ const App = () => {
         reader.readAsDataURL(file);
       });
       const mimeType = file.type || 'image/jpeg';
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                {
-                  inline_data: { mime_type: mimeType, data: base64 }
-                },
-                {
-                  text: `Tu es un assistant qui extrait des informations de réservation depuis des captures d'écran (Airbnb, Booking, Abritel, email, SMS...).
+      const body = JSON.stringify({
+        contents: [{
+          parts: [
+            { inline_data: { mime_type: mimeType, data: base64 } },
+            { text: `Tu es un assistant qui extrait des informations de réservation depuis des captures d'écran (Airbnb, Booking, Abritel, email, SMS...).
 Analyse cette image et retourne UNIQUEMENT un objet JSON valide avec ces champs (null si absent) :
 {
   "name": "prénom et nom du voyageur",
@@ -234,17 +229,32 @@ Analyse cette image et retourne UNIQUEMENT un objet JSON valide avec ces champs 
   "platform": "Airbnb" ou "Booking" ou "Abritel" ou "En direct" ou null,
   "comment": "nombre de voyageurs et remarques"
 }
-Retourne uniquement le JSON, sans texte autour.`
-                }
-              ]
-            }]
-          })
+Retourne uniquement le JSON, sans texte autour.` }
+          ]
+        }]
+      });
+      for (const model of MODELS) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 20000);
+        try {
+          const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: controller.signal }
+          );
+          clearTimeout(timeout);
+          if (!response.ok) {
+            const err = await response.json();
+            lastError = err.error?.message || 'Erreur API';
+            continue;
+          }
+          data = await response.json();
+          break;
+        } catch (e) {
+          clearTimeout(timeout);
+          lastError = e.name === 'AbortError' ? 'Délai dépassé (20s)' : e.message;
         }
-      );
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error?.message || 'Erreur API Gemini');
       }
+      if (!data) throw new Error(lastError || 'Aucun modèle disponible');
       const data = await response.json();
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
       const jsonMatch = text.match(/\{[\s\S]*\}/);
