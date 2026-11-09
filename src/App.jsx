@@ -430,10 +430,10 @@ Retourne uniquement le JSON, sans texte autour.` }
     const tryStartupRenew = () => {
       const token  = localStorage.getItem('gcal_token');
       const expiry = parseInt(localStorage.getItem('gcal_token_expiry') || '0', 10);
-      // S'il y avait un token avant (même expiré), tenter un renouvellement silencieux au démarrage
-      if (token || expiry) {
-        tokenClientRef.current?.requestAccessToken({ prompt: '' });
-      }
+      if (!token && !expiry) return; // jamais connecté → ne rien faire
+      if (expiry && Date.now() < expiry - 5 * 60 * 1000) return; // token encore valide → ne rien faire
+      // Token expiré ou proche de l'expiration → renouvellement silencieux
+      tokenClientRef.current?.requestAccessToken({ prompt: '' });
     };
 
     const script = document.getElementById('gis-script');
