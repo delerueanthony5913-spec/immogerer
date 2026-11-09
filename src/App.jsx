@@ -417,19 +417,25 @@ Retourne uniquement le JSON, sans texte autour.` }
       if (document.visibilityState !== 'visible') return;
       const expiry = parseInt(localStorage.getItem('gcal_token_expiry') || '0', 10);
       if (!expiry) return;
-      if (Date.now() > expiry) {
-        // Token déjà expiré — afficher la bannière sans popup (popup bloquée sur mobile)
-        clearAccessToken();
-        setGoogleConnected(false);
-      } else if (Date.now() > expiry - 5 * 60 * 1000) {
-        // Token expire bientôt — renouvellement silencieux
+      if (Date.now() > expiry - 5 * 60 * 1000) {
+        // Token expiré ou expire bientôt → renouvellement silencieux d'abord
+        // Le callback déconnectera seulement si le renouvellement échoue vraiment
+        tokenClientRef.current?.requestAccessToken({ prompt: '' });
+      }
+    };
+
+    const tryStartupRenew = () => {
+      const token  = localStorage.getItem('gcal_token');
+      const expiry = parseInt(localStorage.getItem('gcal_token_expiry') || '0', 10);
+      // S'il y avait un token avant (même expiré), tenter un renouvellement silencieux au démarrage
+      if (token || expiry) {
         tokenClientRef.current?.requestAccessToken({ prompt: '' });
       }
     };
 
     const script = document.getElementById('gis-script');
-    if (window.google?.accounts?.oauth2) { initGIS(); scheduleRenew(); }
-    else if (script) script.addEventListener('load', () => { initGIS(); scheduleRenew(); });
+    if (window.google?.accounts?.oauth2) { initGIS(); scheduleRenew(); tryStartupRenew(); }
+    else if (script) script.addEventListener('load', () => { initGIS(); scheduleRenew(); tryStartupRenew(); });
 
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
