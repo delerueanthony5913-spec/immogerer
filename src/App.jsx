@@ -6,7 +6,7 @@ import {
   Menu, X, Euro, Search, ArrowRight, LocateFixed, ChevronLeft, ChevronRight,
   Mail, CheckCircle, Clock, TrendingUp, TrendingDown, UploadCloud, AlertTriangle,
   Check, Trash2, CalendarCheck, Calendar as CalendarIcon, FileText, CreditCard,
-  Home, LayoutGrid, Printer
+  Home, LayoutGrid, Printer, Building2, Scale
 } from 'lucide-react';
 
 import { auth, db, appId } from './firebaseConfig';
@@ -22,6 +22,10 @@ const App = () => {
   const [isUnlocked, setIsUnlocked] = useState(() => localStorage.getItem('cadel_unlocked') === 'true');
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
+  const [splashFading, setSplashFading] = useState(false);
+  const [confirmCloseModal, setConfirmCloseModal] = useState(false);
+  const [confirmCloseChantier, setConfirmCloseChantier] = useState(false);
  
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -54,6 +58,8 @@ const App = () => {
   const [filterOwner, setFilterOwner] = useState('global');
  
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanError, setScanError] = useState('');
   const [editingResId, setEditingResId] = useState(null);
   const [formData, setFormData] = useState({ 
     propertyId: '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', 
@@ -83,6 +89,22 @@ const App = () => {
   const [contratModalData, setContratModalData] = useState(null);
   const [hasScrolledToNext, setHasScrolledToNext] = useState(false);
 
+  // --- CHANTIERS ---
+  const [chantiers, setChantiers] = useState([]);
+  const [chantierFilter, setChantierFilter] = useState('all');
+  const [chantierModal, setChantierModal] = useState(null);
+  const [chantierFormData, setChantierFormData] = useState({ nom: '', prenom: '', owner: 'anthony', dateDebut: '', dateFin: '', statut: 'en_cours', montantPrestation: '', montantMateriaux: '', encaissements: [], inclurePrevisionnel: false });
+  const [chantierAddPay, setChantierAddPay] = useState({ open: false, type: 'prestation', montant: '', date: '', note: '' });
+  const [filterCAType, setFilterCAType] = useState('reservations');
+
+  // --- FISCAL PARAMS ---
+  const FISCAL_DEFAULTS = { tvaLocationSoft: 85000, tvaLocationHard: 93500, tvaServicesSoft: 37500, tvaServicesHard: 41250, tvaVentesSoft: 85000, tvaVentesHard: 93500, aeLocation: 83600, aeRenovation: 83600, aeMateriaux: 203100, aeGlobal: 203100 };
+  const [fiscalParams, setFiscalParams] = useState({});
+  const [fiscalParamsEdit, setFiscalParamsEdit] = useState(false);
+  const [fiscalParamsForm, setFiscalParamsForm] = useState({});
+  const [fiscalYear, setFiscalYear] = useState(new Date().getFullYear());
+  const getFiscalParams = (year) => ({ ...FISCAL_DEFAULTS, ...(fiscalParams[String(year)] || {}) });
+
   const [googleConnected, setGoogleConnected] = useState(() => {
     const token   = localStorage.getItem('gcal_token');
     const expiry  = parseInt(localStorage.getItem('gcal_token_expiry') || '0', 10);
@@ -108,6 +130,12 @@ const App = () => {
 
   // --- GESTION DU BOUTON RETOUR MOBILE ---
   const skipNextPopState = useRef(false);
+
+  useEffect(() => {
+    const t1 = setTimeout(() => setSplashFading(true), 1000);
+    const t2 = setTimeout(() => setShowSplash(false), 1600);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, []);
 
   // Initialise l'état history pour éviter de quitter l'app au 1er "retour"
   useEffect(() => {
@@ -144,19 +172,21 @@ const App = () => {
   useEffect(() => { if (isModalOpen)      window.history.pushState({ modal: 'reservation' }, ''); }, [isModalOpen]);
   useEffect(() => { if (dashboardModal)   window.history.pushState({ modal: 'dashboard' }, '');   }, [dashboardModal]);
   useEffect(() => { if (contratModalData) window.history.pushState({ modal: 'contrat' }, '');     }, [contratModalData]);
+  useEffect(() => { if (chantierModal)    window.history.pushState({ modal: 'chantier' }, '');    }, [chantierModal]);
 
   // Intercepte le bouton retour : ferme le modal ouvert au lieu de quitter l'app
   useEffect(() => {
     const handlePopState = () => {
       if (skipNextPopState.current) { skipNextPopState.current = false; return; }
       if (contratModalData)   { setContratModalData(null); }
+      else if (chantierModal) { setChantierModal(null); }
       else if (isModalOpen)   { setIsModalOpen(false); }
       else if (dashboardModal){ setDashboardModal(null); }
       else { window.history.pushState({ immogerer: 'root' }, ''); }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [contratModalData, isModalOpen, dashboardModal]);
+  }, [contratModalData, isModalOpen, dashboardModal, chantierModal]);
 
   const closeModal = () => {
     skipNextPopState.current = true;
@@ -164,10 +194,105 @@ const App = () => {
     window.history.back();
   };
 
+  const handleScreenshotScan = async (file) => {
+    const apiKey = localStorage.getItem('gemini_api_key');
+    if (!apiKey) {
+      setScanError('Clé API Gemini manquante. Allez dans Paramètres pour la configurer.');
+      return;
+    }
+    setIsScanning(true);
+    setScanError('');
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const mimeType = file.type || 'image/jpeg';
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                {
+                  inline_data: { mime_type: mimeType, data: base64 }
+                },
+                {
+                  text: `Tu es un assistant qui extrait des informations de réservation depuis des captures d'écran (Airbnb, Booking, Abritel, email, SMS...).
+Analyse cette image et retourne UNIQUEMENT un objet JSON valide avec ces champs (null si absent) :
+{
+  "name": "prénom et nom du voyageur",
+  "phone": "téléphone ou email du voyageur",
+  "startDate": "date d'arrivée au format YYYY-MM-DD",
+  "endDate": "date de départ au format YYYY-MM-DD",
+  "grossAmount": nombre en euros ou null,
+  "platformFees": frais de plateforme en euros ou null,
+  "platform": "Airbnb" ou "Booking" ou "Abritel" ou "En direct" ou null,
+  "comment": "nombre de voyageurs et remarques"
+}
+Retourne uniquement le JSON, sans texte autour.`
+                }
+              ]
+            }]
+          })
+        }
+      );
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error?.message || 'Erreur API Gemini');
+      }
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('Réponse invalide de Gemini');
+      const extracted = JSON.parse(jsonMatch[0]);
+      setFormData(prev => ({
+        ...prev,
+        ...(extracted.name ? { name: extracted.name } : {}),
+        ...(extracted.phone ? { phone: extracted.phone } : {}),
+        ...(extracted.startDate ? { startDate: extracted.startDate } : {}),
+        ...(extracted.endDate ? { endDate: extracted.endDate } : {}),
+        ...(extracted.grossAmount != null ? { grossAmount: String(extracted.grossAmount) } : {}),
+        ...(extracted.platformFees != null ? { platformFees: String(extracted.platformFees) } : {}),
+        ...(extracted.platform && extracted.platform !== 'null' ? { platform: extracted.platform } : {}),
+        ...(extracted.comment ? { comment: extracted.comment } : {}),
+      }));
+    } catch (e) {
+      setScanError('Erreur : ' + e.message);
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  const closeChantierModal = () => {
+    skipNextPopState.current = true;
+    setChantierModal(null);
+    setChantierAddPay({ open: false, type: 'prestation', montant: '', date: '', note: '' });
+    window.history.back();
+  };
+
+  const computeChantierTotals = (c) => {
+    const totalPresta = parseFloat(c.montantPrestation) || 0;
+    const totalMat    = parseFloat(c.montantMateriaux)  || 0;
+    const total       = totalPresta + totalMat;
+    const encPresta   = (c.encaissements||[]).filter(e=>e.type==='prestation').reduce((s,e)=>s+(parseFloat(e.montant)||0),0);
+    const encMat      = (c.encaissements||[]).filter(e=>e.type==='materiaux').reduce((s,e)=>s+(parseFloat(e.montant)||0),0);
+    const enc         = encPresta + encMat;
+    const restePresta = Math.max(0, totalPresta - encPresta);
+    const resteMat    = Math.max(0, totalMat - encMat);
+    const reste       = Math.max(0, total - enc);
+    const pct         = total > 0 ? Math.round((enc / total) * 100) : 0;
+    return { totalPresta, totalMat, total, encPresta, encMat, enc, restePresta, resteMat, reste, pct };
+  };
+
   // --- REFS POUR LE CARROUSEL NATIF ---
   const scrollContainerRef = useRef(null);
   const isScrollingRef = useRef(false);
-  const TABS_ORDER = ['dashboard', 'reservations', 'agenda', 'statistiques', 'finances', 'settings'];
+  const TABS_ORDER = ['dashboard', 'reservations', 'chantiers', 'agenda', 'statistiques', 'finances', 'fiscal', 'settings'];
  
   // 2. EFFETS FIREBASE
   useEffect(() => {
@@ -206,8 +331,18 @@ const App = () => {
         setDiasMigrationDone(!!d.diasMigrationDone);
       }
     });
- 
-    return () => { unsubAuth(); unsubProps(); unsubTenants(); unsubSettings(); };
+
+    const unsubChantiers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'chantiers'), (snap) => {
+      setChantiers(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+    });
+
+    const unsubFiscalParams = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'fiscalParams'), (snap) => {
+      const map = {};
+      snap.docs.forEach(d => { map[d.id] = d.data(); });
+      setFiscalParams(map);
+    });
+
+    return () => { unsubAuth(); unsubProps(); unsubTenants(); unsubSettings(); unsubChantiers(); unsubFiscalParams(); };
   }, []);
 
   useEffect(() => {
@@ -445,6 +580,7 @@ const App = () => {
     } else {
       setFormData({ ...t, owner: effectiveOwner });
     }
+    setConfirmCloseModal(false);
     setIsModalOpen(true);
 
     const updatedExpenses = (t.resExpenses || []).map(exp => ({ ...exp }));
@@ -602,6 +738,71 @@ const App = () => {
       return a1O === filterOwner || a2O === filterOwner || sO === filterOwner;
     });
   }, [baseTenants, filterOwner, properties]);
+
+  const financeBaseChantiers = useMemo(() => {
+    if (filterOwner === 'global') return chantiers;
+    return chantiers.filter(c => c.owner === filterOwner);
+  }, [chantiers, filterOwner]);
+
+  const fiscalCAByOwner = useMemo(() => {
+    const year = String(new Date().getFullYear());
+    const todayStr = new Date().toISOString().split('T')[0];
+    const compute = (owner) => {
+      let locEnc = 0, locPrev = 0, prestaEnc = 0, prestaPrev = 0, matEnc = 0, matPrev = 0;
+      baseTenants.forEach(t => {
+        if (t.isUrssaf === false) return; // hors URSSAF → hors seuils fiscaux
+        const tOwner = t.owner || ownerFromProp(t.propertyId);
+        const optTotal = (t.resOptions || []).reduce((s, o) => s + (parseFloat(o.amount) || 0), 0);
+        if (t.platform === 'En direct') {
+          const eo = tOwner;
+          const a1O = t.acompte1Owner || eo, a2O = t.acompte2Owner || eo, sO = t.soldeOwner || eo;
+          const a1full = parseFloat(t.acompte1Amount) || 0;
+          const a2full = parseFloat(t.acompte2Amount) || 0;
+          const rawSolde = parseFloat(t.soldeAmount) || 0;
+          const gross = parseFloat(t.grossAmount) || 0;
+          // montant solde = rawSolde si renseigné, sinon gross - total acomptes
+          const s = rawSolde > 0 ? rawSolde : Math.max(0, gross - a1full - a2full);
+          // ENCAISSÉ : chaque paiement reçu dans l'année
+          if (a1O === owner && a1full > 0 && t.acompte1Date?.startsWith(year)) locEnc += a1full;
+          if (a2O === owner && a2full > 0 && t.acompte2Date?.startsWith(year)) locEnc += a2full;
+          if (sO === owner && s > 0 && t.soldeDate?.startsWith(year)) locEnc += s + optTotal;
+          // PRÉVISIONNEL : uniquement si solde pas encore encaissé (réservation non clôturée)
+          if (!t.soldeDate) {
+            const rd = (t.endDate && t.endDate >= todayStr) ? t.endDate : todayStr;
+            if (rd.startsWith(year)) {
+              if (a1O === owner && a1full > 0 && !t.acompte1Date) locPrev += a1full;
+              if (a2O === owner && a2full > 0 && !t.acompte2Date) locPrev += a2full;
+              if (sO === owner && s > 0) locPrev += s + optTotal;
+            }
+          }
+        } else {
+          if (tOwner !== owner) return;
+          const gross = (parseFloat(t.grossAmount) || 0) + optTotal;
+          if (t.paymentDate?.startsWith(year)) {
+            locEnc += gross;
+          } else if (!t.paymentDate) {
+            const rd = (t.endDate && t.endDate >= todayStr) ? t.endDate : todayStr;
+            if (rd.startsWith(year)) locPrev += gross;
+          }
+        }
+      });
+      chantiers.filter(c => c.owner === owner).forEach(c => {
+        (c.encaissements || []).forEach(enc => {
+          if (!enc.date?.startsWith(year)) return;
+          const amount = parseFloat(enc.montant) || 0;
+          if (enc.type === 'prestation') prestaEnc += amount;
+          else if (enc.type === 'materiaux') matEnc += amount;
+        });
+        if (c.statut === 'termine') return;
+        if (c.statut === 'devis' && !c.inclurePrevisionnel) return;
+        const tot = computeChantierTotals(c);
+        const dFin = (!c.dateFin || c.dateFin < todayStr) ? todayStr : c.dateFin;
+        if (dFin.startsWith(year)) { prestaPrev += tot.restePresta; matPrev += tot.resteMat; }
+      });
+      return { locEnc, locPrev, prestaEnc, prestaPrev, matEnc, matPrev };
+    };
+    return { anthony: compute('anthony'), camille: compute('camille') };
+  }, [baseTenants, chantiers, properties]);
  
   const filteredData = useMemo(() => {
     return baseTenants.filter(t => {
@@ -677,7 +878,7 @@ const App = () => {
     const stats = {};
     const initStats = (m) => { if(!stats[m]) stats[m] = { totalBank: 0, urssafGross: 0, directNet: 0, charges: 0, taxes: 0, platforms: {} }; };
 
-    financeBaseTenants.forEach(t => {
+    if (filterCAType === 'all' || filterCAType === 'reservations') financeBaseTenants.forEach(t => {
       if (t.platform === 'En direct') {
            const eo  = t.owner || ownerFromProp(t.propertyId);
            const a1O = t.acompte1Owner || eo;
@@ -716,8 +917,23 @@ const App = () => {
           }
       });
     });
+
+    if (filterCAType === 'all' || filterCAType === 'prestation' || filterCAType === 'materiaux') {
+      financeBaseChantiers.forEach(c => {
+        (c.encaissements || []).forEach(enc => {
+          if (!enc.date || !checkDateFilter(enc.date)) return;
+          if (filterCAType !== 'all' && enc.type !== filterCAType) return;
+          const m = enc.date.substring(0, 7); initStats(m);
+          const amount = parseFloat(enc.montant) || 0;
+          stats[m].totalBank += amount;
+          stats[m].chantierGross = (stats[m].chantierGross || 0) + amount;
+          stats[m].taxes += amount * (enc.type === 'prestation' ? 0.229 : 0.133);
+        });
+      });
+    }
+
     return Object.entries(stats).sort((a, b) => b[0].localeCompare(a[0]));
-  }, [financeBaseTenants, filterYear, filterMonth, filterProv, filterOwner, properties]);
+  }, [financeBaseTenants, financeBaseChantiers, filterYear, filterMonth, filterProv, filterOwner, filterCAType, properties]);
 
   const detailedExpenses = useMemo(() => {
     const list = [];
@@ -750,33 +966,45 @@ const App = () => {
 
   const financeMonthMap = useMemo(() => {
     const map = {};
-    financeBaseTenants.forEach(t => {
-      const prop = properties.find(p => p.id === t.propertyId);
-      const propName = prop?.name || '--';
-      const addToMonth = (monthKey, entry) => {
-        if (!map[monthKey]) map[monthKey] = [];
-        map[monthKey].push(entry);
-      };
-      if (t.platform === 'En direct') {
-        const eo = t.owner || ownerFromProp(t.propertyId);
-        const a1O = t.acompte1Owner || eo;
-        const a2O = t.acompte2Owner || eo;
-        const sO  = t.soldeOwner   || eo;
-        const showA1 = filterOwner === 'global' || a1O === filterOwner;
-        const showA2 = filterOwner === 'global' || a2O === filterOwner;
-        const showS  = filterOwner === 'global' || sO  === filterOwner;
-        if (showA1 && t.acompte1Date && checkDateFilter(t.acompte1Date)) addToMonth(t.acompte1Date.substring(0,7), { tenant: t, propName, label: 'Acompte 1', date: t.acompte1Date, amount: parseFloat(t.acompte1Amount) || 0 });
-        if (showA2 && t.acompte2Date && checkDateFilter(t.acompte2Date)) addToMonth(t.acompte2Date.substring(0,7), { tenant: t, propName, label: 'Acompte 2', date: t.acompte2Date, amount: parseFloat(t.acompte2Amount) || 0 });
-        if (showS  && t.soldeDate    && checkDateFilter(t.soldeDate))    addToMonth(t.soldeDate.substring(0,7),    { tenant: t, propName, label: 'Solde',    date: t.soldeDate,    amount: parseFloat(t.soldeAmount)    || 0 });
-      } else {
-        if (t.paymentDate && checkDateFilter(t.paymentDate)) {
-          const optTotal = (t.resOptions || []).reduce((s, o) => s + (parseFloat(o.amount) || 0), 0);
-          addToMonth(t.paymentDate.substring(0,7), { tenant: t, propName, label: t.platform, date: t.paymentDate, amount: (parseFloat(t.netAmount) || 0) + optTotal });
+    const addToMonth = (monthKey, entry) => { if (!map[monthKey]) map[monthKey] = []; map[monthKey].push(entry); };
+
+    if (filterCAType === 'all' || filterCAType === 'reservations') {
+      financeBaseTenants.forEach(t => {
+        const prop = properties.find(p => p.id === t.propertyId);
+        const propName = prop?.name || '--';
+        if (t.platform === 'En direct') {
+          const eo = t.owner || ownerFromProp(t.propertyId);
+          const a1O = t.acompte1Owner || eo;
+          const a2O = t.acompte2Owner || eo;
+          const sO  = t.soldeOwner   || eo;
+          const showA1 = filterOwner === 'global' || a1O === filterOwner;
+          const showA2 = filterOwner === 'global' || a2O === filterOwner;
+          const showS  = filterOwner === 'global' || sO  === filterOwner;
+          if (showA1 && t.acompte1Date && checkDateFilter(t.acompte1Date)) addToMonth(t.acompte1Date.substring(0,7), { tenant: t, propName, label: 'Acompte 1', date: t.acompte1Date, amount: parseFloat(t.acompte1Amount) || 0, isChantier: false });
+          if (showA2 && t.acompte2Date && checkDateFilter(t.acompte2Date)) addToMonth(t.acompte2Date.substring(0,7), { tenant: t, propName, label: 'Acompte 2', date: t.acompte2Date, amount: parseFloat(t.acompte2Amount) || 0, isChantier: false });
+          if (showS  && t.soldeDate    && checkDateFilter(t.soldeDate))    addToMonth(t.soldeDate.substring(0,7),    { tenant: t, propName, label: 'Solde',    date: t.soldeDate,    amount: parseFloat(t.soldeAmount)    || 0, isChantier: false });
+        } else {
+          if (t.paymentDate && checkDateFilter(t.paymentDate)) {
+            const optTotal = (t.resOptions || []).reduce((s, o) => s + (parseFloat(o.amount) || 0), 0);
+            addToMonth(t.paymentDate.substring(0,7), { tenant: t, propName, label: t.platform, date: t.paymentDate, amount: (parseFloat(t.netAmount) || 0) + optTotal, isChantier: false });
+          }
         }
-      }
-    });
+      });
+    }
+
+    if (filterCAType === 'all' || filterCAType === 'prestation' || filterCAType === 'materiaux') {
+      financeBaseChantiers.forEach(c => {
+        (c.encaissements || []).forEach(enc => {
+          if (!enc.date || !checkDateFilter(enc.date)) return;
+          if (filterCAType !== 'all' && enc.type !== filterCAType) return;
+          const typeLabel = enc.type === 'prestation' ? 'Prestation' : 'Matériaux';
+          addToMonth(enc.date.substring(0,7), { propName: `${c.prenom} ${c.nom}`, label: typeLabel, date: enc.date, amount: parseFloat(enc.montant) || 0, isChantier: true, chantierOwner: c.owner, note: enc.note });
+        });
+      });
+    }
+
     return map;
-  }, [financeBaseTenants, properties, filterYear, filterMonth, filterOwner]);
+  }, [financeBaseTenants, financeBaseChantiers, properties, filterYear, filterMonth, filterOwner, filterCAType]);
 
   const previsionData = useMemo(() => {
     const today = new Date();
@@ -795,15 +1023,16 @@ const App = () => {
     const items = [];
     const addEntry = (monthKey, entry) => {
       if (!nextMonths.includes(monthKey)) return;
-      if (!monthStats[monthKey]) monthStats[monthKey] = { urssafGross: 0, directNet: 0, totalBank: 0, taxes: 0, charges: 0 };
-      monthStats[monthKey].urssafGross += entry.urssafGross;
-      monthStats[monthKey].directNet += entry.directNet;
-      monthStats[monthKey].totalBank += entry.totalBank;
-      monthStats[monthKey].taxes += entry.taxes;
-      monthStats[monthKey].charges += entry.charges;
+      if (!monthStats[monthKey]) monthStats[monthKey] = { urssafGross: 0, directNet: 0, totalBank: 0, taxes: 0, charges: 0, chantierGross: 0 };
+      monthStats[monthKey].urssafGross += entry.urssafGross || 0;
+      monthStats[monthKey].directNet += entry.directNet || 0;
+      monthStats[monthKey].totalBank += entry.totalBank || 0;
+      monthStats[monthKey].taxes += entry.taxes || 0;
+      monthStats[monthKey].charges += entry.charges || 0;
+      monthStats[monthKey].chantierGross += entry.chantierGross || 0;
       items.push({ ...entry, month: monthKey });
     };
-    financeBaseTenants.forEach(t => {
+    if (filterCAType === 'all' || filterCAType === 'reservations') financeBaseTenants.forEach(t => {
       const prop = properties.find(p => p.id === t.propertyId);
       const propName = prop?.name || '--';
       const base = { id: t.id, tenant: t, name: t.name, propName, startDate: t.startDate, endDate: t.endDate };
@@ -842,11 +1071,33 @@ const App = () => {
         }
       }
     });
+
+    // Chantiers en prévisionnel
+    financeBaseChantiers.forEach(c => {
+      if (c.statut === 'termine') return;
+      if (c.statut === 'devis' && !c.inclurePrevisionnel) return;
+      const tot = computeChantierTotals(c);
+      const restePresta = (filterCAType === 'all' || filterCAType === 'prestation') ? tot.restePresta : 0;
+      const resteMat    = (filterCAType === 'all' || filterCAType === 'materiaux')  ? tot.resteMat    : 0;
+      const resteTotal  = restePresta + resteMat;
+      if (resteTotal <= 0) return;
+      const clampDate = (d) => (!d || d < todayStr) ? todayStr : d;
+      const dFin = clampDate(c.dateFin || todayStr);
+      addEntry(dFin.substring(0, 7), {
+        id: c.id, chantier: c,
+        name: `${c.prenom} ${c.nom}`, propName: `${c.prenom} ${c.nom}`,
+        startDate: c.dateDebut, endDate: c.dateFin, label: c.statut === 'devis' ? 'Devis' : 'Chantier',
+        dueDate: dFin,
+        urssafGross: 0, chantierGross: resteTotal, directNet: 0, totalBank: resteTotal,
+        taxes: restePresta * 0.229 + resteMat * 0.133, charges: 0, isChantier: true,
+      });
+    });
+
     return {
       months: nextMonths.filter(m => monthStats[m]).map(m => ({ month: m, ...monthStats[m], profit: monthStats[m].totalBank - monthStats[m].taxes - monthStats[m].charges })),
       items: items.sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))
     };
-  }, [financeBaseTenants, properties, filterYear, filterOwner]);
+  }, [financeBaseTenants, financeBaseChantiers, properties, filterYear, filterOwner, filterCAType]);
 
   const statsCalculations = useMemo(() => {
     const year = filterYear === 'all' ? new Date().getFullYear() : parseInt(filterYear);
@@ -1464,7 +1715,7 @@ const App = () => {
   };
  
   const RenderFilters = () => (
-    <div className="sticky top-0 z-30 bg-[#F8FAFC]/95 backdrop-blur-md pt-2 pb-4 mb-2 px-2 md:px-0">
+    <div className="sticky top-0 z-30 pt-2 pb-4 mb-2 px-2 md:px-0" style={{background:'#ede8d8'}}>
       <div className="flex flex-wrap items-center gap-2 bg-white/80 p-3 rounded-[28px] border border-white shadow-lg mx-auto max-w-7xl">
         <div className="flex items-center gap-1 bg-slate-100 rounded-2xl p-1">
           {[['all', 'Tous'], ['anthony', 'Anthony'], ['camille', 'Camille']].map(([val, label]) => (
@@ -1492,26 +1743,41 @@ const App = () => {
  
   if (!isUnlocked) {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-4 font-sans relative overflow-hidden">
-        <div className="absolute top-[-10%] left-[-10%] w-64 h-64 bg-blue-100 rounded-full blur-3xl opacity-50"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-indigo-100 rounded-full blur-3xl opacity-50"></div>
-        <div className="bg-white p-8 md:p-12 rounded-[40px] shadow-2xl max-w-sm w-full border border-slate-100 flex flex-col items-center text-center animate-in zoom-in-95 relative z-10">
-          <div className="bg-slate-50 p-4 rounded-3xl mb-6 shadow-inner border border-slate-100"><Key size={48} className="text-blue-600" /></div>
-          <h1 className="font-black text-2xl uppercase tracking-tighter text-slate-900 mb-1">Cadel Manager</h1>
-          <p className="text-[10px] uppercase tracking-widest text-slate-400 mb-8 font-bold">Espace Sécurisé</p>
-          <form onSubmit={handlePinSubmit} className="w-full flex flex-col gap-4">
-            <div>
-              <input type="password" value={pinInput} onChange={(e) => { setPinInput(e.target.value); setPinError(false); }} placeholder="Votre mot de passe" className={`w-full p-4 bg-slate-50 border rounded-2xl font-black text-center text-lg tracking-widest outline-none transition-all ${pinError ? 'border-rose-500 bg-rose-50/50 text-rose-500 placeholder-rose-300' : 'border-slate-200 focus:border-blue-500 focus:bg-white focus:shadow-md'}`} autoFocus />
-              {pinError && <p className="text-rose-500 text-[10px] font-black uppercase tracking-widest mt-2 animate-pulse">Mot de passe incorrect</p>}
-            </div>
-            <button type="submit" className="w-full bg-blue-600 text-white p-4 rounded-2xl font-black uppercase text-sm shadow-xl shadow-blue-200 hover:bg-indigo-600 transition-all hover:-translate-y-0.5 active:translate-y-0">Déverrouiller</button>
-          </form>
+      <>
+        {showSplash && (
+          <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center" style={{background:'#000000',opacity: splashFading ? 0 : 1, transition:'opacity 0.6s ease'}}>
+            <img src="/cadel-manager-fond-noir.svg" alt="Cadel Manager" style={{width:'340px',maxWidth:'75vw'}} />
+          </div>
+        )}
+        <div className="min-h-screen flex flex-col items-center justify-center p-6 relative overflow-hidden" style={{background:'#080808',fontFamily:"'Inter', sans-serif"}}>
+          <div className="absolute inset-0" style={{background:'radial-gradient(ellipse at 20% 80%, rgba(207,166,80,0.08) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(207,166,80,0.05) 0%, transparent 50%)'}}></div>
+          <div className="relative z-10 w-full max-w-xs flex flex-col items-center">
+            <img src="/cadel-manager-fond-noir.svg" alt="Cadel Manager" className="w-full h-auto object-contain mb-10" style={{maxWidth:'280px'}} />
+            <p className="text-[9px] uppercase tracking-[0.35em] mb-10 font-semibold" style={{color:'#4a4a4a', letterSpacing:'0.3em'}}>Espace Sécurisé</p>
+            <form onSubmit={handlePinSubmit} className="w-full flex flex-col gap-3">
+              <input type="password" value={pinInput} onChange={(e) => { setPinInput(e.target.value); setPinError(false); }} placeholder="••••••••" className="w-full py-4 px-5 rounded-2xl text-center text-lg tracking-[0.5em] outline-none transition-all" style={pinError ? {background:'#1a0a0a',border:'1px solid #7f1d1d',color:'#fca5a5'} : {background:'#111111',border:'1px solid #222',color:'#ffffff'}} autoFocus />
+              {pinError && <p className="text-rose-400 text-[9px] font-semibold uppercase tracking-widest text-center animate-pulse">Mot de passe incorrect</p>}
+              <button type="submit" className="w-full py-4 rounded-2xl font-bold uppercase text-sm tracking-widest transition-all hover:-translate-y-0.5 active:translate-y-0 mt-1" style={{background:'#CFA650',color:'#000000',letterSpacing:'0.15em'}}>Entrer</button>
+            </form>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
- 
-  if (loading) return <div className="h-screen w-full flex items-center justify-center bg-slate-50 font-black uppercase text-xs"><Loader2 className="animate-spin text-blue-600 mr-2" /> CADEL MANAGER...</div>;
+
+  if (loading) return (
+    <>
+      {showSplash && (
+        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center" style={{background:'#000000',opacity: splashFading ? 0 : 1, transition:'opacity 0.6s ease'}}>
+          <img src="/cadel-manager-fond-noir.svg" alt="Cadel Manager" style={{width:'340px',maxWidth:'75vw'}} />
+        </div>
+      )}
+      <div className="h-screen w-full flex items-center justify-center" style={{background:'#080808',color:'#CFA650',fontFamily:"'Inter',sans-serif"}}>
+        <Loader2 className="animate-spin mr-3" size={18} style={{color:'#CFA650'}} />
+        <span className="text-[10px] font-semibold uppercase tracking-[0.25em]">Chargement…</span>
+      </div>
+    </>
+  );
  
   const curChargesModale = (formData?.resExpenses || []).reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
   const curOptionsModale = (formData?.resOptions || []).reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
@@ -1521,40 +1787,183 @@ const App = () => {
  
   // --- RENDU PRINCIPAL DE L'APPLICATION ---
   return (
-    <div style={{height:'100dvh',overflow:'hidden'}} className="bg-[#F8FAFC] flex flex-col md:flex-row font-sans text-slate-900">
+    <div className="dark-app flex flex-col md:flex-row" style={{height:'100dvh',overflow:'hidden',fontFamily:"'Inter',sans-serif",background:'#ede8d8',color:'#1a1810'}}>
+
+      {showSplash && (
+        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center pointer-events-none" style={{background:'#000000',opacity: splashFading ? 0 : 1, transition:'opacity 0.6s ease'}}>
+          <img src="/cadel-manager-fond-noir.svg" alt="Cadel Manager" style={{width:'340px',maxWidth:'75vw'}} />
+        </div>
+      )}
 
       <style>{`
+        /* ── SCROLLBARS ─────────────────────────────── */
         .hide-scroll::-webkit-scrollbar { display: none; }
         .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
         .snap-always { scroll-snap-stop: always; }
         .res-table-scroll { height: calc(100dvh - 250px); }
         .res-table-scroll-mobile { height: calc(100dvh - 320px); }
+        .dark-app ::-webkit-scrollbar { width:5px; height:5px; }
+        .dark-app ::-webkit-scrollbar-track { background:transparent; }
+        .dark-app ::-webkit-scrollbar-thumb { background:#c8bc9e; border-radius:4px; }
+
+        /* ── FOND GÉNÉRAL BEIGE ─────────────────────── */
+        .dark-app { background:#ede8d8 !important; color:#1a1810 !important; }
+
+        /* ── CARTES / PANNEAUX ──────────────────────── */
+        .dark-app .bg-white    { background:#f8f4e8 !important; }
+        .dark-app .bg-slate-50 { background:#f0ead6 !important; }
+        .dark-app .bg-slate-100{ background:#e6dfc8 !important; }
+        .dark-app .bg-slate-200{ background:#d8d0b8 !important; }
+        .dark-app .bg-slate-900{ background:#1a1810 !important; }
+        .dark-app .bg-slate-800{ background:#262018 !important; }
+        .dark-app .bg-slate-700{ background:#342e22 !important; }
+
+        /* ── TEXTE ──────────────────────────────────── */
+        .dark-app .text-slate-900 { color:#1a1810 !important; }
+        .dark-app .text-slate-800 { color:#2e2820 !important; }
+        .dark-app .text-slate-700 { color:#4a4438 !important; }
+        .dark-app .text-slate-600 { color:#6a6050 !important; }
+        .dark-app .text-slate-500 { color:#8a7e6a !important; }
+        .dark-app .text-slate-400 { color:#aa9e88 !important; }
+        .dark-app .text-slate-300 { color:#c8bcaa !important; }
+        /* Garder rouge pour erreurs -->  */
+        .dark-app .text-rose-500  { color:#b91c1c !important; }
+        .dark-app .text-rose-600  { color:#991b1b !important; }
+        /* Garder vert pour succès */
+        .dark-app .text-emerald-600 { color:#047857 !important; }
+        /* Tous les autres textes colorés → or/foncé sobre */
+        .dark-app .text-blue-600    { color:#CFA650 !important; }
+        .dark-app .text-blue-700    { color:#a07830 !important; }
+        .dark-app .text-indigo-600  { color:#CFA650 !important; }
+        .dark-app .text-amber-700   { color:#a07830 !important; }
+        .dark-app .text-violet-700  { color:#7a6040 !important; }
+        .dark-app .text-teal-700    { color:#6a7850 !important; }
+
+        /* ── BORDURES ───────────────────────────────── */
+        .dark-app .border-slate-100 { border-color:#d8d0b8 !important; }
+        .dark-app .border-slate-200 { border-color:#cec6ae !important; }
+        .dark-app .border-slate-300 { border-color:#c0b898 !important; }
+        .dark-app .border-b  { border-bottom-color:#d8d0b8 !important; }
+        .dark-app .border-t  { border-top-color:#d8d0b8 !important; }
+        .dark-app .border-r  { border-right-color:#d8d0b8 !important; }
+        .dark-app .border    { border-color:#d8d0b8 !important; }
+        .dark-app .divide-y > * + * { border-color:#d8d0b8 !important; }
+        /* Bordures colorées → ton beige/or */
+        .dark-app .border-blue-50    { border-color:#d8d0b8 !important; }
+        .dark-app .border-blue-200   { border-color:#c8bc9e !important; }
+        .dark-app .border-amber-200  { border-color:#c8a840 !important; }
+        .dark-app .border-emerald-200{ border-color:#a8b890 !important; }
+        .dark-app .border-rose-200   { border-color:#d8a0a0 !important; }
+        .dark-app .border-2.border-dashed { border-color:#c8bc9e !important; }
+
+        /* ── OMBRES ─────────────────────────────────── */
+        .dark-app .shadow-xl  { box-shadow:0 8px 32px rgba(26,24,16,0.10), 0 0 0 1px rgba(207,166,80,0.08) !important; }
+        .dark-app .shadow-2xl { box-shadow:0 12px 48px rgba(26,24,16,0.13), 0 0 0 1px rgba(207,166,80,0.10) !important; }
+        .dark-app .shadow-lg  { box-shadow:0 6px 20px rgba(26,24,16,0.09) !important; }
+        .dark-app .shadow-sm  { box-shadow:0 2px 8px rgba(26,24,16,0.07) !important; }
+        .dark-app .shadow-md  { box-shadow:0 4px 14px rgba(26,24,16,0.08) !important; }
+
+        /* ── INPUTS / SELECT / TEXTAREA ─────────────── */
+        .dark-app input:not([type=checkbox]):not([type=radio]),
+        .dark-app select,
+        .dark-app textarea {
+          background:#f0ead6 !important;
+          border-color:#cec6ae !important;
+          color:#1a1810 !important;
+        }
+        .dark-app input::placeholder,
+        .dark-app textarea::placeholder { color:#aa9e88 !important; }
+        .dark-app option { background:#f0ead6; color:#1a1810; }
+
+        /* ── HOVER ──────────────────────────────────── */
+        .dark-app .hover\\:bg-slate-50:hover  { background:#e8e0c8 !important; }
+        .dark-app .hover\\:bg-slate-100:hover { background:#ddd6c0 !important; }
+        .dark-app .hover\\:bg-white:hover     { background:#f0ead6 !important; }
+        .dark-app .focus\\:bg-white:focus     { background:#f8f4e8 !important; }
+
+        /* ── TABLEAUX ───────────────────────────────── */
+        .dark-app table { border-color:#d8d0b8 !important; }
+        .dark-app th, .dark-app td { border-color:#d8d0b8 !important; }
+        .dark-app thead { background:#e6dfc8 !important; }
+        .dark-app tbody tr:hover { background:rgba(207,166,80,0.05) !important; }
+
+        /* ── TOUTES LES LIGNES COLORÉES → TON OR/BEIGE UNIFIÉ ── */
+        .dark-app .bg-amber-50,
+        .dark-app .bg-blue-50,
+        .dark-app .bg-emerald-50,
+        .dark-app .bg-violet-50,
+        .dark-app .bg-teal-50,
+        .dark-app .bg-rose-50,
+        .dark-app .bg-orange-50,
+        .dark-app .bg-indigo-50   { background:rgba(207,166,80,0.06) !important; }
+
+        .dark-app .bg-amber-100,
+        .dark-app .bg-blue-100,
+        .dark-app .bg-emerald-100,
+        .dark-app .bg-violet-100,
+        .dark-app .bg-teal-100,
+        .dark-app .bg-rose-100,
+        .dark-app .bg-yellow-100,
+        .dark-app .bg-green-100,
+        .dark-app .bg-indigo-100  { background:rgba(207,166,80,0.11) !important; }
+
+        /* Badges → or discret (bg-blue-200 et bg-emerald-200 exclus : utilisés pour les lignes logements) */
+        .dark-app .bg-amber-200,
+        .dark-app .bg-violet-200,
+        .dark-app .bg-teal-200,
+        .dark-app .bg-rose-200,
+        .dark-app .bg-indigo-200  { background:rgba(207,166,80,0.18) !important; }
+
+        /* Erreur rouge → garder lisible */
+        .dark-app .bg-red-100     { background:rgba(185,28,28,0.08) !important; }
+        .dark-app .bg-rose-50     { background:rgba(185,28,28,0.06) !important; }
+
+        /* ── TEXTES BADGES COLORÉS → TAN/OR ────────── */
+        .dark-app .text-amber-800,
+        .dark-app .text-blue-800,
+        .dark-app .text-emerald-800,
+        .dark-app .text-violet-800,
+        .dark-app .text-teal-800  { color:#7a6028 !important; }
+
+        /* ── FOND PRINCIPAL AVEC GRADIENT CHAUD ─────── */
+        .dark-main-bg {
+          background:
+            radial-gradient(ellipse at 10% 90%, rgba(207,166,80,0.09) 0%, transparent 50%),
+            radial-gradient(ellipse at 90% 10%, rgba(207,166,80,0.07) 0%, transparent 50%),
+            #ede8d8 !important;
+        }
       `}</style>
  
-      <aside className={`fixed md:sticky top-0 left-0 z-50 w-72 h-[100dvh] bg-white border-r transform md:translate-x-0 transition-transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="p-10 border-b flex flex-col items-center relative">
-          <img src="/icon.svg" alt="Cadel Manager Logo" className="w-24 h-24 rounded-3xl shadow-xl mb-2 object-contain" />
-          <button onClick={() => { localStorage.removeItem('cadel_unlocked'); setIsUnlocked(false); }} className="absolute top-4 right-4 p-2 text-slate-300 hover:text-slate-900 transition-colors" title="Verrouiller l'application"><Lock size={16} /></button>
+      <aside className={`fixed md:sticky top-0 left-0 z-50 w-72 h-[100dvh] transform md:translate-x-0 transition-transform ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`} style={{background:'#000000',borderRight:'1px solid #1f1f1f'}}>
+        <div className="flex flex-col items-center relative" style={{padding:'28px 28px 24px',borderBottom:'1px solid #1a1a1a'}}>
+          <img src="/cadel-manager-fond-noir.svg" alt="Cadel Manager Logo" className="w-full h-auto object-contain" style={{maxWidth:'210px'}} />
+          <button onClick={() => { localStorage.removeItem('cadel_unlocked'); setIsUnlocked(false); }} className="absolute top-3 right-3 p-2 rounded-xl transition-colors" style={{color:'#333'}} onMouseEnter={e=>e.currentTarget.style.color='#CFA650'} onMouseLeave={e=>e.currentTarget.style.color='#333'} title="Verrouiller l'application"><Lock size={14} /></button>
         </div>
-        <nav className="flex-1 p-6 space-y-2 overflow-y-auto">
-          {[{ id: 'dashboard', label: 'Accueil', icon: <Home size={18}/> }, { id: 'reservations', label: 'Réservations', icon: <List size={18}/> }, { id: 'agenda', label: 'Agenda', icon: <CalendarRange size={18}/> }, { id: 'statistiques', label: 'Statistiques', icon: <BarChart2 size={18}/> }, { id: 'finances', label: 'Finances', icon: <Calculator size={18}/> }, { id: 'settings', label: 'Paramètres', icon: <Settings size={18}/> }].map(item => (
-            <button key={item.id} onClick={() => changeTab(item.id)} className={`w-full text-left px-5 py-4 rounded-[20px] font-black text-[11px] uppercase tracking-widest transition-all flex items-center gap-4 ${activeTab === item.id ? 'bg-slate-900 text-white shadow-2xl' : 'text-slate-400 hover:bg-slate-50'}`}>{item.icon} {item.label}</button>
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+          {[{ id: 'dashboard', label: 'Accueil', icon: <Home size={16}/> }, { id: 'reservations', label: 'Réservations', icon: <List size={16}/> }, { id: 'chantiers', label: 'Chantiers', icon: <Building2 size={16}/> }, { id: 'agenda', label: 'Agenda', icon: <CalendarRange size={16}/> }, { id: 'statistiques', label: 'Statistiques', icon: <BarChart2 size={16}/> }, { id: 'finances', label: 'Finances', icon: <Calculator size={16}/> }, { id: 'fiscal', label: 'Fiscal', icon: <Scale size={16}/> }, { id: 'settings', label: 'Paramètres', icon: <Settings size={16}/> }].map(item => (
+            <button key={item.id} onClick={() => changeTab(item.id)} className="w-full text-left px-4 py-3 rounded-xl transition-all flex items-center gap-3" style={{fontSize:'10px',fontWeight:700,letterSpacing:'0.12em',textTransform:'uppercase', ...(activeTab === item.id ? {background:'#CFA650',color:'#000000'} : {color:'#4a4a4a',background:'transparent'})}} onMouseEnter={e=>{ if(activeTab !== item.id) { e.currentTarget.style.color='#CFA650'; e.currentTarget.style.background='rgba(207,166,80,0.06)'; } }} onMouseLeave={e=>{ if(activeTab !== item.id) { e.currentTarget.style.color='#4a4a4a'; e.currentTarget.style.background='transparent'; } }}>{item.icon} {item.label}</button>
           ))}
         </nav>
       </aside>
  
-      <div className="md:hidden flex justify-between p-5 bg-white border-b sticky top-0 z-40 shadow-sm">
+      <div className="md:hidden flex justify-between p-4 sticky top-0 z-40" style={{background:'#000000',borderBottom:'1px solid #1f1f1f'}}>
         <div className="flex items-center gap-3">
-            <img src="/icon.svg" alt="Logo" className="w-10 h-10 rounded-[12px] shadow-sm object-contain" />
-            <h1 className="font-black text-sm uppercase">CADEL MANAGER <span className="text-slate-400 font-bold text-[9px] normal-case">v2.6</span></h1>
+            <img src="/cadel-manager-fond-noir.svg" alt="Logo" className="h-auto w-auto object-contain" style={{maxWidth:'200px',height:'52px'}} />
         </div>
-        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2">{isMobileMenuOpen ? <X /> : <Menu />}</button>
+        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2" style={{color:'#CFA650'}}>{isMobileMenuOpen ? <X /> : <Menu />}</button>
       </div>
  
-      <main className="flex-1 w-full min-w-0 relative flex flex-col overflow-x-hidden">
+      <main className="dark-main-bg flex-1 w-full min-w-0 relative flex flex-col overflow-x-hidden">
+        {/* Filigrane maison + CADEL MANAGER */}
+        <div className="hidden md:flex fixed inset-0 pointer-events-none z-0 items-center justify-start overflow-hidden" style={{left:'288px'}}>
+          <img src="/watermark.svg?v=3" alt="" aria-hidden="true" style={{width:'100%',maxWidth:'920px',opacity:0.11,mixBlendMode:'multiply',userSelect:'none'}} />
+        </div>
+        <div className="flex md:hidden fixed inset-0 pointer-events-none z-0 items-center justify-start overflow-hidden">
+          <img src="/watermark.svg?v=3" alt="" aria-hidden="true" style={{width:'100%',maxWidth:'500px',opacity:0.09,mixBlendMode:'multiply',userSelect:'none'}} />
+        </div>
         
         {gcalDeletedAlert && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/75">
             <div className="bg-white p-8 rounded-[40px] shadow-2xl max-w-sm w-full border border-slate-100 flex flex-col gap-6">
               <div className="text-center">
                 <div className="bg-orange-50 text-orange-500 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><AlertTriangle size={32}/></div>
@@ -1574,7 +1983,7 @@ const App = () => {
                   setEditingResId(tenant.id);
                   setFormData({ ...tenant });
                   setIsModalOpen(true);
-                }} className="w-full p-4 rounded-2xl font-black uppercase text-[10px] text-white bg-blue-600 shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all">
+                }} className="w-full p-4 rounded-2xl font-black uppercase text-[10px] transition-all" style={{background:'#CFA650',color:'#000000'}}>
                   Remettre sur Google Agenda
                 </button>
                 <button onClick={async () => {
@@ -1593,7 +2002,7 @@ const App = () => {
         )}
 
         {gcalDeletedList.length > 0 && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60">
             <div className="bg-white rounded-[40px] shadow-2xl max-w-lg w-full border border-slate-100 flex flex-col max-h-[90vh] overflow-hidden mx-4">
               <div className="p-6 border-b flex items-center gap-4">
                 <div className="bg-orange-50 text-orange-500 w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0"><AlertTriangle size={24}/></div>
@@ -1644,7 +2053,7 @@ const App = () => {
         )}
 
         {gcalStatusNotif.length > 0 && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60">
             <div className="bg-white rounded-[40px] shadow-2xl max-w-sm w-full border border-slate-100 flex flex-col max-h-[80vh] overflow-hidden mx-4">
               <div className="p-6 border-b flex items-center gap-4">
                 <div className="bg-emerald-50 text-emerald-500 w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0"><CheckCircle size={24}/></div>
@@ -1681,7 +2090,7 @@ const App = () => {
         )}
 
         {quickPayConfig && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 animate-in fade-in">
              <div className="bg-white p-8 rounded-[40px] shadow-2xl max-w-sm w-full border border-slate-100 flex flex-col gap-6 animate-in zoom-in-95">
                 <div className="text-center">
                   <div className="bg-emerald-50 text-emerald-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><Euro size={32}/></div>
@@ -1701,7 +2110,7 @@ const App = () => {
           const selectedItems = detailedExpenses.filter(e => selectedExpenseIds.includes(e.id));
           const total = selectedItems.reduce((s, e) => s + (e.amount || 0), 0);
           return (
-            <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in p-3 md:p-6">
+            <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 animate-in fade-in p-3 md:p-6">
               <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-2xl max-h-[95dvh] border border-slate-100 flex flex-col animate-in zoom-in-95 overflow-hidden">
                 <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 flex-shrink-0">
                   <div className="flex items-center gap-3">
@@ -1769,7 +2178,7 @@ const App = () => {
                   </button>
                   <div className="flex gap-3">
                     <button onClick={() => setGroupedPayConfig(null)} className="flex-1 p-4 rounded-2xl font-black uppercase text-[10px] text-slate-400 bg-white border border-slate-200 hover:bg-slate-100 transition-colors">Annuler</button>
-                    <button onClick={handleGroupedPay} className="flex-1 p-4 rounded-2xl font-black uppercase text-[10px] text-white bg-blue-500 shadow-xl shadow-blue-200 hover:bg-blue-600 transition-all hover:-translate-y-0.5">Valider ({selectedItems.length})</button>
+                    <button onClick={handleGroupedPay} className="flex-1 p-4 rounded-2xl font-black uppercase text-[10px] transition-all hover:-translate-y-0.5" style={{background:'#CFA650',color:'#000000'}}>Valider ({selectedItems.length})</button>
                   </div>
                 </div>
               </div>
@@ -1859,7 +2268,7 @@ const App = () => {
         })()}
 
         {dashboardModal && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-in fade-in p-4">
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 animate-in fade-in p-4">
             <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-lg max-h-[85dvh] flex flex-col border border-slate-100 overflow-hidden animate-in zoom-in-95">
               <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0 bg-slate-900 text-white">
                 <div>
@@ -1893,7 +2302,7 @@ const App = () => {
         )}
 
         {statsDetailConfig && (
-           <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-in fade-in">
+           <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-slate-900/80 animate-in fade-in">
               <div className="bg-[#F8FAFC] rounded-[40px] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-slate-100 overflow-hidden relative">
                  <div className="p-6 md:p-8 border-b flex justify-between items-center bg-white sticky top-0 z-10 shadow-sm">
                     <div className="flex items-center gap-3 text-blue-600 font-black uppercase tracking-tighter text-xl"><Search size={24} /> {statsDetailConfig.title}</div>
@@ -1921,7 +2330,7 @@ const App = () => {
            </div>
         )}
  
-        <RenderFilters />
+        {activeTab !== 'finances' && <RenderFilters />}
         
         <div 
           ref={scrollContainerRef} 
@@ -1949,7 +2358,7 @@ const App = () => {
                       {label:'Encaissé ce mois',value:`${encaisse.toLocaleString('fr-FR',{maximumFractionDigits:0})}€`,color:'text-emerald-600',bg:'bg-white',border:'border-slate-100',
                         getItems:()=>{ const cm=todayStr.substring(0,7); return baseTenants.filter(t=>{ if(t.platform==='En direct') return [t.acompte1Date,t.acompte2Date,t.soldeDate].some(d=>d&&d.startsWith(cm)); return t.paymentDate&&t.paymentDate.startsWith(cm); }); }},
                       {label:'Prévisionnel net',value:`${prevNet.toLocaleString('fr-FR',{maximumFractionDigits:0})}€`,color:'text-blue-600',bg:'bg-white',border:'border-slate-100',
-                        getItems:()=>[...new Map(previsionData.items.map(i=>[i.id,i.tenant])).values()]},
+                        getItems:()=>[...new Map(previsionData.items.filter(i=>!i.isChantier).map(i=>[i.id,i.tenant])).values()]},
                       {label:'Acomptes en retard',value:overdueRes.length,color:overdueRes.length>0?'text-rose-600':'text-slate-300',bg:overdueRes.length>0?'bg-rose-50':'bg-white',border:overdueRes.length>0?'border-rose-200':'border-slate-100',
                         getItems:()=>overdueRes},
                       {label:'Prestations à payer',value:`${prestDues.toLocaleString('fr-FR',{maximumFractionDigits:0})}€`,color:prestDues>0?'text-orange-600':'text-slate-300',bg:prestDues>0?'bg-orange-50':'bg-white',border:prestDues>0?'border-orange-200':'border-slate-100',
@@ -1980,7 +2389,7 @@ const App = () => {
                       <div className="p-3 bg-amber-500 text-white font-black uppercase text-[10px]">Encaissements à venir</div>
                       <div className="divide-y">
                         {previsionData.items.slice(0,8).map((item,i)=>(
-                          <div key={i} onClick={()=>{changeTab('reservations');openReservation(item.tenant);}} className="flex justify-between items-center px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors">
+                          <div key={i} onClick={()=>{ if (item.isChantier) changeTab('chantiers'); else { changeTab('reservations'); openReservation(item.tenant); }}} className="flex justify-between items-center px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors">
                             <div><div className="font-black text-sm">{item.name}</div><div className="text-[10px] text-slate-400 uppercase font-bold">{item.propName} — {item.label}</div></div>
                             <div className="text-right"><div className="font-black text-sm text-amber-600">{(item.totalBank||0).toLocaleString('fr-FR',{maximumFractionDigits:0})}€</div><div className="text-[10px] text-slate-400">{formatDateFr(item.dueDate)}</div></div>
                           </div>
@@ -2024,10 +2433,10 @@ const App = () => {
                 <div className="flex justify-between items-center mx-2 md:mx-0 mb-6">
                    <h2 className="text-2xl md:text-3xl font-black uppercase tracking-tighter">Réservations</h2>
                    <div className="flex items-center gap-2 md:gap-4">
-                      <button onClick={() => scrollToCurrentRes(true)} className="p-3 md:px-4 md:py-3 bg-white text-blue-600 rounded-full md:rounded-[20px] shadow-lg border border-slate-100 hover:bg-blue-50 transition-all flex items-center justify-center gap-2" title="Aller à aujourd'hui">
+                      <button onClick={() => scrollToCurrentRes(true)} className="p-3 md:px-4 md:py-3 bg-white rounded-full md:rounded-[20px] shadow-lg border border-slate-100 transition-all flex items-center justify-center gap-2" style={{color:'#CFA650'}} title="Aller à aujourd'hui">
                          <LocateFixed size={18} /><span className="hidden md:inline font-black text-[10px] uppercase">Aujourd'hui</span>
                       </button>
-                      <button onClick={() => { setEditingResId(null); setFormData({ propertyId: properties[0]?.id || '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '', acompte1Amount: '', acompte1Date: '', acompte2Amount: '', acompte2Date: '', soldeAmount: '', soldeDate: '' }); setIsModalOpen(true); }} className="bg-blue-600 text-white px-6 py-3 md:px-8 md:py-4 rounded-[20px] md:rounded-[24px] font-black text-[11px] shadow-xl hover:bg-blue-700 transition-all">+ Nouvelle</button>
+                      <button onClick={() => { setEditingResId(null); setFormData({ propertyId: properties[0]?.id || '', name: '', phone: '', startDate: '', endDate: '', paymentDate: '', platform: availablePlatforms[0] || 'Airbnb', isUrssaf: true, displayedAmount: '', cityTax: '', bankFees: '', grossAmount: '', platformFees: '', deposit: '', resExpenses: [], comment: '', acompte1Amount: '', acompte1Date: '', acompte2Amount: '', acompte2Date: '', soldeAmount: '', soldeDate: '' }); setIsModalOpen(true); }} className="px-6 py-3 md:px-8 md:py-4 rounded-[20px] md:rounded-[24px] font-black text-[11px] shadow-xl transition-all" style={{background:'#CFA650',color:'#000000'}}>+ Nouvelle</button>
                    </div>
                 </div>
                 
@@ -2126,7 +2535,98 @@ const App = () => {
             </div>
           </div>
  
-          {/* 2. ONGLET AGENDA */}
+          {/* 2. ONGLET CHANTIERS */}
+          <div className="flex-none w-full max-w-full overflow-y-auto snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border" style={{WebkitOverflowScrolling:'touch'}}>
+            <div className="max-w-7xl mx-auto pb-32 space-y-4 px-2 md:px-0">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-3xl font-black uppercase">Chantiers</h2>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-1 bg-slate-100 rounded-2xl p-1">
+                    {[['all','Tous'],['anthony','Anthony'],['camille','Camille']].map(([v,l])=>(
+                      <button key={v} onClick={()=>setChantierFilter(v)} className="px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all" style={chantierFilter===v ? {background:'#CFA650',color:'#000000'} : {color:'#6b7280',background:'transparent'}}>{l}</button>
+                    ))}
+                  </div>
+                  <button onClick={()=>{
+                    setChantierFormData({nom:'',prenom:'',owner:'anthony',dateDebut:'',dateFin:'',statut:'en_cours',montantPrestation:'',montantMateriaux:'',encaissements:[]});
+                    setChantierAddPay({open:false,type:'prestation',montant:'',date:todayStr,note:''});
+                    setChantierModal({mode:'new'});
+                  }} className="px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase transition-all" style={{background:'#CFA650',color:'#000000'}}>+ Nouveau chantier</button>
+                </div>
+              </div>
+
+              {/* Cards */}
+              {(() => {
+                const visible = chantiers.filter(c=>chantierFilter==='all'||c.owner===chantierFilter);
+                if (visible.length===0) return (
+                  <div className="text-center py-16 text-slate-400">
+                    <Building2 size={40} className="mx-auto mb-3 opacity-40"/>
+                    <p className="font-black uppercase text-sm">Aucun chantier{chantierFilter!=='all'?' pour cette personne':''}</p>
+                    <p className="text-xs mt-1">Clique sur "+ Nouveau chantier" pour commencer</p>
+                  </div>
+                );
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {visible.map(c=>{
+                      const t = computeChantierTotals(c);
+                      const statusLabel = {devis:'Devis',en_cours:'En cours',termine:'Terminé'}[c.statut]||c.statut;
+                      const statusCls = {devis:'bg-slate-100 text-slate-500',en_cours:'bg-amber-100 text-amber-700',termine:'bg-emerald-100 text-emerald-700'}[c.statut]||'bg-slate-100 text-slate-500';
+                      const fmtDate = s=>{if(!s)return'—';const[y,m,d]=s.split('-');return`${d}/${m}/${y}`;};
+                      return (
+                        <div key={c.id} onClick={()=>{
+                          setChantierFormData({...c});
+                          setChantierAddPay({open:false,type:'prestation',montant:'',date:todayStr,note:''});
+                          setConfirmCloseChantier(false);
+                          setChantierModal({mode:'edit',id:c.id});
+                        }} className="bg-white rounded-[28px] border border-slate-100 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer p-5 flex flex-col gap-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="font-black text-base uppercase tracking-tight truncate">{c.prenom} {c.nom}</div>
+                              <div className="text-[10px] text-slate-400 font-bold mt-0.5">{fmtDate(c.dateDebut)} → {fmtDate(c.dateFin)}</div>
+                            </div>
+                            <div className="flex gap-1.5 flex-shrink-0">
+                              {c.owner==='anthony'&&<span className="w-6 h-6 rounded-full bg-blue-600 text-white text-[9px] font-black flex items-center justify-center">A</span>}
+                              {c.owner==='camille'&&<span className="w-6 h-6 rounded-full bg-emerald-600 text-white text-[9px] font-black flex items-center justify-center">C</span>}
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${statusCls}`}>{statusLabel}</span>
+                            </div>
+                          </div>
+                          {/* Progress */}
+                          <div>
+                            <div className="flex justify-between text-[9px] font-black uppercase text-slate-400 mb-1">
+                              <span>Progression</span><span>{t.pct}%</span>
+                            </div>
+                            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-blue-600 rounded-full transition-all" style={{width:`${t.pct}%`}}/>
+                            </div>
+                          </div>
+                          {/* Split */}
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="bg-slate-50 rounded-2xl p-3">
+                              <div className="text-[8px] font-black uppercase text-violet-500 mb-1">● Prestation</div>
+                              <div className="font-black text-sm">{(t.encPresta).toLocaleString('fr-FR',{maximumFractionDigits:0})}€</div>
+                              <div className="text-[9px] text-slate-400">/ {(t.totalPresta).toLocaleString('fr-FR',{maximumFractionDigits:0})}€</div>
+                              {t.restePresta>0&&<div className="text-[9px] text-rose-500 font-bold">Reste {(t.restePresta).toLocaleString('fr-FR',{maximumFractionDigits:0})}€</div>}
+                            </div>
+                            <div className="bg-slate-50 rounded-2xl p-3">
+                              <div className="text-[8px] font-black uppercase text-amber-500 mb-1">● Matériaux</div>
+                              <div className="font-black text-sm">{(t.encMat).toLocaleString('fr-FR',{maximumFractionDigits:0})}€</div>
+                              <div className="text-[9px] text-slate-400">/ {(t.totalMat).toLocaleString('fr-FR',{maximumFractionDigits:0})}€</div>
+                              {t.resteMat>0&&<div className="text-[9px] text-rose-500 font-bold">Reste {(t.resteMat).toLocaleString('fr-FR',{maximumFractionDigits:0})}€</div>}
+                            </div>
+                          </div>
+                          <div className="flex justify-between items-center pt-1 border-t border-slate-100">
+                            <span className="text-[9px] font-black uppercase text-slate-400">Reste à recevoir</span>
+                            <span className={`font-black text-base ${t.reste===0?'text-emerald-600':'text-rose-600'}`}>{t.reste===0?'✓ Soldé':`${t.reste.toLocaleString('fr-FR',{maximumFractionDigits:0})}€`}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+
+          {/* 3. ONGLET AGENDA */}
           <div className="flex-none w-full max-w-full overflow-y-auto snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border" style={{WebkitOverflowScrolling:'touch'}}>
             <div className="max-w-7xl mx-auto pb-32">
               <div className="flex justify-between items-center mx-2 md:mx-0 mb-6">
@@ -2287,11 +2787,40 @@ const App = () => {
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mx-2 md:mx-0">
                 <h2 className="text-3xl font-black uppercase">Comptabilité</h2>
               </div>
-              <div className="sticky top-0 z-30 bg-[#F8FAFC]/95 backdrop-blur-md py-2 -mt-4 mx-2 md:mx-0">
-                <div className="flex items-center gap-1 bg-slate-100 rounded-2xl p-1 self-start w-fit">
-                  {[['global', 'Global'], ['anthony', 'Anthony'], ['camille', 'Camille']].map(([val, label]) => (
-                    <button key={val} onClick={() => setFilterOwner(val)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${filterOwner === val ? 'bg-slate-900 text-white shadow' : 'text-slate-500 hover:bg-slate-200'}`}>{label}</button>
-                  ))}
+              <div className="sticky top-0 z-30 pt-2 pb-3 mx-2 md:mx-0" style={{background:'#ede8d8'}}>
+                <div className="flex flex-wrap items-center gap-2 bg-white/80 p-3 rounded-[28px] border border-white shadow-lg">
+                  <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+                    <Filter size={12} className="text-slate-400 flex-shrink-0" />
+                    <select value={filterYear} onChange={e => setFilterYear(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer">
+                      <option value="all">Toutes années</option>{(yearsAvailable || []).map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+                    <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer">
+                      <option value="all">Tous mois</option>{['Janv','Févr','Mars','Avril','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'].map((m,i)=><option key={i} value={i}>{m}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+                    <select value={filterProp} onChange={e => setFilterProp(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none max-w-[100px] md:max-w-[130px] cursor-pointer">
+                      <option value="all">Logements</option>{(properties || []).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-1 px-3 py-2 bg-slate-50 rounded-2xl border border-slate-100">
+                    <select value={filterPlat} onChange={e => setFilterPlat(e.target.value)} className="text-[10px] font-black uppercase bg-transparent outline-none cursor-pointer">
+                      <option value="all">Plateformes</option>{(availablePlatforms || []).map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div className="w-px h-6 bg-slate-200 hidden md:block flex-shrink-0"/>
+                  <div className="flex items-center gap-1 bg-slate-100 rounded-2xl p-1 flex-shrink-0">
+                    {[['global', 'Global'], ['anthony', 'Anthony'], ['camille', 'Camille']].map(([val, label]) => (
+                      <button key={val} onClick={() => setFilterOwner(val)} className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${filterOwner === val ? 'bg-slate-900 text-white shadow' : 'text-slate-500 hover:bg-slate-200'}`}>{label}</button>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-1 bg-slate-100 rounded-2xl p-1 flex-shrink-0">
+                    {[['reservations', 'Locations'], ['all', 'Tout CA'], ['prestation', 'Prestation'], ['materiaux', 'Matériaux']].map(([val, label]) => (
+                      <button key={val} onClick={() => setFilterCAType(val)} className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${filterCAType === val ? 'bg-indigo-700 text-white shadow' : 'text-slate-500 hover:bg-slate-200'}`}>{label}</button>
+                    ))}
+                  </div>
                 </div>
               </div>
               {/* PRÉVISIONNEL */}
@@ -2307,7 +2836,7 @@ const App = () => {
                       <thead className="bg-amber-50 uppercase text-amber-600 border-b text-[6px] md:text-xs tracking-tighter md:tracking-normal">
                         <tr>
                           <th className="p-1 md:p-6">Mois</th>
-                          <th className="p-1 md:p-6 text-right text-slate-500">Brut URSSAF</th>
+                          <th className="p-1 md:p-6 text-right text-slate-500">{filterCAType === 'reservations' ? 'Brut URSSAF' : 'CA Brut'}</th>
                           <th className="p-1 md:p-6 text-right text-emerald-600">Direct (hors URSSAF)</th>
                           <th className="p-1 md:p-6 text-right text-indigo-500">Virement att.</th>
                           <th className="p-1 md:p-6 text-right text-slate-500">Prest.</th>
@@ -2329,7 +2858,7 @@ const App = () => {
                                     {isExp ? '▾' : '▸'} {formatMonthYear(m.month)}
                                   </span>
                                 </td>
-                                <td className="p-1 md:p-6 text-right text-slate-500 text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{m.urssafGross > 0 ? `${m.urssafGross.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€` : '-'}</td>
+                                <td className="p-1 md:p-6 text-right text-slate-500 text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{(m.urssafGross + (m.chantierGross || 0)) > 0 ? `${(m.urssafGross + (m.chantierGross || 0)).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€` : '-'}</td>
                                 <td className="p-1 md:p-6 text-right text-emerald-600 font-black text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{m.directNet > 0 ? `${m.directNet.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€` : '-'}</td>
                                 <td className="p-1 md:p-6 text-right text-indigo-600 font-black text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{m.totalBank > 0 ? `${m.totalBank.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€` : '-'}</td>
                                 <td className="p-1 md:p-6 text-right text-slate-500 text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{m.charges > 0 ? `-${m.charges.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€` : '-'}</td>
@@ -2345,10 +2874,10 @@ const App = () => {
                                       </thead>
                                       <tbody className="divide-y divide-white/50">
                                         {monthItems.map((item, i) => (
-                                          <tr key={i} onClick={() => openReservation(item.tenant)} className="cursor-pointer hover:brightness-95 transition-all">
+                                          <tr key={i} onClick={() => { if (!item.isChantier) openReservation(item.tenant); }} className={`hover:brightness-95 transition-all ${!item.isChantier ? 'cursor-pointer' : ''}`}>
                                             <td className="pl-4 md:pl-8 py-2 md:py-3 uppercase text-[7px] md:text-[10px] font-black text-slate-700">{item.propName}</td>
                                             <td className="py-2 md:py-3 text-[7px] md:text-[10px] font-bold">{item.name}</td>
-                                            <td className="py-2 md:py-3 text-[7px] md:text-[10px] text-slate-500 hidden md:table-cell">{formatDateFr(item.startDate)} → {formatDateFr(item.endDate)}</td>
+                                            <td className="py-2 md:py-3 text-[7px] md:text-[10px] text-slate-500 hidden md:table-cell">{formatDateFr(item.startDate)} → {item.isChantier ? `Fin ${formatDateFr(item.endDate)}` : formatDateFr(item.endDate)}</td>
                                             <td className="py-2 md:py-3"><span className={`${pal.badge} text-[6px] md:text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full`}>{item.label}</span></td>
                                             <td className="py-2 md:py-3 text-right pr-4 md:pr-8 font-black text-indigo-600 text-[8px] md:text-xs">{item.totalBank.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
                                           </tr>
@@ -2365,7 +2894,7 @@ const App = () => {
                       <tfoot className="bg-amber-500 text-white font-black sticky bottom-0 z-10">
                         <tr>
                           <td className="p-1.5 md:p-8 uppercase text-[6px] md:text-[10px] leading-tight tracking-tighter md:tracking-normal">Total prévisionnel</td>
-                          <td className="p-1.5 md:p-8 text-right opacity-90"><div className="leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{previsionData.months.reduce((s,m)=>s+m.urssafGross,0).toLocaleString('fr-FR',{maximumFractionDigits:2})}€</div></td>
+                          <td className="p-1.5 md:p-8 text-right opacity-90"><div className="leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{previsionData.months.reduce((s,m)=>s+m.urssafGross+(m.chantierGross||0),0).toLocaleString('fr-FR',{maximumFractionDigits:2})}€</div></td>
                           <td className="p-1.5 md:p-8 text-right text-amber-100 leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{previsionData.months.reduce((s,m)=>s+m.directNet,0).toLocaleString('fr-FR',{maximumFractionDigits:2})}€</td>
                           <td className="p-1.5 md:p-8 text-right leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{previsionData.months.reduce((s,m)=>s+m.totalBank,0).toLocaleString('fr-FR',{maximumFractionDigits:2})}€</td>
                           <td className="p-1.5 md:p-8 text-right text-amber-200 leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">-{previsionData.months.reduce((s,m)=>s+m.charges,0).toLocaleString('fr-FR',{maximumFractionDigits:2})}€</td>
@@ -2384,7 +2913,7 @@ const App = () => {
                   <table className="w-full text-left min-w-[500px] md:min-w-[700px]" style={{tableLayout:'fixed'}}>
                     <colgroup><col style={{width:'20%'}}/><col style={{width:'12%'}}/><col style={{width:'16%'}}/><col style={{width:'13%'}}/><col style={{width:'11%'}}/><col style={{width:'12%'}}/><col style={{width:'16%'}}/></colgroup>
                     <thead className="bg-slate-50 uppercase text-slate-400 border-b sticky top-0 z-10 shadow-sm text-[6px] md:text-xs tracking-tighter md:tracking-normal">
-                      <tr><th className="p-1 md:p-6">Période</th><th className="p-1 md:p-6 text-right">Brut URSSAF</th><th className="p-1 md:p-6 text-right text-emerald-600">Direct (hors URSSAF)</th><th className="p-1 md:p-6 text-right text-indigo-600">Virement</th><th className="p-1 md:p-6 text-right text-slate-500">Prest.</th><th className="p-1 md:p-6 text-right text-rose-500">Cotis.</th><th className="p-1 md:p-6 text-right font-black">Profit</th></tr>
+                      <tr><th className="p-1 md:p-6">Période</th><th className="p-1 md:p-6 text-right">{filterCAType === 'reservations' ? 'Brut URSSAF' : 'CA Brut'}</th><th className="p-1 md:p-6 text-right text-emerald-600">Direct (hors URSSAF)</th><th className="p-1 md:p-6 text-right text-indigo-600">Virement</th><th className="p-1 md:p-6 text-right text-slate-500">Prest.</th><th className="p-1 md:p-6 text-right text-rose-500">Cotis.</th><th className="p-1 md:p-6 text-right font-black">Profit</th></tr>
                     </thead>
                     <tbody className="divide-y font-bold">
                       {(monthlyRecapData || []).map(([m, d], idx) => {
@@ -2397,7 +2926,7 @@ const App = () => {
                               <td className="p-1 md:p-6 capitalize text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">
                                 <span className="inline-flex items-center gap-1.5"><span className={`w-2 h-2 rounded-full flex-shrink-0 ${pal.dot}`}></span>{isExpanded ? '▾' : '▸'} {formatMonthYear(m)}</span>
                               </td>
-                              <td className="p-1 md:p-6 text-right text-slate-500"><div className="text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{d.urssafGross.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</div></td>
+                              <td className="p-1 md:p-6 text-right text-slate-500"><div className="text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{(d.urssafGross + (d.chantierGross || 0)).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</div></td>
                               <td className="p-1 md:p-6 text-right text-emerald-600 font-black text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{d.directNet > 0 ? `${d.directNet.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€` : '-'}</td>
                               <td className="p-1 md:p-6 text-right text-indigo-600 font-black text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">{d.totalBank.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
                               <td className="p-1 md:p-6 text-right text-slate-500 text-[8px] md:text-sm leading-tight tracking-tighter md:tracking-normal">-{d.charges.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
@@ -2413,10 +2942,10 @@ const App = () => {
                                     </thead>
                                     <tbody className="divide-y divide-white/50">
                                       {monthItems.map((item, i) => (
-                                        <tr key={i} onClick={() => openReservation(item.tenant)} className="cursor-pointer hover:brightness-95 transition-all">
+                                        <tr key={i} onClick={() => { if (!item.isChantier) openReservation(item.tenant); }} className={`hover:brightness-95 transition-all ${!item.isChantier ? 'cursor-pointer' : ''}`}>
                                           <td className="pl-4 md:pl-10 py-2 md:py-3 uppercase text-[7px] md:text-[10px] font-black text-slate-700">{item.propName}</td>
-                                          <td className="py-2 md:py-3 text-[7px] md:text-[10px] font-bold">{item.tenant.name}</td>
-                                          <td className="py-2 md:py-3 text-[7px] md:text-[10px] text-slate-500 hidden md:table-cell">{formatDateFr(item.tenant.startDate)} → {formatDateFr(item.tenant.endDate)}</td>
+                                          <td className="py-2 md:py-3 text-[7px] md:text-[10px] font-bold">{item.isChantier ? (item.chantierOwner === 'anthony' ? 'A' : 'C') : item.tenant.name}</td>
+                                          <td className="py-2 md:py-3 text-[7px] md:text-[10px] text-slate-500 hidden md:table-cell">{item.isChantier ? (item.note || '—') : `${formatDateFr(item.tenant.startDate)} → ${formatDateFr(item.tenant.endDate)}`}</td>
                                           <td className="py-2 md:py-3"><span className={`${pal.badge} text-[6px] md:text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full`}>{item.label}</span></td>
                                           <td className="py-2 md:py-3 text-right pr-4 md:pr-8 font-black text-[8px] md:text-xs">{item.amount.toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
                                         </tr>
@@ -2430,21 +2959,21 @@ const App = () => {
                         );
                       })}
                     </tbody>
-                    <tfoot className="bg-indigo-600 text-white font-black text-[10px] md:text-lg sticky bottom-0 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+                    <tfoot className="font-black text-[10px] md:text-lg sticky bottom-0 z-10 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]" style={{background:'#000000',color:'#FFFFFF'}}>
                       <tr>
                         <td className="p-1.5 md:p-8 uppercase text-[6px] md:text-[10px] leading-tight tracking-tighter md:tracking-normal">TOTAL</td>
-                        <td className="p-1.5 md:p-8 text-right opacity-90"><div className="leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.urssafGross, 0).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</div></td>
+                        <td className="p-1.5 md:p-8 text-right opacity-90"><div className="leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.urssafGross + (d.chantierGross || 0), 0).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</div></td>
                         <td className="p-1.5 md:p-8 text-right text-emerald-300 leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.directNet, 0).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
                         <td className="p-1.5 md:p-8 text-right leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
                         <td className="p-1.5 md:p-8 text-right text-indigo-200 leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">-{monthlyRecapData.reduce((acc, [m, d]) => acc + d.charges, 0).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
                         <td className="p-1.5 md:p-8 text-right text-rose-300 leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">-{monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes, 0).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
-                        <td className="p-1.5 md:p-8 text-right bg-indigo-700/50 leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">{(monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0) - monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes + d.charges, 0)).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
+                        <td className="p-1.5 md:p-8 text-right leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal" style={{color:'#CFA650'}}>{(monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0) - monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes + d.charges, 0)).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
                       </tr>
                     </tfoot>
                   </table>
                 </div>
                 {previsionData.months.length > 0 && (() => {
-                  const tUrssaf  = monthlyRecapData.reduce((a,[,d])=>a+d.urssafGross,0) + previsionData.months.reduce((a,m)=>a+m.urssafGross,0);
+                  const tUrssaf  = monthlyRecapData.reduce((a,[,d])=>a+d.urssafGross+(d.chantierGross||0),0) + previsionData.months.reduce((a,m)=>a+m.urssafGross+(m.chantierGross||0),0);
                   const tDirect  = monthlyRecapData.reduce((a,[,d])=>a+d.directNet,0)   + previsionData.months.reduce((a,m)=>a+m.directNet,0);
                   const tBank    = monthlyRecapData.reduce((a,[,d])=>a+d.totalBank,0)   + previsionData.months.reduce((a,m)=>a+m.totalBank,0);
                   const tCharges = monthlyRecapData.reduce((a,[,d])=>a+d.charges,0)     + previsionData.months.reduce((a,m)=>a+m.charges,0);
@@ -2475,11 +3004,11 @@ const App = () => {
               <div className="bg-white rounded-[24px] md:rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100 mx-2 md:mx-0">
                 <div className="p-3 md:p-5 bg-slate-900 text-white font-black uppercase flex items-center justify-between text-[10px] md:text-xs">
                   <span>Suivi Prestataires</span>
-                  <button onClick={() => selectedExpenseIds.length > 0 && setGroupedPayConfig({ date: new Date().toISOString().split('T')[0] })} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${selectedExpenseIds.length > 0 ? 'bg-blue-500 hover:bg-blue-400 text-white' : 'bg-slate-700 text-slate-500 cursor-not-allowed'}`}>
+                  <button onClick={() => selectedExpenseIds.length > 0 && setGroupedPayConfig({ date: new Date().toISOString().split('T')[0] })} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all" style={selectedExpenseIds.length > 0 ? {background:'#CFA650',color:'#000000'} : {background:'#1f1f1f',color:'#555',cursor:'not-allowed'}}>
                     <CreditCard size={12}/> {selectedExpenseIds.length > 0 ? `Règlement groupé (${selectedExpenseIds.length})` : 'Règlement groupé'}
                   </button>
                 </div>
-                <div className="flex gap-3 p-3 bg-blue-600 border-b border-blue-700">
+                <div className="flex gap-3 p-3 border-b" style={{background:'#111111',borderColor:'#2a2a2a'}}>
                   <select value={filterProvSuivi} onChange={e => setFilterProvSuivi(e.target.value)} className="flex-1 px-3 py-2 bg-white rounded-xl text-xs font-black uppercase outline-none cursor-pointer shadow-sm">
                     <option value="all">Tous prestataires</option>
                     {(availableProviders || []).map(p => <option key={p} value={p}>{p}</option>)}
@@ -2519,25 +3048,217 @@ const App = () => {
                         </tbody>
                     </table>
                 </div>
-                <div className="flex items-center justify-between bg-blue-600 text-white px-4 py-4 md:px-6 md:py-5">
-                  <span className="font-black uppercase text-xs text-blue-200">{(detailedExpenses || []).length} prestation(s)</span>
+                <div className="flex items-center justify-between px-4 py-4 md:px-6 md:py-5" style={{background:'#000000',color:'#FFFFFF'}}>
+                  <span className="font-black uppercase text-xs" style={{color:'#CFA650'}}>{(detailedExpenses || []).length} prestation(s)</span>
                   <span className="font-black text-xl md:text-2xl">{(detailedExpenses || []).reduce((s, e) => s + (e.amount || 0), 0).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</span>
                 </div>
               </div>
             </div>
           </div>
  
+          {/* 6. ONGLET FISCAL */}
+          <div className="flex-none w-full max-w-full overflow-y-auto snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border" style={{WebkitOverflowScrolling:'touch'}}>
+            <div className="max-w-7xl mx-auto pb-32 space-y-6">
+              {(() => {
+                const currentYear = new Date().getFullYear();
+                const p = getFiscalParams(fiscalYear);
+                const fmt = (v) => v >= 1000 ? `${(v/1000).toFixed(1).replace('.0','')}k€` : `${Math.round(v)}€`;
+                const isCurrentYear = fiscalYear === currentYear;
+
+                const saveFiscalParams = async () => {
+                  const vals = {};
+                  Object.keys(FISCAL_DEFAULTS).forEach(k => {
+                    vals[k] = parseFloat(fiscalParamsForm[k]) || FISCAL_DEFAULTS[k];
+                  });
+                  await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'fiscalParams', String(fiscalYear)), vals);
+                  setFiscalParamsEdit(false);
+                };
+
+                const FiscalGauge = ({ label, enc, prev, soft, hard }) => {
+                  const total = enc + prev;
+                  const ref = hard > 0 ? hard : soft;
+                  const pctEnc = ref > 0 ? Math.min(100, (enc/ref)*100) : 0;
+                  const pctTotal = ref > 0 ? Math.min(100, (total/ref)*100) : 0;
+                  const pctSoft = ref > 0 ? Math.min(100, (soft/ref)*100) : 0;
+                  const state = total >= hard ? 'crit' : total >= soft ? 'danger' : enc >= soft*0.85 ? 'warn' : 'ok';
+                  const barColor  = '#D4A000';
+                  const ghostColor= 'rgba(207,166,80,0.38)';
+                  const lblColor  = { ok:'#4a7c59', warn:'#a07830', danger:'#b54a3a', crit:'#8b1a1a' }[state];
+                  return (
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-[10px] font-black uppercase" style={{color:'#6a6050'}}>{label}</span>
+                        <span className="text-[10px] font-bold" style={{color:lblColor}}>
+                          <span style={{color:'#D4A000'}}>{fmt(enc)}</span>{prev > 0 ? <span style={{color:'#CFA650'}}> +{fmt(prev)}</span> : ''} <span style={{color:'#aa9e88'}}>/</span> {fmt(soft)}
+                        </span>
+                      </div>
+                      <div className="relative h-3 rounded-full overflow-hidden" style={{background:'#d8d0b8'}}>
+                        <div className="absolute inset-y-0 left-0 rounded-full transition-all" style={{width:`${pctTotal}%`,background:ghostColor}} />
+                        <div className="absolute inset-y-0 left-0 rounded-full transition-all" style={{width:`${pctEnc}%`,background:barColor}} />
+                        <div className="absolute inset-y-0 w-0.5" style={{left:`${pctSoft}%`,background:'#1a1810',opacity:0.85}} />
+                      </div>
+                      <div className="flex justify-between text-[8px]" style={{color:'#aa9e88'}}>
+                        <span>0€</span><span>{fmt(soft)}{hard !== soft ? ` / ${fmt(hard)}` : ''}</span>
+                      </div>
+                    </div>
+                  );
+                };
+
+                const PField = ({ label, k }) => (
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-slate-400">{label}</label>
+                    <input type="number" className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-right focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      value={fiscalParamsForm[k] ?? ''}
+                      onChange={e => setFiscalParamsForm(f => ({...f, [k]: e.target.value}))} />
+                  </div>
+                );
+
+                return (
+                  <>
+                    {/* HEADER + SÉLECTEUR D'ANNÉE */}
+                    <div className="flex items-center justify-between mx-2 md:mx-0">
+                      <h2 className="text-3xl font-black uppercase">Fiscal</h2>
+                      <div className="flex items-center gap-2 bg-white rounded-2xl shadow border border-slate-100 px-3 py-2" style={{touchAction:'manipulation'}}>
+                        <button onClick={(e) => { e.stopPropagation(); setFiscalYear(y => y - 1); setFiscalParamsEdit(false); setFiscalParamsForm({}); }}
+                          className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 active:bg-slate-200 text-slate-600 font-black text-xl select-none">‹</button>
+                        <span className="text-sm font-black text-slate-800 w-12 text-center select-none">{fiscalYear}</span>
+                        <button onClick={(e) => { e.stopPropagation(); setFiscalYear(y => y + 1); setFiscalParamsEdit(false); setFiscalParamsForm({}); }}
+                          className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 active:bg-slate-200 text-slate-600 font-black text-xl select-none">›</button>
+                      </div>
+                    </div>
+
+                    {!isCurrentYear && (
+                      <div className="mx-2 md:mx-0 bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-[10px] font-bold text-amber-700">
+                        Les jauges CA affichent toujours l'année en cours ({currentYear}). Cette vue permet de configurer les seuils {fiscalYear}.
+                      </div>
+                    )}
+
+                    {/* SEUILS ÉDITABLES */}
+                    <div className="bg-white rounded-[32px] shadow-xl border border-slate-50 mx-2 md:mx-0 overflow-hidden">
+                      <div className="px-6 pt-5 pb-4 flex items-center justify-between border-b border-slate-100">
+                        <div>
+                          <div className="text-sm font-black uppercase">Seuils fiscaux {fiscalYear}</div>
+                          <div className="text-[10px] text-slate-400">Chaque année est sauvegardée indépendamment.</div>
+                        </div>
+                        {fiscalParamsEdit ? (
+                          <div className="flex gap-2">
+                            <button onClick={() => { setFiscalParamsEdit(false); setFiscalParamsForm({}); }}
+                              className="px-4 py-2 rounded-xl text-[10px] font-black uppercase text-slate-400 hover:bg-slate-50">Annuler</button>
+                            <button onClick={saveFiscalParams}
+                              className="px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase">Enregistrer</button>
+                          </div>
+                        ) : (
+                          <button onClick={() => { setFiscalParamsEdit(true); setFiscalParamsForm({...p}); }}
+                            className="px-4 py-2 bg-slate-100 rounded-xl text-[10px] font-black uppercase text-slate-600 hover:bg-slate-200">Modifier</button>
+                        )}
+                      </div>
+                      <div className="p-6 grid md:grid-cols-2 gap-6">
+                        <div className="space-y-3">
+                          <div className="text-[9px] font-black uppercase text-slate-400 tracking-widest">TVA Franchise</div>
+                          {fiscalParamsEdit ? (
+                            <div className="grid grid-cols-2 gap-3">
+                              <PField label="Location — seuil" k="tvaLocationSoft" />
+                              <PField label="Location — tolérance" k="tvaLocationHard" />
+                              <PField label="Réno MO — seuil" k="tvaServicesSoft" />
+                              <PField label="Réno MO — tolérance" k="tvaServicesHard" />
+                              <PField label="Matériaux — seuil" k="tvaVentesSoft" />
+                              <PField label="Matériaux — tolérance" k="tvaVentesHard" />
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              {[['Location meublée', p.tvaLocationSoft, p.tvaLocationHard], ['Rénovation MO', p.tvaServicesSoft, p.tvaServicesHard], ['Matériaux achat-revente', p.tvaVentesSoft, p.tvaVentesHard]].map(([lbl, s, h]) => (
+                                <div key={lbl} className="flex justify-between items-center py-2" style={{borderBottom:'1px solid #d8d0b8'}}>
+                                  <span className="text-[10px] font-bold" style={{color:'#6a6050'}}>{lbl}</span>
+                                  <span className="text-[10px] font-black" style={{color:'#1a1810'}}>{s.toLocaleString('fr-FR')} € / {h.toLocaleString('fr-FR')} €</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="space-y-3">
+                          <div className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Auto-Entrepreneur</div>
+                          {fiscalParamsEdit ? (
+                            <div className="grid grid-cols-2 gap-3">
+                              <PField label="Location" k="aeLocation" />
+                              <PField label="Rénovation MO" k="aeRenovation" />
+                              <PField label="Matériaux" k="aeMateriaux" />
+                              <PField label="Global" k="aeGlobal" />
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              {[['Location meublée', p.aeLocation], ['Rénovation MO', p.aeRenovation], ['Matériaux achat-revente', p.aeMateriaux], ['CA Global', p.aeGlobal]].map(([lbl, s]) => (
+                                <div key={lbl} className="flex justify-between items-center py-2" style={{borderBottom:'1px solid #d8d0b8'}}>
+                                  <span className="text-[10px] font-bold" style={{color:'#6a6050'}}>{lbl}</span>
+                                  <span className="text-[10px] font-black" style={{color:'#1a1810'}}>{s.toLocaleString('fr-FR')} €</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* JAUGES PAR PERSONNE — toujours année courante */}
+                    {isCurrentYear && ['anthony','camille'].map(owner => {
+                      const d = fiscalCAByOwner[owner];
+                      const totalEnc = d.locEnc + d.prestaEnc + d.matEnc;
+                      const totalPrev = d.locPrev + d.prestaPrev + d.matPrev;
+                      const ownerColor = owner === 'anthony' ? 'bg-blue-600' : 'bg-emerald-600';
+                      return (
+                        <div key={owner} className="bg-white rounded-[32px] shadow-xl border border-slate-50 mx-2 md:mx-0 overflow-hidden">
+                          <div className="px-6 pt-5 pb-4 flex items-center gap-3 border-b border-slate-100">
+                            <span className={`w-8 h-8 rounded-full ${ownerColor} text-white flex items-center justify-center text-[11px] font-black`}>{owner === 'anthony' ? 'A' : 'C'}</span>
+                            <div>
+                              <div className="text-sm font-black capitalize">{owner === 'anthony' ? 'Anthony' : 'Camille'}</div>
+                              <div className="text-[10px] font-bold" style={{color:'#8a7e6a'}}>CA encaissé <span style={{color:'#D4A000'}}>{fmt(totalEnc)}</span> · Prévisionnel <span style={{color:'#CFA650'}}>+{fmt(totalPrev)}</span></div>
+                            </div>
+                          </div>
+                          <div className="p-6 grid md:grid-cols-2 gap-6">
+                            <div className="space-y-4">
+                              <div className="text-[9px] font-black uppercase tracking-widest flex items-center gap-2" style={{color:'#8a7e6a'}}><span className="w-4 h-0.5 inline-block" style={{background:'#c8bc9e'}}/> TVA Franchise</div>
+                              <FiscalGauge label="Location meublée" enc={d.locEnc} prev={d.locPrev} soft={p.tvaLocationSoft} hard={p.tvaLocationHard} />
+                              <FiscalGauge label="Rénovation MO" enc={d.prestaEnc} prev={d.prestaPrev} soft={p.tvaServicesSoft} hard={p.tvaServicesHard} />
+                              <FiscalGauge label="Matériaux achat-revente" enc={d.matEnc} prev={d.matPrev} soft={p.tvaVentesSoft} hard={p.tvaVentesHard} />
+                              <div className="text-[9px] rounded-xl p-2.5" style={{color:'#6a6050',background:'rgba(207,166,80,0.1)',border:'1px solid rgba(207,166,80,0.2)'}}>Dépassement du seuil = obligation TVA. La barre fantôme inclut le prévisionnel.</div>
+                            </div>
+                            <div className="space-y-4">
+                              <div className="text-[9px] font-black uppercase tracking-widest flex items-center gap-2" style={{color:'#8a7e6a'}}><span className="w-4 h-0.5 inline-block" style={{background:'#c8bc9e'}}/> Auto-Entrepreneur</div>
+                              <FiscalGauge label="Location meublée" enc={d.locEnc} prev={d.locPrev} soft={p.aeLocation} hard={p.aeLocation} />
+                              <FiscalGauge label="Rénovation MO" enc={d.prestaEnc} prev={d.prestaPrev} soft={p.aeRenovation} hard={p.aeRenovation} />
+                              <FiscalGauge label="Matériaux achat-revente" enc={d.matEnc} prev={d.matPrev} soft={p.aeMateriaux} hard={p.aeMateriaux} />
+                              <FiscalGauge label="CA Global" enc={totalEnc} prev={totalPrev} soft={p.aeGlobal} hard={p.aeGlobal} />
+                              <div className="text-[9px] rounded-xl p-2.5" style={{color:'#6a6050',background:'rgba(207,166,80,0.1)',border:'1px solid rgba(207,166,80,0.2)'}}>Services ≤ {p.aeRenovation.toLocaleString('fr-FR')} € ET global ≤ {p.aeGlobal.toLocaleString('fr-FR')} €.</div>
+                            </div>
+                          </div>
+                          <div className="px-6 pb-5 grid grid-cols-3 gap-3">
+                            {[['Location', d.locEnc, d.locPrev], ['Rénovation MO', d.prestaEnc, d.prestaPrev], ['Matériaux', d.matEnc, d.matPrev]].map(([label, enc, prev]) => (
+                              <div key={label} className="rounded-2xl p-3 text-center" style={{background:'rgba(207,166,80,0.08)',border:'1px solid rgba(207,166,80,0.2)'}}>
+                                <div className="text-[8px] font-black uppercase mb-1" style={{color:'#8a7e6a'}}>{label}</div>
+                                <div className="text-sm font-black" style={{color:'#D4A000'}}>{fmt(enc)}</div>
+                                {prev > 0 && <div className="text-[9px]" style={{color:'#CFA650'}}>+{fmt(prev)} prev.</div>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+
           {/* 5. ONGLET SETTINGS */}
           <div className="flex-none w-full max-w-full overflow-y-auto snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border" style={{WebkitOverflowScrolling:'touch'}}>
             <div className="max-w-7xl mx-auto pb-32 space-y-10">
               <h2 className="text-3xl font-black uppercase mx-2 md:mx-0">Paramètres</h2>
               <div className="bg-white p-8 rounded-[40px] border-2 border-dashed shadow-xl flex flex-col items-center justify-center text-center mx-2 md:mx-0">
-                <UploadCloud size={40} className="text-blue-600 mb-4"/>
+                <UploadCloud size={40} className="mb-4" style={{color:'#CFA650'}}/>
                 <h3 className="text-xl font-black uppercase">Importation de Réservations (CSV)</h3>
                 <p className="text-xs text-slate-400 mt-2 mb-6">Sélectionnez la plateforme source et collez votre export CSV.</p>
                 <div className="flex items-center gap-4 bg-slate-50 p-2 rounded-2xl shadow-inner border border-slate-100">
-                  <label className={`flex-1 py-3 px-6 rounded-xl font-black uppercase text-[10px] cursor-pointer transition-all ${importSource === 'Airbnb' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-200'}`}><input type="radio" value="Airbnb" checked={importSource === 'Airbnb'} onChange={e => setImportSource(e.target.value)} className="hidden" /> Airbnb</label>
-                  <label className={`flex-1 py-3 px-6 rounded-xl font-black uppercase text-[10px] cursor-pointer transition-all ${importSource === 'Booking' ? 'bg-blue-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-200'}`}><input type="radio" value="Booking" checked={importSource === 'Booking'} onChange={e => setImportSource(e.target.value)} className="hidden" /> Booking</label>
+                  <label className="flex-1 py-3 px-6 rounded-xl font-black uppercase text-[10px] cursor-pointer transition-all" style={importSource === 'Airbnb' ? {background:'#CFA650',color:'#000000'} : {color:'#6b7280'}}><input type="radio" value="Airbnb" checked={importSource === 'Airbnb'} onChange={e => setImportSource(e.target.value)} className="hidden" /> Airbnb</label>
+                  <label className="flex-1 py-3 px-6 rounded-xl font-black uppercase text-[10px] cursor-pointer transition-all" style={importSource === 'Booking' ? {background:'#CFA650',color:'#000000'} : {color:'#6b7280'}}><input type="radio" value="Booking" checked={importSource === 'Booking'} onChange={e => setImportSource(e.target.value)} className="hidden" /> Booking</label>
                 </div>
                 <textarea value={importText} onChange={(e)=>setImportText(e.target.value)} placeholder={`Collez les lignes de votre export ${importSource} ici...`} className="w-full mt-6 p-4 bg-slate-50 border rounded-3xl min-h-[150px] font-mono text-[10px] outline-none" />
                 {importStatus && <p className="mt-4 font-black text-emerald-600 uppercase">{importStatus}</p>}
@@ -2565,14 +3286,47 @@ const App = () => {
                 </div>
               </div>
               
+              {/* GEMINI API KEY */}
+              <div className="bg-white p-6 rounded-[32px] shadow-lg mx-2 md:mx-0 mt-4 border-2 border-dashed" style={{borderColor:'#CFA650'}}>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                  <div>
+                    <h3 className="text-[10px] font-black uppercase mb-1" style={{color:'#CFA650'}}>IA — Scan de captures d'écran</h3>
+                    <p className="text-[9px] text-slate-400 font-bold">Clé API Google Gemini pour remplir automatiquement le formulaire depuis une capture Airbnb / Booking / email.</p>
+                    <p className="text-[9px] mt-1 font-bold" style={{color:'#CFA650'}}>Gratuit sur aistudio.google.com → Get API Key</p>
+                  </div>
+                </div>
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="password"
+                    defaultValue={localStorage.getItem('gemini_api_key') || ''}
+                    placeholder="AIza..."
+                    className="flex-1 p-3 bg-slate-50 border rounded-2xl text-[10px] font-mono outline-none"
+                    id="gemini-key-input"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const val = document.getElementById('gemini-key-input').value.trim();
+                      if (val) { localStorage.setItem('gemini_api_key', val); alert('Clé sauvegardée !'); }
+                      else { localStorage.removeItem('gemini_api_key'); alert('Clé supprimée.'); }
+                    }}
+                    className="px-5 py-3 rounded-2xl font-black text-[10px] uppercase shadow-md transition-colors"
+                    style={{background:'#CFA650',color:'#000000'}}
+                  >
+                    Sauvegarder
+                  </button>
+                </div>
+                {localStorage.getItem('gemini_api_key') && <p className="text-[9px] text-emerald-600 font-black mt-2">✅ Clé configurée</p>}
+              </div>
+
               {/* GOOGLE AGENDA */}
               <div className="bg-white p-6 rounded-[32px] shadow-lg mx-2 md:mx-0 mt-4 border-2 border-blue-50">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                   <div>
-                    <h3 className="text-[10px] font-black uppercase text-blue-600 mb-1">Google Agenda</h3>
+                    <h3 className="text-[10px] font-black uppercase mb-1" style={{color:'#CFA650'}}>Google Agenda</h3>
                     <p className="text-[9px] text-slate-400 font-bold">{googleConnected ? "✅ Connecté — synchronisation automatique active" : "❌ Non connecté — cliquez pour autoriser"}</p>
                   </div>
-                  <button onClick={googleConnected ? signOutGoogle : signInGoogle} className={"px-5 py-3 rounded-2xl font-black text-[10px] uppercase shadow-md transition-colors " + (googleConnected ? "bg-slate-100 text-slate-500 hover:bg-rose-100 hover:text-rose-600" : "bg-blue-600 text-white hover:bg-blue-700")}>
+                  <button onClick={googleConnected ? signOutGoogle : signInGoogle} className="px-5 py-3 rounded-2xl font-black text-[10px] uppercase shadow-md transition-colors" style={googleConnected ? {background:'#f1f5f9',color:'#64748b'} : {background:'#CFA650',color:'#000000'}}>
                     {googleConnected ? "Déconnecter" : "Connecter Google"}
                   </button>
                 </div>
@@ -2689,8 +3443,24 @@ const App = () => {
       {/* MODALE DE RESERVATION SECURISEE */}
       {isModalOpen && formData && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
-          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={closeModal}></div>
+          <div className="absolute inset-0 bg-slate-900/80" onClick={() => { if (formData?.name || formData?.startDate || formData?.grossAmount) { setConfirmCloseModal(true); } else { closeModal(); } }}></div>
           <div className="bg-white rounded-[40px] md:rounded-[60px] shadow-2xl w-full max-w-3xl max-h-[95vh] flex flex-col border border-slate-100 overflow-hidden relative z-10">
+            {confirmCloseModal && (
+              <div className="absolute inset-0 z-30 flex items-center justify-center rounded-[40px] md:rounded-[60px] overflow-hidden">
+                <div className="absolute inset-0 bg-black/50"></div>
+                <div className="relative z-10 p-7 rounded-3xl shadow-2xl flex flex-col items-center gap-5 text-center mx-4 max-w-xs" style={{background:'#f8f4e8',border:'1px solid #d8d0b8'}}>
+                  <AlertTriangle size={30} style={{color:'#CFA650'}}/>
+                  <div>
+                    <p className="font-black text-sm uppercase tracking-tight mb-1" style={{color:'#1a1810'}}>Fermer sans enregistrer ?</p>
+                    <p className="text-xs font-medium" style={{color:'#8a7e6a'}}>Les données saisies seront perdues.</p>
+                  </div>
+                  <div className="flex flex-col gap-2 w-full">
+                    <button onClick={() => setConfirmCloseModal(false)} className="w-full py-3 rounded-2xl font-black text-xs uppercase tracking-widest" style={{background:'#CFA650',color:'#000'}}>Continuer à remplir</button>
+                    <button onClick={() => { setConfirmCloseModal(false); closeModal(); }} className="w-full py-3 rounded-2xl font-black text-xs uppercase tracking-widest" style={{background:'#e6dfc8',color:'#6a6050'}}>Fermer sans enregistrer</button>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="p-6 md:p-10 border-b flex justify-between items-center bg-white sticky top-0 z-10">
                <div className="flex items-center gap-4 text-blue-600 font-black uppercase leading-none"><CalendarCheck size={28} /> Détails</div>
                <div className="flex items-center gap-2">
@@ -2701,6 +3471,37 @@ const App = () => {
                </div>
             </div>
             <form onSubmit={saveRes} className="p-6 md:p-10 space-y-8 overflow-y-auto flex-1 custom-scrollbar text-xs touch-manipulation" style={{ touchAction: 'manipulation' }}>
+
+              {/* SCAN CAPTURE D'ÉCRAN */}
+              {!editingResId && (
+                <div>
+                  <input
+                    id="screenshot-upload"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => { if (e.target.files?.[0]) { handleScreenshotScan(e.target.files[0]); e.target.value = ''; } }}
+                  />
+                  <label
+                    htmlFor="screenshot-upload"
+                    className="flex items-center justify-center gap-3 w-full py-4 rounded-[24px] border-2 border-dashed cursor-pointer transition-all"
+                    style={{ borderColor: '#CFA650', background: 'rgba(207,166,80,0.05)', color: '#CFA650' }}
+                  >
+                    {isScanning ? (
+                      <>
+                        <svg className="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                        <span className="font-black text-[10px] uppercase tracking-widest">Analyse en cours…</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                        <span className="font-black text-[10px] uppercase tracking-widest">Importer une capture d'écran</span>
+                      </>
+                    )}
+                  </label>
+                  {scanError && <p className="mt-2 text-[10px] font-bold text-rose-600 text-center">{scanError}</p>}
+                </div>
+              )}
 
               {/* ATTRIBUTION PROPRIÉTAIRE */}
               <div className={`flex items-center justify-between p-4 rounded-[24px] border-2 ${!formData.owner ? 'border-rose-300 bg-rose-50' : formData.owner === 'anthony' ? 'border-blue-200 bg-blue-50' : 'border-emerald-200 bg-emerald-50'}`}>
@@ -3062,6 +3863,252 @@ const App = () => {
             } catch (e) {}
           }}
         />
+      )}
+
+      {/* MODAL CHANTIER */}
+      {chantierModal && (
+        <div className="fixed inset-0 z-[150] flex items-end md:items-center justify-center bg-slate-900/60 p-0 md:p-4" onClick={e=>{ if(e.target===e.currentTarget){ if(chantierFormData.nom||chantierFormData.prenom||chantierFormData.montantPrestation){ setConfirmCloseChantier(true); } else { closeChantierModal(); } } }}>
+          <div className="bg-white w-full max-w-lg max-h-[92dvh] flex flex-col rounded-t-[32px] md:rounded-[32px] overflow-hidden shadow-2xl" style={{position:'relative'}}>
+            {confirmCloseChantier && (
+              <div className="absolute inset-0 z-30 flex items-center justify-center rounded-t-[32px] md:rounded-[32px] overflow-hidden">
+                <div className="absolute inset-0 bg-black/50"></div>
+                <div className="relative z-10 p-7 rounded-3xl shadow-2xl flex flex-col items-center gap-5 text-center mx-4 max-w-xs" style={{background:'#f8f4e8',border:'1px solid #d8d0b8'}}>
+                  <AlertTriangle size={30} style={{color:'#CFA650'}}/>
+                  <div>
+                    <p className="font-black text-sm uppercase tracking-tight mb-1" style={{color:'#1a1810'}}>Fermer sans enregistrer ?</p>
+                    <p className="text-xs font-medium" style={{color:'#8a7e6a'}}>Les données saisies seront perdues.</p>
+                  </div>
+                  <div className="flex flex-col gap-2 w-full">
+                    <button onClick={() => setConfirmCloseChantier(false)} className="w-full py-3 rounded-2xl font-black text-xs uppercase tracking-widest" style={{background:'#CFA650',color:'#000'}}>Continuer à remplir</button>
+                    <button onClick={() => { setConfirmCloseChantier(false); closeChantierModal(); }} className="w-full py-3 rounded-2xl font-black text-xs uppercase tracking-widest" style={{background:'#e6dfc8',color:'#6a6050'}}>Fermer sans enregistrer</button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0">
+              <h3 className="font-black text-sm uppercase tracking-widest">{chantierModal.mode==='new'?'Nouveau chantier':`${chantierFormData.prenom} ${chantierFormData.nom}`}</h3>
+              <button onClick={closeChantierModal} className="text-slate-400 hover:text-slate-800 transition-colors text-xl leading-none">✕</button>
+            </div>
+
+            {/* Scroll body */}
+            <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+              {/* Nom / Prénom */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Prénom</label>
+                  <input value={chantierFormData.prenom} onChange={e=>setChantierFormData(f=>({...f,prenom:e.target.value}))} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-blue-500" placeholder="Jean"/>
+                </div>
+                <div>
+                  <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Nom</label>
+                  <input value={chantierFormData.nom} onChange={e=>setChantierFormData(f=>({...f,nom:e.target.value}))} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-blue-500" placeholder="Dupont"/>
+                </div>
+              </div>
+
+              {/* Owner */}
+              <div>
+                <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Pour qui</label>
+                <div className="flex gap-2">
+                  {[['anthony','A','bg-blue-600'],['camille','C','bg-emerald-600']].map(([o,badge,bg])=>(
+                    <button key={o} onClick={()=>setChantierFormData(f=>({...f,owner:o}))} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-2xl border-2 font-black text-xs uppercase transition-all ${chantierFormData.owner===o?`${bg} text-white border-transparent shadow`:'border-slate-200 text-slate-400 hover:border-slate-300'}`}>
+                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] ${chantierFormData.owner===o?'bg-white/20 text-white':'bg-slate-100'}`}>{badge}</span>
+                      {o.charAt(0).toUpperCase()+o.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Statut */}
+              <div>
+                <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Statut</label>
+                <div className="flex gap-2">
+                  {[['devis','Devis'],['en_cours','En cours'],['termine','Terminé']].map(([s,l])=>(
+                    <button key={s} onClick={()=>setChantierFormData(f=>({...f,statut:s}))} className={`flex-1 py-2 rounded-xl border-2 font-black text-[10px] uppercase transition-all ${chantierFormData.statut===s?'bg-slate-900 text-white border-transparent':'border-slate-200 text-slate-500 hover:border-slate-300'}`}>{l}</button>
+                  ))}
+                </div>
+                {chantierFormData.statut==='devis' && (
+                  <label className="flex items-center gap-2.5 mt-3 cursor-pointer select-none">
+                    <input type="checkbox" checked={!!chantierFormData.inclurePrevisionnel} onChange={e=>setChantierFormData(f=>({...f,inclurePrevisionnel:e.target.checked}))} className="w-4 h-4 rounded accent-blue-600"/>
+                    <span className="text-[10px] font-black uppercase text-slate-500">Inclure dans le prévisionnel</span>
+                  </label>
+                )}
+              </div>
+
+              {/* Dates */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Date démarrage</label>
+                  <input type="date" value={chantierFormData.dateDebut} onChange={e=>setChantierFormData(f=>({...f,dateDebut:e.target.value}))} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-blue-500"/>
+                </div>
+                <div>
+                  <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Date fin prévue</label>
+                  <input type="date" value={chantierFormData.dateFin} onChange={e=>setChantierFormData(f=>({...f,dateFin:e.target.value}))} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-blue-500"/>
+                </div>
+              </div>
+
+              <hr className="border-slate-100"/>
+
+              {/* Montants */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Devis / Montants</label>
+                  {chantierModal.mode==='edit' && <span className="text-[9px] font-bold flex items-center gap-1" style={{color:'#CFA650'}}>✏ Modifiable</span>}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl p-3" style={{background:'rgba(207,166,80,0.08)',border:'1px solid rgba(207,166,80,0.25)'}}>
+                    <div className="text-[8px] font-black uppercase mb-2" style={{color:'#CFA650'}}>● Prestation (MO)</div>
+                    <input type="number" min="0" step="100" value={chantierFormData.montantPrestation} onChange={e=>setChantierFormData(f=>({...f,montantPrestation:e.target.value}))} className="w-full px-2 py-1.5 rounded-xl text-sm font-bold outline-none" style={{background:'rgba(255,255,255,0.7)',border:'1px solid rgba(207,166,80,0.4)',color:'#1a1810'}} placeholder="0"/>
+                    <div className="text-[8px] mt-1 font-medium" style={{color:'#aa9e88'}}>URSSAF 21,2%</div>
+                  </div>
+                  <div className="rounded-2xl p-3" style={{background:'rgba(207,166,80,0.05)',border:'1px solid rgba(207,166,80,0.2)'}}>
+                    <div className="text-[8px] font-black uppercase mb-2" style={{color:'#a07830'}}>● Matériaux</div>
+                    <input type="number" min="0" step="100" value={chantierFormData.montantMateriaux} onChange={e=>setChantierFormData(f=>({...f,montantMateriaux:e.target.value}))} className="w-full px-2 py-1.5 rounded-xl text-sm font-bold outline-none" style={{background:'rgba(255,255,255,0.7)',border:'1px solid rgba(207,166,80,0.3)',color:'#1a1810'}} placeholder="0"/>
+                    <div className="text-[8px] mt-1 font-medium" style={{color:'#aa9e88'}}>URSSAF 12,3%</div>
+                  </div>
+                </div>
+                {(parseFloat(chantierFormData.montantPrestation)||0)+(parseFloat(chantierFormData.montantMateriaux)||0)>0 && (
+                  <div className="mt-2 flex justify-between items-center bg-slate-50 rounded-2xl px-4 py-2.5">
+                    <span className="text-[10px] font-black uppercase text-slate-500">Total chantier</span>
+                    <span className="font-black text-lg">{((parseFloat(chantierFormData.montantPrestation)||0)+(parseFloat(chantierFormData.montantMateriaux)||0)).toLocaleString('fr-FR',{maximumFractionDigits:0})}€</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Progression encaissements (si chantier existant) */}
+              {chantierModal.mode==='edit' && (() => {
+                const t = computeChantierTotals(chantierFormData);
+                if (t.total === 0) return null;
+                const pctP = t.totalPresta>0?Math.min(100,Math.round(t.encPresta/t.totalPresta*100)):0;
+                const pctM = t.totalMat>0?Math.min(100,Math.round(t.encMat/t.totalMat*100)):0;
+                return (
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                    {t.totalPresta>0&&<div>
+                      <div className="flex justify-between text-[9px] font-black uppercase mb-1"><span className="text-violet-600">● Prestation</span><span className="text-violet-600">{pctP}%</span></div>
+                      <div className="h-2 bg-slate-200 rounded-full overflow-hidden mb-1"><div className="h-full bg-violet-500 rounded-full" style={{width:`${pctP}%`}}/></div>
+                      <div className="flex justify-between text-[9px] font-bold text-slate-500"><span>{t.encPresta.toLocaleString('fr-FR',{maximumFractionDigits:0})}€ / {t.totalPresta.toLocaleString('fr-FR',{maximumFractionDigits:0})}€</span><span className={t.restePresta===0?'text-emerald-600':'text-rose-500'}>{t.restePresta===0?'✓ Soldé':'Reste '+t.restePresta.toLocaleString('fr-FR',{maximumFractionDigits:0})+'€'}</span></div>
+                    </div>}
+                    {t.totalPresta>0&&t.totalMat>0&&<div className="border-t border-slate-200"/>}
+                    {t.totalMat>0&&<div>
+                      <div className="flex justify-between text-[9px] font-black uppercase mb-1"><span className="text-amber-600">● Matériaux</span><span className="text-amber-600">{pctM}%</span></div>
+                      <div className="h-2 bg-slate-200 rounded-full overflow-hidden mb-1"><div className="h-full bg-amber-400 rounded-full" style={{width:`${pctM}%`}}/></div>
+                      <div className="flex justify-between text-[9px] font-bold text-slate-500"><span>{t.encMat.toLocaleString('fr-FR',{maximumFractionDigits:0})}€ / {t.totalMat.toLocaleString('fr-FR',{maximumFractionDigits:0})}€</span><span className={t.resteMat===0?'text-emerald-600':'text-rose-500'}>{t.resteMat===0?'✓ Soldé':'Reste '+t.resteMat.toLocaleString('fr-FR',{maximumFractionDigits:0})+'€'}</span></div>
+                    </div>}
+                    <div className="border-t border-slate-200 pt-2 flex justify-between items-baseline">
+                      <span className="text-[10px] font-black uppercase text-slate-400">Total global · {t.pct}%</span>
+                      <div className="text-right">
+                        <div className="font-black">{t.enc.toLocaleString('fr-FR',{maximumFractionDigits:0})}€ / {t.total.toLocaleString('fr-FR',{maximumFractionDigits:0})}€</div>
+                        <div className={`text-[10px] font-bold ${t.reste===0?'text-emerald-600':'text-rose-500'}`}>{t.reste===0?'✓ Entièrement soldé':'Reste à recevoir : '+t.reste.toLocaleString('fr-FR',{maximumFractionDigits:0})+'€'}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <hr className="border-slate-100"/>
+
+              {/* Encaissements */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Encaissements ({(chantierFormData.encaissements||[]).length})</span>
+                  <button onClick={()=>setChantierAddPay(p=>({...p,open:!p.open,montant:'',note:''}))} className="px-3 py-1 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-500 rounded-xl text-[9px] font-black uppercase transition-all border border-slate-200">
+                    {chantierAddPay.open?'Annuler':'+ Ajouter'}
+                  </button>
+                </div>
+
+                {chantierAddPay.open && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-3 space-y-3">
+                    <div className="flex gap-2">
+                      {[['prestation','Prestation','text-violet-600 border-violet-300 bg-violet-50'],['materiaux','Matériaux','text-amber-600 border-amber-300 bg-amber-50']].map(([type,label,activeCls])=>(
+                        <button key={type} onClick={()=>setChantierAddPay(p=>({...p,type}))} className={`flex-1 py-2 rounded-xl border-2 text-[10px] font-black uppercase transition-all ${chantierAddPay.type===type?activeCls:'border-slate-200 text-slate-400'}`}>{label}</button>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[8px] font-black uppercase text-slate-400 mb-1">Montant</label>
+                        <input type="number" min="0" step="100" value={chantierAddPay.montant} onChange={e=>setChantierAddPay(p=>({...p,montant:e.target.value}))} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-blue-500" placeholder="2000"/>
+                      </div>
+                      <div>
+                        <label className="block text-[8px] font-black uppercase text-slate-400 mb-1">Date</label>
+                        <input type="date" value={chantierAddPay.date||todayStr} onChange={e=>setChantierAddPay(p=>({...p,date:e.target.value}))} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-blue-500"/>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[8px] font-black uppercase text-slate-400 mb-1">Note (optionnel)</label>
+                      <input value={chantierAddPay.note} onChange={e=>setChantierAddPay(p=>({...p,note:e.target.value}))} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none focus:border-blue-500" placeholder="Acompte, solde…"/>
+                    </div>
+                    <button onClick={async()=>{
+                      const montant = parseFloat(chantierAddPay.montant)||0;
+                      const date = chantierAddPay.date||todayStr;
+                      if (!montant) return;
+                      const newEnc = { id: Math.random().toString(36).slice(2,10), date, montant, type: chantierAddPay.type, note: chantierAddPay.note||'' };
+                      const updated = { ...chantierFormData, encaissements: [...(chantierFormData.encaissements||[]), newEnc] };
+                      setChantierFormData(updated);
+                      setChantierAddPay(p=>({...p,open:false,montant:'',note:''}));
+                      if (chantierModal.mode==='edit') {
+                        try { await setDoc(doc(db,'artifacts',appId,'public','data','chantiers',chantierModal.id),{encaissements:updated.encaissements},{merge:true}); } catch(e){}
+                      }
+                    }} className="w-full py-2.5 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all">Valider l'encaissement</button>
+                  </div>
+                )}
+
+                {(chantierFormData.encaissements||[]).length===0 ? (
+                  <div className="text-center py-4 text-slate-400 text-xs">Aucun encaissement — le reste est le total du chantier</div>
+                ) : (
+                  <div className="space-y-2">
+                    {[...(chantierFormData.encaissements||[])].reverse().map(enc=>(
+                      <div key={enc.id} className="flex items-center gap-3 bg-slate-50 rounded-2xl px-4 py-3 border border-slate-100">
+                        <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${enc.type==='prestation'?'bg-violet-500':'bg-amber-400'}`}/>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-black text-sm">{(parseFloat(enc.montant)||0).toLocaleString('fr-FR',{maximumFractionDigits:0})}€</div>
+                          <div className="text-[9px] text-slate-400 font-bold uppercase">{enc.type==='prestation'?'Prestation':'Matériaux'} · {enc.date?enc.date.split('-').reverse().join('/'):''}{enc.note?` · ${enc.note}`:''}</div>
+                        </div>
+                        <button onClick={async(e)=>{
+                          e.stopPropagation();
+                          const updated = {...chantierFormData, encaissements:(chantierFormData.encaissements||[]).filter(x=>x.id!==enc.id)};
+                          setChantierFormData(updated);
+                          if (chantierModal.mode==='edit') {
+                            try { await setDoc(doc(db,'artifacts',appId,'public','data','chantiers',chantierModal.id),{encaissements:updated.encaissements},{merge:true}); } catch(e){}
+                          }
+                        }} className="text-slate-300 hover:text-rose-500 transition-colors text-base font-black leading-none">✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex gap-3 px-6 py-4 border-t flex-shrink-0">
+              {chantierModal.mode==='edit' && (
+                <button onClick={async()=>{
+                  if (!window.confirm(`Supprimer le chantier de ${chantierFormData.prenom} ${chantierFormData.nom} ?`)) return;
+                  try { await deleteDoc(doc(db,'artifacts',appId,'public','data','chantiers',chantierModal.id)); } catch(e){}
+                  closeChantierModal();
+                }} className="px-4 py-3 bg-rose-50 text-rose-600 rounded-2xl text-[10px] font-black uppercase hover:bg-rose-100 transition-colors">Supprimer</button>
+              )}
+              <button onClick={async()=>{
+                if (!chantierFormData.prenom.trim()||!chantierFormData.nom.trim()) { alert('Prénom et nom requis'); return; }
+                const data = {
+                  nom: chantierFormData.nom.trim(), prenom: chantierFormData.prenom.trim(),
+                  owner: chantierFormData.owner, statut: chantierFormData.statut,
+                  dateDebut: chantierFormData.dateDebut, dateFin: chantierFormData.dateFin,
+                  montantPrestation: parseFloat(chantierFormData.montantPrestation)||0,
+                  montantMateriaux: parseFloat(chantierFormData.montantMateriaux)||0,
+                  encaissements: chantierFormData.encaissements||[],
+                  inclurePrevisionnel: chantierFormData.statut==='devis' ? !!chantierFormData.inclurePrevisionnel : false,
+                };
+                try {
+                  if (chantierModal.mode==='edit') {
+                    await setDoc(doc(db,'artifacts',appId,'public','data','chantiers',chantierModal.id),data,{merge:true});
+                  } else {
+                    await addDoc(collection(db,'artifacts',appId,'public','data','chantiers'),data);
+                  }
+                } catch(e){}
+                closeChantierModal();
+              }} className="flex-1 py-3 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all">{chantierModal.mode==='new'?'Créer le chantier':'Enregistrer'}</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
