@@ -221,6 +221,7 @@ const App = () => {
           parts: [
             ...imageParts,
             { text: `Tu es un assistant qui extrait des informations de réservation depuis des captures d'écran (Airbnb, Booking, Abritel, email, SMS...).
+Aujourd'hui nous sommes le ${new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}.
 Analyse ${fileList.length > 1 ? 'ces ' + fileList.length + ' images (elles concernent toutes la même réservation)' : 'cette image'} et retourne UNIQUEMENT un objet JSON valide avec ces champs (null si absent) :
 {
   "name": "prénom et nom du voyageur",
@@ -235,6 +236,13 @@ Analyse ${fileList.length > 1 ? 'ces ' + fileList.length + ' images (elles conce
   "listingName": "nom exact du logement/annonce tel qu'affiché sur la plateforme",
   "comment": "nombre de voyageurs uniquement + requêtes spéciales + animaux + heure d'arrivée si précisée + remarques utiles pour l'hôte. Ne pas mettre le nombre de nuits ni le nombre de logements."
 }
+
+RÈGLE IMPORTANTE pour les dates (startDate et endDate) :
+Si l'année n'est pas visible sur la capture, détermine-la ainsi :
+- Si le mois de la réservation est >= au mois actuel → utilise l'année en cours
+- Si le mois de la réservation est < au mois actuel → utilise l'année suivante
+Exemples (aujourd'hui = novembre) : réservation en septembre → c'était cette année ou l'an prochain ? Mois 9 < mois 11 → année suivante. Réservation en décembre → mois 12 >= mois 11 → année en cours.
+Ne jamais inventer une année passée si elle n'est pas explicitement écrite.
 
 RÈGLE IMPORTANTE pour le champ "grossAmount" sur Airbnb :
 Si tu vois "Frais de chambre" (ou "Frais de chambre pour X nuit(s)") ET un "Ajustement du tarif" (ou "Ajustement de prix" ou "Remise"), alors :
