@@ -234,7 +234,7 @@ Analyse ${fileList.length > 1 ? 'ces ' + fileList.length + ' images (elles conce
   "cityTax": taxe de séjour en euros ou null,
   "platform": "Airbnb" ou "Booking" ou "Abritel" ou "En direct" ou null,
   "listingName": "nom exact du logement/annonce tel qu'affiché sur la plateforme",
-  "comment": "nombre de voyageurs uniquement + requêtes spéciales + animaux + heure d'arrivée si précisée + remarques utiles pour l'hôte. Ne pas mettre le nombre de nuits ni le nombre de logements."
+  "comment": "nombre total de voyageurs (IMPORTANT : si tu vois '1 personne + 3 adultes' ou '+3 adultes' c'est 4 au total — additionne le réservant et les invités) + requêtes spéciales + animaux + heure d'arrivée si précisée + remarques utiles pour l'hôte. Ne pas mettre le nombre de nuits ni le nombre de logements."
 }
 
 RÈGLE IMPORTANTE pour les dates (startDate et endDate) :
