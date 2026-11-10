@@ -235,6 +235,13 @@ Analyse ${fileList.length > 1 ? 'ces ' + fileList.length + ' images (elles conce
   "listingName": "nom exact du logement/annonce tel qu'affiché sur la plateforme",
   "comment": "nombre de voyageurs uniquement + requêtes spéciales + animaux + heure d'arrivée si précisée + remarques utiles pour l'hôte. Ne pas mettre le nombre de nuits ni le nombre de logements."
 }
+
+RÈGLE IMPORTANTE pour le champ "grossAmount" sur Airbnb :
+Si tu vois "Frais de chambre" (ou "Frais de chambre pour X nuit(s)") ET un "Ajustement du tarif" (ou "Ajustement de prix" ou "Remise"), alors :
+grossAmount = Frais de chambre − Ajustement du tarif
+Exemple : Frais de chambre 124 € et Ajustement −10 € → grossAmount = 114 €
+Les commissions/frais Airbnb sont séparés et vont dans "platformFees".
+
 Retourne uniquement le JSON, sans texte autour.` }
           ]
         }]
