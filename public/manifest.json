@@ -3,14 +3,20 @@
   "name": "CADEL Manager",
   "icons": [
     {
-      "src": "/icon.svg",
-      "type": "image/svg+xml",
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
       "sizes": "512x512",
       "purpose": "any maskable"
     }
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#FFFFFF",
-  "background_color": "#F8FAFC"
+  "theme_color": "#000000",
+  "background_color": "#000000"
 }

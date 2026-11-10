@@ -194,7 +194,8 @@ const App = () => {
     window.history.back();
   };
 
-  const handleScreenshotScan = async (file) => {
+  const handleScreenshotScan = async (files) => {
+    const fileList = Array.isArray(files) ? files : [files];
     const apiKey = localStorage.getItem('gemini_api_key');
     if (!apiKey) {
       setScanError('Clé API Gemini manquante. Allez dans Paramètres pour la configurer.');
@@ -206,19 +207,21 @@ const App = () => {
     let lastError = '';
     let data = null;
     try {
-      const base64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result.split(',')[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      const mimeType = file.type || 'image/jpeg';
+      const imageParts = await Promise.all(fileList.map(async (file) => {
+        const base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result.split(',')[1]);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        return { inline_data: { mime_type: file.type || 'image/jpeg', data: base64 } };
+      }));
       const body = JSON.stringify({
         contents: [{
           parts: [
-            { inline_data: { mime_type: mimeType, data: base64 } },
+            ...imageParts,
             { text: `Tu es un assistant qui extrait des informations de réservation depuis des captures d'écran (Airbnb, Booking, Abritel, email, SMS...).
-Analyse cette image et retourne UNIQUEMENT un objet JSON valide avec ces champs (null si absent) :
+Analyse ${fileList.length > 1 ? 'ces ' + fileList.length + ' images (elles concernent toutes la même réservation)' : 'cette image'} et retourne UNIQUEMENT un objet JSON valide avec ces champs (null si absent) :
 {
   "name": "prénom et nom du voyageur",
   "phone": "téléphone ou email du voyageur",
@@ -3515,8 +3518,9 @@ Retourne uniquement le JSON, sans texte autour.` }
                     id="screenshot-upload"
                     type="file"
                     accept="image/*"
+                    multiple
                     className="hidden"
-                    onChange={e => { if (e.target.files?.[0]) { handleScreenshotScan(e.target.files[0]); e.target.value = ''; } }}
+                    onChange={e => { if (e.target.files?.length) { handleScreenshotScan(Array.from(e.target.files)); e.target.value = ''; } }}
                   />
                   <label
                     htmlFor="screenshot-upload"
@@ -3531,7 +3535,7 @@ Retourne uniquement le JSON, sans texte autour.` }
                     ) : (
                       <>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
-                        <span className="font-black text-[10px] uppercase tracking-widest">Importer une capture d'écran</span>
+                        <span className="font-black text-[10px] uppercase tracking-widest">Importer captures d'écran</span>
                       </>
                     )}
                   </label>
