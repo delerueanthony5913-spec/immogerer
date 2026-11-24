@@ -3087,10 +3087,7 @@ Retourne uniquement le JSON, sans texte autour.` }
                         <td className="p-1.5 md:p-8 text-right text-rose-300 leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal">-{monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes, 0).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
                         <td className="p-1.5 md:p-8 text-right leading-tight text-[8px] md:text-lg tracking-tighter md:tracking-normal" style={{color:'#CFA650'}}>{(monthlyRecapData.reduce((acc, [m, d]) => acc + d.totalBank, 0) - monthlyRecapData.reduce((acc, [m, d]) => acc + d.taxes + d.charges, 0)).toLocaleString('fr-FR', {maximumFractionDigits: 2})}€</td>
                       </tr>
-                    </tfoot>
-                  </table>
-                </div>
-                {previsionData.months.length > 0 && (() => {
+                      {previsionData.months.length > 0 && (() => {
                   const tUrssaf  = monthlyRecapData.reduce((a,[,d])=>a+d.urssafGross+(d.chantierGross||0),0) + previsionData.months.reduce((a,m)=>a+m.urssafGross+(m.chantierGross||0),0);
                   const tDirect  = monthlyRecapData.reduce((a,[,d])=>a+d.directNet,0)   + previsionData.months.reduce((a,m)=>a+m.directNet,0);
                   const tBank    = monthlyRecapData.reduce((a,[,d])=>a+d.totalBank,0)   + previsionData.months.reduce((a,m)=>a+m.totalBank,0);
@@ -3098,11 +3095,7 @@ Retourne uniquement le JSON, sans texte autour.` }
                   const tTaxes   = monthlyRecapData.reduce((a,[,d])=>a+d.taxes,0)       + previsionData.months.reduce((a,m)=>a+m.taxes,0);
                   const tProfit  = tBank - tTaxes - tCharges;
                   const fmt = v => v.toLocaleString('fr-FR',{maximumFractionDigits:2});
-                  return (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left min-w-[500px] md:min-w-[700px]" style={{tableLayout:'fixed'}}>
-                        <colgroup><col style={{width:'20%'}}/><col style={{width:'12%'}}/><col style={{width:'16%'}}/><col style={{width:'13%'}}/><col style={{width:'11%'}}/><col style={{width:'12%'}}/><col style={{width:'16%'}}/></colgroup>
-                        <tbody>
+                        return (
                           <tr className="bg-slate-900 text-white font-black">
                             <td className="p-1.5 md:p-8 uppercase text-[6px] md:text-[10px] leading-tight tracking-tighter md:tracking-normal">Total annuel</td>
                             <td className="p-1.5 md:p-8 text-right text-[8px] md:text-lg leading-tight tracking-tighter md:tracking-normal opacity-90">{fmt(tUrssaf)}€</td>
@@ -3112,11 +3105,11 @@ Retourne uniquement le JSON, sans texte autour.` }
                             <td className="p-1.5 md:p-8 text-right text-rose-300 text-[8px] md:text-lg leading-tight tracking-tighter md:tracking-normal">-{tTaxes.toFixed(2)}€</td>
                             <td className={`p-1.5 md:p-8 text-right bg-slate-800 text-[8px] md:text-xl leading-tight tracking-tighter md:tracking-normal ${tProfit>=0?'text-emerald-400':'text-rose-400'}`}>{fmt(tProfit)}€</td>
                           </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  );
-                })()}
+                        );
+                      })()}
+                    </tfoot>
+                  </table>
+                </div>
               </div>
 
               <div className="bg-white rounded-[24px] md:rounded-[40px] shadow-2xl overflow-hidden text-xs border border-slate-100 mx-2 md:mx-0">
