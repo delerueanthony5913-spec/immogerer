@@ -204,17 +204,45 @@ const App = () => {
     setIsScanning(true);
     setScanError('');
     const MODELS = ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-3.5-flash'];
-    let lastError = '';
+    const errors = []; // une entrée par tentative ratée, pour un diagnostic complet
     let data = null;
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    // Réduit et recompresse la capture (JPEG, 2048px max) pour accélérer l'envoi en 4G/5G
+    const readAsBase64 = (blob) => new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    const compressImage = (file) => new Promise((resolve, reject) => {
+      const original = () => readAsBase64(file).then(d => resolve({ mime_type: file.type || 'image/jpeg', data: d }), reject);
+      let url;
+      try {
+        url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const MAX = 2048;
+            const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.round(img.width * scale);
+            canvas.height = Math.round(img.height * scale);
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+            URL.revokeObjectURL(url);
+            canvas.toBlob((blob) => {
+              if (!blob || blob.size >= file.size) return original();
+              readAsBase64(blob).then(d => resolve({ mime_type: 'image/jpeg', data: d }), () => original());
+            }, 'image/jpeg', 0.85);
+          } catch { URL.revokeObjectURL(url); original(); }
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); original(); };
+        img.src = url;
+      } catch { if (url) URL.revokeObjectURL(url); original(); }
+    });
     try {
       const imageParts = await Promise.all(fileList.map(async (file) => {
-        const base64 = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result.split(',')[1]);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-        return { inline_data: { mime_type: file.type || 'image/jpeg', data: base64 } };
+        const img = await compressImage(file);
+        return { inline_data: img };
       }));
       const body = JSON.stringify({
         contents: [{
@@ -252,34 +280,69 @@ Les commissions/frais Airbnb sont séparés et vont dans "platformFees".
 
 Retourne uniquement le JSON, sans texte autour.` }
           ]
-        }]
+        }],
+        generationConfig: { responseMimeType: 'application/json', temperature: 0 }
       });
-      for (const model of MODELS) {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 20000);
-        try {
-          const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: controller.signal }
-          );
-          clearTimeout(timeout);
-          if (!response.ok) {
-            const err = await response.json();
-            lastError = err.error?.message || 'Erreur API';
-            continue;
+      modelLoop: for (const model of MODELS) {
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 30000);
+          try {
+            const response = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+              { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: controller.signal }
+            );
+            clearTimeout(timeout);
+            if (!response.ok) {
+              let msg = 'HTTP ' + response.status;
+              try { const err = await response.json(); if (err.error?.message) msg += ' — ' + err.error.message; } catch { /* corps non JSON */ }
+              errors.push(model + ' : ' + msg);
+              // Surcharge temporaire de Google : on attend un peu et on réessaie le même modèle une fois
+              if ((response.status === 503 || response.status === 500) && attempt === 1) { await sleep(3000); continue; }
+              continue modelLoop; // sinon (quota, modèle inconnu...) : modèle suivant
+            }
+            data = await response.json();
+            break modelLoop;
+          } catch (e) {
+            clearTimeout(timeout);
+            errors.push(model + ' : ' + (e.name === 'AbortError' ? 'délai dépassé (30s)' : (e.message || 'erreur réseau')));
+            continue modelLoop;
           }
-          data = await response.json();
-          break;
-        } catch (e) {
-          clearTimeout(timeout);
-          lastError = e.name === 'AbortError' ? 'Délai dépassé (20s)' : e.message;
         }
       }
-      if (!data) throw new Error('Aucun modèle disponible. Dernière erreur : ' + (lastError || 'inconnue'));
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      if (!data) {
+        const all = errors.join(' | ');
+        console.warn('Scan capture — échecs Gemini :', errors);
+        let hint = 'Aucun modèle Gemini n\'a répondu. ';
+        if (/HTTP 429/.test(all)) hint = 'Quota Gemini atteint — réessaie dans quelques minutes. ';
+        else if (/HTTP 50[03]/.test(all)) hint = 'Serveurs Gemini surchargés — réessaie dans un instant. ';
+        else if (/HTTP 40[13]/.test(all)) hint = 'Clé API Gemini refusée — vérifie-la dans Paramètres. ';
+        else if (/délai dépassé|failed to fetch|network|load failed/i.test(all)) hint = 'Connexion trop lente ou coupée — vérifie le réseau. ';
+        throw new Error(hint + 'Détail : ' + (all || 'inconnu'));
+      }
+      const candidate = data.candidates?.[0];
+      if (!candidate) {
+        const reason = data.promptFeedback?.blockReason;
+        throw new Error(reason ? 'Gemini a refusé d\'analyser l\'image (' + reason + ').' : 'Gemini a renvoyé une réponse vide — réessaie.');
+      }
+      // On assemble tous les morceaux de texte (sans les éventuelles "pensées" du modèle)
+      const text = (candidate.content?.parts || [])
+        .filter(p => typeof p.text === 'string' && !p.thought)
+        .map(p => p.text).join('');
       const jsonMatch = text.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/) || text.match(/(\{[\s\S]*\})/);
-      if (!jsonMatch) throw new Error('Réponse illisible — réessaie avec une image plus nette');
-      const extracted = JSON.parse(jsonMatch[1]);
+      if (!jsonMatch) {
+        console.warn('Scan capture — réponse Gemini sans JSON :', candidate.finishReason, text);
+        if (candidate.finishReason === 'MAX_TOKENS') throw new Error('Réponse de Gemini coupée avant la fin — réessaie.');
+        if (candidate.finishReason && candidate.finishReason !== 'STOP') throw new Error('Gemini a interrompu sa réponse (' + candidate.finishReason + ') — réessaie.');
+        throw new Error('Gemini n\'a renvoyé aucune donnée exploitable — réessaie.');
+      }
+      let extracted;
+      try {
+        extracted = JSON.parse(jsonMatch[1]);
+      } catch {
+        console.warn('Scan capture — JSON invalide :', text);
+        throw new Error('Réponse de Gemini mal formée — réessaie.');
+      }
       let matchedPropertyId = '';
       if (extracted.listingName) {
         const needle = extracted.listingName.toLowerCase().trim();
