@@ -2448,7 +2448,7 @@ Retourne uniquement le JSON, sans texte autour.` }
            </div>
         )}
  
-        {activeTab !== 'finances' && <RenderFilters />}
+        {activeTab !== 'finances' && activeTab !== 'statistiques' && <RenderFilters />}
         
         <div 
           ref={scrollContainerRef} 
