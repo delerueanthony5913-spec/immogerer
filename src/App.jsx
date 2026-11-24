@@ -15,6 +15,7 @@ import DonutChart from './DonutChart';
 import ComparisonChart from './ComparisonChart';
 import { getAccessToken, setAccessToken, clearAccessToken, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, createDiasEvent, updateDiasEvent, deleteDiasEvent, getEventAttendees } from './googleCalendar';
 import Statistiques from './Statistiques';
+import Accueil from './Accueil';
 import ContratModal from './ContratModal';
 // --- COMPOSANT PRINCIPAL ---
 const App = () => {
@@ -2448,7 +2449,7 @@ Retourne uniquement le JSON, sans texte autour.` }
            </div>
         )}
  
-        {activeTab !== 'finances' && activeTab !== 'statistiques' && <RenderFilters />}
+        {activeTab !== 'finances' && activeTab !== 'statistiques' && activeTab !== 'dashboard' && <RenderFilters />}
         
         <div 
           ref={scrollContainerRef} 
@@ -2458,80 +2459,17 @@ Retourne uniquement le JSON, sans texte autour.` }
  
           {/* 0. ONGLET DASHBOARD */}
           <div className="flex-none w-full max-w-full overflow-y-auto snap-center snap-always px-0 md:px-12 py-6 md:py-12 box-border" style={{WebkitOverflowScrolling:'touch'}}>
-            <div className="max-w-7xl mx-auto pb-32 space-y-4 px-2 md:px-0">
-              <h2 className="text-3xl font-black uppercase">Accueil</h2>
-              {(() => {
-                const cm = todayStr.substring(0,7);
-                const thisMonth = (monthlyRecapData.find(([m])=>m===cm)||[])[1];
-                const encaisse = thisMonth?.totalBank||0;
-                const prevNet = previsionData.months.reduce((s,m)=>s+m.profit,0);
-                const overdueRes = baseTenants.filter(t=>getOverdueAlerts(t).length>0);
-                const prestDues = baseTenants.reduce((sum,t)=>sum+(t.resExpenses||[]).filter(e=>!e.paymentDate).reduce((s,e)=>s+(parseFloat(e.amount)||0),0),0);
-                const d7 = new Date(); d7.setDate(d7.getDate()+7);
-                const d7str = d7.toISOString().split('T')[0];
-                const arrivals = baseTenants.filter(t=>t.startDate>=todayStr&&t.startDate<=d7str).sort((a,b)=>a.startDate.localeCompare(b.startDate));
-                return (<>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {[
-                      {label:'Encaissé ce mois',value:`${encaisse.toLocaleString('fr-FR',{maximumFractionDigits:0})}€`,color:'text-emerald-600',bg:'bg-white',border:'border-slate-100',
-                        getItems:()=>{ const cm=todayStr.substring(0,7); return baseTenants.filter(t=>{ if(t.platform==='En direct') return [t.acompte1Date,t.acompte2Date,t.soldeDate].some(d=>d&&d.startsWith(cm)); return t.paymentDate&&t.paymentDate.startsWith(cm); }); }},
-                      {label:'Prévisionnel net',value:`${prevNet.toLocaleString('fr-FR',{maximumFractionDigits:0})}€`,color:'text-blue-600',bg:'bg-white',border:'border-slate-100',
-                        getItems:()=>[...new Map(previsionData.items.filter(i=>!i.isChantier).map(i=>[i.id,i.tenant])).values()]},
-                      {label:'Acomptes en retard',value:overdueRes.length,color:overdueRes.length>0?'text-rose-600':'text-slate-300',bg:overdueRes.length>0?'bg-rose-50':'bg-white',border:overdueRes.length>0?'border-rose-200':'border-slate-100',
-                        getItems:()=>overdueRes},
-                      {label:'Prestations à payer',value:`${prestDues.toLocaleString('fr-FR',{maximumFractionDigits:0})}€`,color:prestDues>0?'text-orange-600':'text-slate-300',bg:prestDues>0?'bg-orange-50':'bg-white',border:prestDues>0?'border-orange-200':'border-slate-100',
-                        getItems:()=>baseTenants.filter(t=>(t.resExpenses||[]).some(e=>!e.paymentDate))},
-                    ].map(k=>(
-                      <div key={k.label} onClick={()=>{ const items=k.getItems(); if(items.length===1){changeTab('reservations');openReservation(items[0]);}else if(items.length>1){setDashboardModal({title:k.label,items});}}} className={`${k.bg} rounded-[20px] shadow-lg p-4 border ${k.border} cursor-pointer hover:shadow-xl hover:-translate-y-0.5 transition-all`}>
-                        <div className="text-[9px] font-black uppercase text-slate-400 mb-1">{k.label}</div>
-                        <div className={`text-2xl font-black ${k.color}`}>{k.value}</div>
-                      </div>
-                    ))}
-                  </div>
-                  {arrivals.length>0&&(
-                    <div className="bg-white rounded-[20px] shadow-lg border border-slate-100 overflow-hidden">
-                      <div className="p-3 bg-slate-900 text-white font-black uppercase text-[10px]">Arrivées dans 7 jours ({arrivals.length})</div>
-                      <div className="divide-y">
-                        {arrivals.map(t=>{
-                          const prop=properties.find(p=>p.id===t.propertyId);
-                          return(<div key={t.id} onClick={()=>{changeTab('reservations');openReservation(t);}} className="flex justify-between items-center px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors">
-                            <div><div className="font-black text-sm">{t.name}</div><div className="text-[10px] text-slate-400 uppercase font-bold">{prop?.name||'--'} — {t.platform}</div></div>
-                            <div className="text-right"><div className="font-black text-sm text-blue-600">{formatDateFr(t.startDate)}</div><div className="text-[10px] text-slate-400">→ {formatDateFr(t.endDate)}</div></div>
-                          </div>);
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  {previsionData.items.length>0&&(
-                    <div className="bg-white rounded-[20px] shadow-lg border border-amber-100 overflow-hidden">
-                      <div className="p-3 bg-amber-500 text-white font-black uppercase text-[10px]">Encaissements à venir</div>
-                      <div className="divide-y">
-                        {previsionData.items.slice(0,8).map((item,i)=>(
-                          <div key={i} onClick={()=>{ if (item.isChantier) changeTab('chantiers'); else { changeTab('reservations'); openReservation(item.tenant); }}} className="flex justify-between items-center px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors">
-                            <div><div className="font-black text-sm">{item.name}</div><div className="text-[10px] text-slate-400 uppercase font-bold">{item.propName} — {item.label}</div></div>
-                            <div className="text-right"><div className="font-black text-sm text-amber-600">{(item.totalBank||0).toLocaleString('fr-FR',{maximumFractionDigits:0})}€</div><div className="text-[10px] text-slate-400">{formatDateFr(item.dueDate)}</div></div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {overdueRes.length>0&&(
-                    <div className="bg-white rounded-[20px] shadow-lg border border-rose-200 overflow-hidden">
-                      <div className="p-3 bg-rose-600 text-white font-black uppercase text-[10px]">Paiements en retard</div>
-                      <div className="divide-y">
-                        {overdueRes.map(t=>{
-                          const prop=properties.find(p=>p.id===t.propertyId);
-                          return(<div key={t.id} onClick={()=>{changeTab('reservations');openReservation(t);}} className="flex justify-between items-center px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors">
-                            <div><div className="font-black text-sm">{t.name}</div><div className="text-[10px] text-slate-400 uppercase font-bold">{prop?.name||'--'} — {formatDateFr(t.startDate)}</div></div>
-                            <span className="text-[9px] font-black text-rose-600 uppercase">{getOverdueAlerts(t).join(' · ')}</span>
-                          </div>);
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </>);
-              })()}
-            </div>
+            <Accueil
+              tenants={tenants}
+              properties={properties}
+              chantiers={chantiers}
+              ownerFromProp={ownerFromProp}
+              getOverdueAlerts={getOverdueAlerts}
+              fiscalCAByOwner={fiscalCAByOwner}
+              fiscalParams={getFiscalParams(new Date().getFullYear())}
+              onOpenReservation={(t) => { changeTab('reservations'); openReservation(t); }}
+              onGoTab={changeTab}
+            />
           </div>
 
           {/* 1. ONGLETS RESERVATIONS */}

@@ -27,7 +27,7 @@ const deltaTxt = d => d === null ? '—' : `${d > 0 ? '+' : ''}${d} %`;
 /* Transforme réservations + chantiers en "lignes d'argent" datées.
    - réalisé : un paiement avec une date (paymentDate, acompte/solde, encaissement chantier)
    - prévisionnel : montant pas encore encaissé, placé à la date du séjour (ou fin de chantier) */
-const buildEntries = (tenants, chantiers, ownerFromProp, todayStr) => {
+export const buildEntries = (tenants, chantiers, ownerFromProp, todayStr) => {
   const entries = [];
   const stays = [];
   const push = e => { if (e.date && (e.brut > 0 || e.cost > 0)) entries.push(e); };
