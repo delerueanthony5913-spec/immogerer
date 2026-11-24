@@ -30,17 +30,19 @@ const deltaTxt = d => d === null ? '—' : `${d > 0 ? '+' : ''}${d} %`;
 const buildEntries = (tenants, chantiers, ownerFromProp, todayStr) => {
   const entries = [];
   const stays = [];
-  const push = e => { if (e.date && e.brut > 0) entries.push(e); };
+  const push = e => { if (e.date && (e.brut > 0 || e.cost > 0)) entries.push(e); };
 
   (tenants || []).forEach(t => {
     if (!t.startDate) return;
     const base = t.owner || ownerFromProp(t.propertyId);
     const opt = (t.resOptions || []).reduce((s, o) => s + num(o.amount), 0);
     const gross = num(t.grossAmount) + opt;
-    const expenses = (t.resExpenses || []).reduce((s, e) => s + num(e.amount), 0);
-    const urssaf = t.isUrssaf !== false ? gross * URSSAF_RATE : 0;
-    const netRatio = gross > 0 ? Math.max(0, (gross - expenses - urssaf) / gross) : 0;
+    // Net d'un encaissement = encaissement − URSSAF. Les frais (ménage, linge, piscine…) sont des lignes à part,
+    // datées à leur propre date de paiement ; un frais sans date = pas encore payé (prévisionnel).
+    const netRatio = t.isUrssaf !== false ? 1 - URSSAF_RATE : 1;
     const common = { kind: 'loc', propertyId: t.propertyId, platform: t.platform || 'Autre', netRatio };
+    const dueDate = (t.endDate && t.endDate >= todayStr) ? t.endDate : todayStr;
+    (t.resExpenses || []).forEach(e => push({ ...common, owner: base, brut: 0, cost: num(e.amount), expense: true, date: e.paymentDate || dueDate, fut: !e.paymentDate }));
     stays.push({ propertyId: t.propertyId, owner: base, startDate: t.startDate, nights: nightsOf(t), gross });
 
     if (t.platform === 'En direct') {
@@ -128,7 +130,7 @@ const Statistiques = ({ tenants = [], properties = [], chantiers = [], ownerFrom
   }, [entries, curYear]);
 
   const isNet = metric === 'net';
-  const val = e => isNet ? e.brut * e.netRatio : e.brut;
+  const val = e => e.expense ? (isNet ? -e.cost : 0) : (isNet ? e.brut * e.netRatio : e.brut);
   const propOwner = id => ownerFromProp(id);
   const locProps = properties.filter(p => who === 'all' || propOwner(p.id) === who);
 
@@ -151,6 +153,9 @@ const Statistiques = ({ tenants = [], properties = [], chantiers = [], ownerFrom
   const A = monthly(yA), B = monthly(yB);
   const sum = a => a.reduce((s, v) => s + v, 0);
   const totA = sum(A.tot), totB = sum(B.tot), realA = sum(A.real), futA = sum(A.fut);
+  const expA = sel.filter(e => e.expense && e.date.startsWith(String(yA)));
+  const expPaid = expA.filter(e => !e.fut).reduce((s, e) => s + e.cost, 0);
+  const expDue = expA.filter(e => e.fut).reduce((s, e) => s + e.cost, 0);
   const splitLoc = sel.filter(e => e.kind === 'loc' && e.date.startsWith(String(yA))).reduce((s, e) => s + val(e), 0);
   const splitTrav = totA - splitLoc;
 
@@ -160,9 +165,9 @@ const Statistiques = ({ tenants = [], properties = [], chantiers = [], ownerFrom
   const daysYear = (yA % 4 === 0 && (yA % 100 !== 0 || yA % 400 === 0)) ? 366 : 365;
   const occA = Math.round(nightsA / (daysYear * nbProps) * 100);
 
-  const max = Math.max(1, ...A.tot, ...B.tot);
+  const max = Math.max(1, ...A.tot, ...B.tot, ...A.real);
   const dMonth = pct(A.tot[month], B.tot[month]);
-  const monthIsFut = A.fut[month] > 0;
+  const monthIsFut = A.fut[month] !== 0;
 
   const upcoming = Array.from({ length: 6 }, (_, i) => {
     const d = new Date(curYear, curMonth + 1 + i, 1);
@@ -202,7 +207,7 @@ const Statistiques = ({ tenants = [], properties = [], chantiers = [], ownerFrom
     ? (properties.find(p => p.id === prop)?.name || '')
     : `${who === 'all' ? '' : WHO[who].label + ' · '}${{ all: 'locations + travaux', loc: 'locations', trav: 'travaux' }[act]}`;
   const metricDef = isNet
-    ? 'Locations : brut moins frais prestataires et URSSAF 7,7 %. Avant impôt sur le revenu. Travaux : en brut (achats et URSSAF travaux non suivis).'
+    ? 'Locations : encaissements moins URSSAF 7,7 %, moins les frais prestataires au mois où tu les paies. Avant impôt. Travaux : en brut.'
     : 'Ce que tu reçois : locations commissions déduites, options comprises ; travaux = main d’œuvre + matériaux. Avant charges et URSSAF.';
   const metricShort = isNet ? 'net' : 'brut';
   const label = { fontSize: 12, fontWeight: 700, color: MUTED, width: 76 };
@@ -268,6 +273,13 @@ const Statistiques = ({ tenants = [], properties = [], chantiers = [], ownerFrom
             ))}
           </div>
         )}
+        {isNet && showLoc && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 8 }}>
+            {[[expPaid, 'frais payés'], [expDue, 'frais à payer']].map(([v, l]) => (
+              <div key={l} style={{ background: '#2a261b', borderRadius: 14, padding: 10 }}><div style={{ fontSize: 16, fontWeight: 900 }}>{v > 0 ? '−' : ''}{fmt(v)}</div><div style={{ fontSize: 11, color: '#d8d0b8' }}>{l}</div></div>
+            ))}
+          </div>
+        )}
         {showLoc && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 8 }}>
             {[[nightsA, 'nuits'], [`${occA} %`, 'occupation'], [fmt(nightsA ? grossStaysA / nightsA : 0), 'brut / nuit']].map(([v, l]) => (
@@ -275,17 +287,17 @@ const Statistiques = ({ tenants = [], properties = [], chantiers = [], ownerFrom
             ))}
           </div>
         )}
-        {futA > 0 && (
+        {sel.some(e => e.fut && e.date.startsWith(String(yA))) && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid #3a3426', paddingTop: 12 }}>
             <div style={{ display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden', gap: 2 }}>
-              <span style={{ background: GOLD, flex: realA }} />
-              <span style={{ background: hatch(GOLD, 'transparent'), flex: futA }} />
+              <span style={{ background: GOLD, flex: Math.max(0, realA) }} />
+              <span style={{ background: hatch(GOLD, 'transparent'), flex: Math.max(0, futA) }} />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 8, fontSize: 12, color: '#d8d0b8' }}>
               <div><div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Swatch />Réalisé</div><div style={{ fontSize: 16, fontWeight: 900, color: '#f8f4e8' }}>{fmt(realA)}</div></div>
               <div><div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Swatch kind="fut" />Prévisionnel</div><div style={{ fontSize: 16, fontWeight: 900, color: '#f8f4e8' }}>{fmt(futA)}</div></div>
             </div>
-            <p style={{ margin: 0, fontSize: 11, color: '#c8bc9e' }}>Prévisionnel = séjours et chantiers pas encore encaissés.</p>
+            <p style={{ margin: 0, fontSize: 11, color: '#c8bc9e' }}>{isNet ? 'Prévisionnel = encaissements à venir moins les frais pas encore payés.' : 'Prévisionnel = séjours et chantiers pas encore encaissés.'}</p>
           </div>
         )}
       </div>
@@ -303,7 +315,7 @@ const Statistiques = ({ tenants = [], properties = [], chantiers = [], ownerFrom
         <div style={{ display: 'flex', alignItems: 'flex-end', height: 150, borderBottom: `1px solid ${LINE}` }}>
           {MS.map((s, m) => {
             const on = month === m;
-            const hR = Math.round(A.real[m] / max * 138), hF = Math.round(A.fut[m] / max * 138), hB = Math.max(2, Math.round(B.tot[m] / max * 138));
+            const hR = Math.max(0, Math.round(A.real[m] / max * 138)), hF = Math.max(0, Math.round(A.fut[m] / max * 138)), hB = Math.max(2, Math.round(B.tot[m] / max * 138));
             return (
               <button key={m} onClick={() => setMonth(m)} aria-label={MF[m]} style={{ flex: 1, height: '100%', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 2, padding: '0 1px', border: 0, borderRadius: '6px 6px 0 0', background: on ? '#f3eddc' : 'transparent' }}>
                 <span style={{ width: 9, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
@@ -324,7 +336,7 @@ const Statistiques = ({ tenants = [], properties = [], chantiers = [], ownerFrom
             <DeltaChip d={dMonth} />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 8, fontSize: 12, color: MUTED }}>
-            <div><div style={{ fontSize: 15, fontWeight: 900, color: INK }}>{fmt(A.tot[month])}</div>{yA}{A.fut[month] > 0 && ` · dont ${fmt(A.fut[month])} prév.`}</div>
+            <div><div style={{ fontSize: 15, fontWeight: 900, color: INK }}>{fmt(A.tot[month])}</div>{yA}{A.fut[month] !== 0 && ` · dont ${fmt(A.fut[month])} prév.`}</div>
             <div><div style={{ fontSize: 15, fontWeight: 900, color: INK }}>{fmt(B.tot[month])}</div>{yB}</div>
           </div>
           <p style={{ margin: 0, fontSize: 11, color: MUTED }}>Touche un mois pour voir son détail.</p>
