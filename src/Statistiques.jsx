@@ -1,785 +1,394 @@
 import React, { useState, useMemo } from 'react';
-import { TrendingUp, TrendingDown } from 'lucide-react';
 
-const SC = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f43f5e','#84cc16'];
-const DC = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f43f5e','#84cc16'];
-const MONTHS = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
-const METRICS = [
-  { id:'gross',   label:'CA Brut',      u:'€' },
-  { id:'profit',  label:'Profit Net',   u:'€' },
-  { id:'charges', label:'Charges',      u:'€' },
-  { id:'nights',  label:'Nuits',        u:'nuits' },
-  { id:'count',   label:'Réservations', u:'' },
-];
+/* ─────────────────────────────────────────────────────────────
+   Statistiques — vue simplifiée
+   - Filtres : qui (Anthony / Camille), activité (locations / travaux), logement
+   - Comparaison année A vs année B, en brut ou en net
+   - Réalisé (encaissé) vs prévisionnel (non encore encaissé)
+   ───────────────────────────────────────────────────────────── */
 
-/* ── filtres ── */
-
-const matchMulti = (t, selY, selP, selPl) => {
-  if (!t.startDate) return false;
-  if (selY.length  > 0 && !selY.includes(t.startDate.slice(0,4))) return false;
-  if (selP.length  > 0 && !selP.includes(t.propertyId))           return false;
-  if (selPl.length > 0 && !selPl.includes(t.platform))            return false;
-  return true;
+const MS = ['J','F','M','A','M','J','J','A','S','O','N','D'];
+const MF = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+const WHO = {
+  anthony: { label: 'Anthony', initial: 'A', color: '#2f5fa8' },
+  camille: { label: 'Camille', initial: 'C', color: '#1f7a55' },
 };
+const URSSAF_RATE = 0.077;
+const GOLD = '#CFA650', GOLD_DARK = '#a07830', INK = '#1a1810', MUTED = '#6a6050', LINE = '#e6dfc8', CARD = '#fffdf6';
+const PLAT_COLORS = [GOLD, INK, '#8a7e6a', '#c8bc9e', GOLD_DARK, '#e6dfc8'];
+const hatch = (c, bg) => `repeating-linear-gradient(45deg, ${c} 0 2px, ${bg} 2px 5px)`;
+const num = v => parseFloat(v) || 0;
+const fmt = n => `${Math.round(n).toLocaleString('fr-FR')} €`;
+const daysIn = (y, m) => new Date(y, m + 1, 0).getDate();
+const nightsOf = t => (t.startDate && t.endDate) ? Math.max(0, Math.round((new Date(t.endDate) - new Date(t.startDate)) / 86400000)) : 0;
+const pct = (a, b) => b > 0 ? Math.round(((a - b) / b) * 100) : null;
+const deltaTxt = d => d === null ? '—' : `${d > 0 ? '+' : ''}${d} %`;
 
-/* ── données mensuelles (générique) ── */
+/* Transforme réservations + chantiers en "lignes d'argent" datées.
+   - réalisé : un paiement avec une date (paymentDate, acompte/solde, encaissement chantier)
+   - prévisionnel : montant pas encore encaissé, placé à la date du séjour (ou fin de chantier) */
+const buildEntries = (tenants, chantiers, ownerFromProp, todayStr) => {
+  const entries = [];
+  const stays = [];
+  const push = e => { if (e.date && e.brut > 0) entries.push(e); };
 
-const getMonthly = (tenants, selY, selP, selPl, metric, chargeType = 'all') => {
-  const data = Array(12).fill(0);
-  tenants.filter(t => matchMulti(t, selY, selP, selPl)).forEach(t => {
-    const sm  = t.startDate ? parseInt(t.startDate.slice(5,7))-1 : -1;
-    const optTotal = (t.resOptions||[]).reduce((s,o)=>s+(parseFloat(o.amount)||0),0);
-    const g   = (parseFloat(t.grossAmount)||0) + optTotal;
+  (tenants || []).forEach(t => {
+    if (!t.startDate) return;
+    const base = t.owner || ownerFromProp(t.propertyId);
+    const opt = (t.resOptions || []).reduce((s, o) => s + num(o.amount), 0);
+    const gross = num(t.grossAmount) + opt;
+    const expenses = (t.resExpenses || []).reduce((s, e) => s + num(e.amount), 0);
+    const urssaf = t.isUrssaf !== false ? gross * URSSAF_RATE : 0;
+    const netRatio = gross > 0 ? Math.max(0, (gross - expenses - urssaf) / gross) : 0;
+    const common = { kind: 'loc', propertyId: t.propertyId, platform: t.platform || 'Autre', netRatio };
+    stays.push({ propertyId: t.propertyId, owner: base, startDate: t.startDate, nights: nightsOf(t), gross });
 
-    const addDate = (date, amt) => {
-      if (!date || !amt) return;
-      if (selY.length === 1 && date.slice(0,4) !== selY[0]) return;
-      data[parseInt(date.slice(5,7))-1] += amt;
-    };
-
-    if (metric === 'nights') {
-      if (sm >= 0) data[sm] += Math.max(0, Math.round((new Date(t.endDate)-new Date(t.startDate))/86400000));
-    } else if (metric === 'count') {
-      if (sm >= 0) data[sm]++;
+    if (t.platform === 'En direct') {
+      const who = o => (o === 'anthony' || o === 'camille') ? o : base;
+      const a1 = num(t.acompte1Amount), a2 = num(t.acompte2Amount);
+      const solde = num(t.soldeAmount) > 0 ? num(t.soldeAmount) : Math.max(0, num(t.grossAmount) - a1 - a2);
+      [[a1, t.acompte1Date, t.acompte1Owner], [a2, t.acompte2Date, t.acompte2Owner], [solde + opt, t.soldeDate, t.soldeOwner]]
+        .forEach(([amount, date, owner]) => push({ ...common, owner: who(owner), brut: amount, date: date || t.startDate, fut: !date }));
     } else {
-      if (metric === 'gross' || metric === 'profit') {
-        if (t.platform === 'En direct') {
-          addDate(t.acompte1Date, parseFloat(t.acompte1Amount)||0);
-          addDate(t.acompte2Date, parseFloat(t.acompte2Amount)||0);
-          addDate(t.soldeDate,    parseFloat(t.soldeAmount)||0);
-        } else {
-          addDate(t.paymentDate, g);
-        }
-      }
-      if (metric === 'charges' || metric === 'profit') {
-        const sign = metric === 'profit' ? -1 : 1;
-        if (chargeType !== 'urssaf') {
-          (t.resExpenses||[]).forEach(e => addDate(e.paymentDate, sign*(parseFloat(e.amount)||0)));
-        }
-        if (chargeType !== 'prestataires' && t.isUrssaf !== false && sm >= 0) {
-          if (!selY.length || selY.includes(t.startDate.slice(0,4))) data[sm] += sign * g * 0.077;
-        }
-      }
+      push({ ...common, owner: base, brut: gross, date: t.paymentDate || t.startDate, fut: !t.paymentDate });
     }
   });
-  if (metric === 'profit') return data.map(v => Math.max(0, v));
-  return data;
-};
 
-/* Prévisionnel basé sur la date de début de séjour */
-const getForecast = (tenants, year, selP, selPl, metric) => {
-  const data = Array(12).fill(0);
-  tenants.filter(t => matchMulti(t, [year], selP, selPl)).forEach(t => {
-    const m = parseInt(t.startDate.slice(5,7))-1;
-    if (metric === 'nights') data[m] += Math.max(0, Math.round((new Date(t.endDate)-new Date(t.startDate))/86400000));
-    else if (metric === 'count') data[m]++;
-    else data[m] += (parseFloat(t.grossAmount)||0) + (t.resOptions||[]).reduce((s,o)=>s+(parseFloat(o.amount)||0),0);
+  (chantiers || []).forEach(c => {
+    (c.encaissements || []).forEach(e => push({ kind: 'trav', cat: e.type === 'materiaux' ? 'mat' : 'mo', owner: c.owner, brut: num(e.montant), date: e.date, fut: false, netRatio: 1 }));
+    if (c.statut === 'termine') return;
+    if (c.statut === 'devis' && !c.inclurePrevisionnel) return;
+    const encOf = type => (c.encaissements || []).filter(e => e.type === type).reduce((s, e) => s + num(e.montant), 0);
+    const date = (!c.dateFin || c.dateFin < todayStr) ? todayStr : c.dateFin;
+    push({ kind: 'trav', cat: 'mo', owner: c.owner, brut: Math.max(0, num(c.montantPrestation) - encOf('prestation')), date, fut: true, netRatio: 1 });
+    push({ kind: 'trav', cat: 'mat', owner: c.owner, brut: Math.max(0, num(c.montantMateriaux) - encOf('materiaux')), date, fut: true, netRatio: 1 });
   });
-  return data;
+  return { entries, stays };
 };
 
-/* Prévisionnel pour réservations non encore encaissées (aucune date de paiement enregistrée) */
-const getUnpaidForecast = (tenants, year, selP, selPl, metric) => {
-  const data = Array(12).fill(0);
-  tenants.filter(t => {
-    if (!matchMulti(t, [year], selP, selPl)) return false;
-    if (t.platform === 'En direct') return !t.acompte1Date && !t.acompte2Date && !t.soldeDate;
-    return !t.paymentDate;
-  }).forEach(t => {
-    const m = parseInt(t.startDate.slice(5,7))-1;
-    if (metric === 'nights') data[m] += Math.max(0, Math.round((new Date(t.endDate)-new Date(t.startDate))/86400000));
-    else if (metric === 'count') data[m]++;
-    else data[m] += (parseFloat(t.grossAmount)||0) + (t.resOptions||[]).reduce((s,o)=>s+(parseFloat(o.amount)||0),0);
-  });
-  return data;
-};
-
-/* ── KPI ── */
-
-const computeKPIs = (tenants, selY, selP, selPl, chargeType = 'all') => {
-  let gross=0, nights=0, charges=0, count=0;
-  tenants.filter(t => matchMulti(t, selY, selP, selPl)).forEach(t => {
-    const optTotal = (t.resOptions||[]).reduce((s,o)=>s+(parseFloat(o.amount)||0),0);
-    count++;
-    gross  += (parseFloat(t.grossAmount)||0) + optTotal;
-    nights += Math.max(0, Math.round((new Date(t.endDate)-new Date(t.startDate))/86400000));
-    if (chargeType !== 'urssaf')
-      (t.resExpenses||[]).forEach(e => { charges += parseFloat(e.amount)||0; });
-    if (chargeType !== 'prestataires' && t.isUrssaf !== false)
-      charges += ((parseFloat(t.grossAmount)||0) + optTotal)*0.077;
-  });
-  return { gross, nights, charges, profit: gross-charges, count, rpn: nights>0?gross/nights:0 };
-};
-
-const trend = (a, b) => b > 0 ? Math.round(((a-b)/b)*100) : null;
-
-/* ── Répartitions ── */
-
-const getPlatBreak = (tenants, selY, selP) =>
-  Object.entries(
-    tenants.filter(t => matchMulti(t, selY, selP, [])).reduce((m,t) => {
-      const optTotal = (t.resOptions||[]).reduce((s,o)=>s+(parseFloat(o.amount)||0),0);
-      m[t.platform] = (m[t.platform]||0)+(parseFloat(t.grossAmount)||0)+optTotal; return m;
-    }, {})
-  ).sort((a,b)=>b[1]-a[1]);
-
-const getPropBreak = (tenants, props, selY, selPl) =>
-  Object.entries(
-    tenants.filter(t => matchMulti(t, selY, [], selPl)).reduce((m,t) => {
-      const optTotal = (t.resOptions||[]).reduce((s,o)=>s+(parseFloat(o.amount)||0),0);
-      m[t.propertyId] = (m[t.propertyId]||0)+(parseFloat(t.grossAmount)||0)+optTotal; return m;
-    }, {})
-  ).map(([id,v])=>[props.find(p=>p.id===id)?.name||id, v]).sort((a,b)=>b[1]-a[1]);
-
-/* ── Graphique SVG ── */
-
-const LineChart = ({ series, labels, unit='€' }) => {
-  const [tip, setTip] = useState(null);
-  const W=720, H=278, PL=58, PR=16, PT=16, PB=46;
-  const pW=W-PL-PR, pH=H-PT-PB;
-  const all = series.flatMap(s=>s.data).filter(v=>v!=null&&v>0);
-  const mx  = Math.max(...all, 1);
-  const xS  = i => PL+(i/Math.max(labels.length-1,1))*pW;
-  const yS  = v => PT+pH-(Math.max(v,0)/mx)*pH;
-
-  const smooth = d => {
-    let path='', last=null;
-    d.forEach((v,i)=>{
-      if (v==null){last=null;return;}
-      const pt=[xS(i),yS(v)];
-      if (!last) path+=`M${pt[0]} ${pt[1]}`;
-      else { const c=(pt[0]-last[0])/2.8; path+=` C${last[0]+c} ${last[1]},${pt[0]-c} ${pt[1]},${pt[0]} ${pt[1]}`; }
-      last=pt;
-    });
-    return path;
-  };
-  const areaD = d => {
-    const v=d.map((v,i)=>v!=null?i:-1).filter(i=>i>=0);
-    if (!v.length) return '';
-    return `${smooth(d)} L${xS(v[v.length-1])} ${PT+pH} L${xS(v[0])} ${PT+pH}Z`;
-  };
-  const fmt = v => unit==='€'
-    ? (v>=1000?`${(v/1000).toFixed(v>=10000?0:1)}k€`:`${Math.round(v)}€`)
-    : Math.round(v).toString();
-
-  // Totaux par mois : séries visibles en priorité, sinon séries cachées (prévisionnel)
-  const monthTotals = labels.map((_,mi) => {
-    let sum=0, has=false;
-    series.filter(s=>!s.hideLegend).forEach(s=>{ const v=s.data[mi]; if(v!=null){sum+=v;has=true;} });
-    if (!has) series.forEach(s=>{ const v=s.data[mi]; if(v!=null){sum+=v;has=true;} });
-    return has ? sum : null;
-  });
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{height:H}}>
-      <defs>
-        {series.map((s,si)=>(
-          <linearGradient key={si} id={`lg${si}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={s.color} stopOpacity="0.18"/>
-            <stop offset="100%" stopColor={s.color} stopOpacity="0"/>
-          </linearGradient>
-        ))}
-      </defs>
-
-      {/* grille */}
-      {Array.from({length:6}).map((_,i)=>{
-        const y=PT+(i/5)*pH, v=mx*(1-i/5);
-        return (
-          <g key={i}>
-            <line x1={PL} y1={y} x2={W-PR} y2={y} stroke="#f1f5f9" strokeWidth="1"/>
-            <text x={PL-5} y={y+4} textAnchor="end" fontSize="8" fill="#94a3b8" fontFamily="system-ui">{fmt(v)}</text>
-          </g>
-        );
-      })}
-      {labels.map((l,i)=>(
-        <g key={i}>
-          <text x={xS(i)} y={H-25} textAnchor="middle" fontSize="9" fill="#94a3b8" fontFamily="system-ui">{l}</text>
-          {monthTotals[i]!=null && monthTotals[i]>0 && (
-            <text x={xS(i)} y={H-11} textAnchor="middle" fontSize="8" fontWeight="bold" fill="#475569" fontFamily="system-ui">{fmt(monthTotals[i])}</text>
-          )}
-        </g>
-      ))}
-
-      {/* courbes */}
-      {series.map((s,si)=>(
-        <g key={si}>
-          {!s.dashed && <path d={areaD(s.data)} fill={`url(#lg${si})`}/>}
-          <path d={smooth(s.data)} fill="none" stroke={s.color}
-            strokeWidth={s.dashed?2:2.5} strokeDasharray={s.dashed?'7 4':undefined}
-            strokeLinecap="round" opacity={s.dashed?0.7:1}/>
-          {s.data.map((v,i)=>v==null?null:(
-            <circle key={i} cx={xS(i)} cy={yS(v)} r={s.dashed?3:4.5}
-              fill={s.dashed?'white':s.color} stroke={s.color} strokeWidth="2"
-              onMouseEnter={()=>setTip({x:xS(i),y:yS(v),name:s.name,lbl:labels[i],val:v,color:s.color,dashed:s.dashed})}
-              onMouseLeave={()=>setTip(null)} style={{cursor:'pointer'}}/>
-          ))}
-        </g>
-      ))}
-
-
-      {/* tooltip */}
-      {tip&&(()=>{
-        const tx=tip.x>W-148?tip.x-152:tip.x+12, ty=tip.y<52?tip.y+8:tip.y-44;
-        return (
-          <g>
-            <line x1={tip.x} y1={PT} x2={tip.x} y2={PT+pH} stroke={tip.color} strokeWidth="1" strokeDasharray="4 2" opacity="0.4"/>
-            <rect x={tx} y={ty} width="134" height="38" rx="8" fill="white" stroke={tip.color} strokeWidth="1.5" style={{filter:'drop-shadow(0 4px 8px rgba(0,0,0,0.12))'}}/>
-            <text x={tx+67} y={ty+13} textAnchor="middle" fontSize="8.5" fill="#64748b" fontFamily="system-ui">{tip.name}{tip.dashed?' (prév.)':''} · {tip.lbl}</text>
-            <text x={tx+67} y={ty+28} textAnchor="middle" fontSize="13" fontWeight="bold" fill={tip.color} fontFamily="system-ui">{fmt(tip.val)}</text>
-          </g>
-        );
-      })()}
-    </svg>
-  );
-};
-
-/* ── Donut ── */
-
-const Donut = ({ data, colors, title }) => {
-  const [hov, setHov] = useState(null);
-  const total=data.reduce((s,[,v])=>s+v,0);
-  const r=38,cx=50,cy=50,circ=2*Math.PI*r;
-  let cum=0;
-  const segs=data.slice(0,8).map(([name,value],i)=>{
-    const pct=total>0?value/total:0;
-    const da=pct*circ,doff=circ*(1-cum); cum+=pct;
-    return {name,value,pct,da,doff,color:colors[i%colors.length],i};
-  });
-  const disp=hov!==null?data[hov]:null;
-  return (
-    <div>
-      {title && <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-3">{title}</p>}
-      <svg viewBox="0 0 100 100" className="w-32 h-32 mx-auto">
-        {segs.map(s=>(
-          <circle key={s.i} cx={cx} cy={cy} r={r} fill="none" stroke={s.color}
-            strokeWidth={hov===s.i?20:15} strokeDasharray={`${s.da} ${circ-s.da}`}
-            strokeDashoffset={s.doff} transform={`rotate(-90 ${cx} ${cy})`}
-            style={{cursor:'pointer',transition:'stroke-width 0.15s'}}
-            onMouseEnter={()=>setHov(s.i)} onMouseLeave={()=>setHov(null)}/>
-        ))}
-        <circle cx={cx} cy={cy} r="24" fill="white"/>
-        <text x={cx} y={cy-4} textAnchor="middle" fontSize="6" fill="#94a3b8" fontFamily="system-ui">
-          {disp?(disp[0].length>12?disp[0].slice(0,12)+'…':disp[0]):'Total'}
-        </text>
-        <text x={cx} y={cy+7} textAnchor="middle" fontSize="10" fontWeight="bold" fill="#1e293b" fontFamily="system-ui">
-          {disp?`${Math.round(disp[1]/1000)}k€`:`${Math.round(total/1000)}k€`}
-        </text>
-      </svg>
-      <div className="space-y-1 mt-2">
-        {segs.map(s=>(
-          <div key={s.i}
-            className={`flex items-center justify-between text-[8px] px-1.5 py-1 rounded-xl cursor-default transition-colors ${hov===s.i?'bg-slate-50':''}`}
-            onMouseEnter={()=>setHov(s.i)} onMouseLeave={()=>setHov(null)}>
-            <div className="flex items-center gap-1.5 min-w-0">
-              <div className="w-2 h-2 rounded-full flex-shrink-0" style={{background:s.color}}/>
-              <span className="font-bold text-slate-600 truncate">{s.name}</span>
-            </div>
-            <div className="flex items-center gap-1 ml-1 flex-shrink-0">
-              <span className="font-black text-slate-800">{Math.round(s.value).toLocaleString('fr-FR')}€</span>
-              <span className="text-slate-400">({Math.round(s.pct*100)}%)</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-/* ── MiniBar ── */
-
-const MiniBar = ({ data, labels, color, unit='nuits' }) => {
-  const [hov,setHov]=useState(null);
-  const max=Math.max(...data,1);
-  return (
-    <div className="flex items-end gap-0.5" style={{height:100}}>
-      {data.map((v,i)=>(
-        <div key={i} className="flex-1 flex flex-col items-center justify-end relative"
-          onMouseEnter={()=>setHov(i)} onMouseLeave={()=>setHov(null)}>
-          {hov===i&&v>0&&(
-            <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[7px] font-black px-1.5 py-0.5 rounded-lg whitespace-nowrap z-10">
-              {v} {unit}
-            </div>
-          )}
-          <div className="w-full rounded-t-sm transition-all duration-300"
-            style={{height:`${(v/max)*88}px`,background:hov===i?color+'cc':color,minHeight:v>0?2:0}}/>
-          <span className="text-[6.5px] text-slate-400 font-bold mt-0.5">{labels[i]}</span>
-        </div>
-      ))}
-    </div>
-  );
-};
-
-/* ── KPI Card ── */
-
-const KPI = ({ label, value, sub, trend: t, color='blue', icon }) => {
-  const cls={blue:'text-blue-600',emerald:'text-emerald-600',violet:'text-violet-600',amber:'text-amber-500',rose:'text-rose-500',slate:'text-slate-700'};
-  return (
-    <div className="bg-white rounded-[22px] p-4 shadow-lg border border-slate-50 flex flex-col gap-1">
-      <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 leading-tight">{label}</p>
-      <p className={`text-xl md:text-2xl font-black leading-none ${cls[color]}`}>{value}</p>
-      {sub&&<p className="text-[8px] text-slate-400 font-bold">{sub}</p>}
-      {t!==null&&t!==undefined&&(
-        <div className={`mt-1 self-start flex items-center gap-1 text-[7px] font-black px-2 py-0.5 rounded-full ${t>=0?'bg-emerald-50 text-emerald-600':'bg-rose-50 text-rose-500'}`}>
-          {t>=0?<TrendingUp size={8}/>:<TrendingDown size={8}/>} {t>=0?'+':''}{t}% vs N-1
-        </div>
-      )}
-    </div>
-  );
-};
-
-/* ── Pill ── */
-
-const Pill = ({label,active,color,onClick,size='sm'}) => (
-  <button onClick={onClick}
-    className={`flex items-center gap-1.5 rounded-xl font-black uppercase transition-all ${size==='sm'?'px-2.5 py-1 text-[8px]':'px-3 py-1.5 text-[9px]'}`}
-    style={{
-      background: active ? color+'22' : '#1e293b',
-      color: active ? color : '#64748b',
-      border: `1.5px solid ${active ? color+'66' : '#334155'}`,
-    }}>
-    {active&&<span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{background:color}}/>}
-    {label}
-  </button>
+/* ── petits composants ── */
+const Pill = ({ on, onClick, children, big }) => (
+  <button onClick={onClick} style={{
+    minHeight: big ? 44 : 36, padding: big ? '0 14px' : '0 14px', borderRadius: 999, fontSize: 13, fontWeight: 700,
+    border: `1px solid ${on ? (big ? INK : GOLD) : (big ? '#d8d0b8' : LINE)}`,
+    background: on ? (big ? INK : GOLD) : (big ? CARD : '#f8f4e8'), color: on && big ? '#f8f4e8' : INK,
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, flex: big ? 1 : 'none'
+  }}>{children}</button>
 );
+const Dot = ({ owner, size = 22 }) => WHO[owner] ? (
+  <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flex: 'none', width: size, height: size, borderRadius: '50%', fontSize: Math.round(size * .5), fontWeight: 900, color: '#fff', background: WHO[owner].color }}>{WHO[owner].initial}</span>
+) : null;
+const Card = ({ children, style }) => (
+  <div style={{ background: CARD, border: `1px solid ${LINE}`, borderRadius: 22, padding: 16, display: 'flex', flexDirection: 'column', gap: 12, ...style }}>{children}</div>
+);
+const H2 = ({ children, sub }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: INK, display: 'flex', alignItems: 'center', gap: 8 }}>{children}</h3>
+    {sub && <p style={{ margin: 0, fontSize: 12, color: MUTED }}>{sub}</p>}
+  </div>
+);
+const PrevBadge = () => (
+  <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 999, border: `1.5px dashed ${GOLD_DARK}`, color: '#6a4f1c' }}>Prévisionnel</span>
+);
+const Swatch = ({ kind }) => (
+  <span style={{ width: 10, height: 10, borderRadius: 3, boxSizing: 'border-box', display: 'inline-block',
+    ...(kind === 'fut' ? { border: `1.5px dashed ${GOLD_DARK}`, background: hatch(GOLD, '#fbf3dc') } : { background: kind === 'b' ? '#d8d0b8' : GOLD }) }} />
+);
+const DeltaChip = ({ d, dark }) => {
+  const pos = d === null || d >= 0;
+  const st = pos ? (dark ? ['#24412f', '#9fe0b4'] : ['#e2f1e6', '#1f6b3d']) : (dark ? ['#4a2620', '#f4b3a4'] : ['#f8e3de', '#9c3522']);
+  return <span style={{ fontSize: 14, fontWeight: 900, padding: '3px 10px', borderRadius: 999, background: st[0], color: st[1] }}>{deltaTxt(d)}</span>;
+};
 
 /* ── Composant principal ── */
+const Statistiques = ({ tenants = [], properties = [], chantiers = [], ownerFromProp = () => 'other' }) => {
+  const now = new Date();
+  const curYear = now.getFullYear();
+  const curMonth = now.getMonth();
+  const todayStr = now.toISOString().split('T')[0];
 
-const Statistiques = ({ tenants, properties, availablePlatforms }) => {
-  const curYear  = new Date().getFullYear();
-  const curMonth = new Date().getMonth();
+  const [who, setWho] = useState('all');
+  const [act, setAct] = useState('all');
+  const [prop, setProp] = useState('all');
+  const [yA, setYA] = useState(curYear);
+  const [yB, setYB] = useState(curYear - 1);
+  const [metric, setMetric] = useState('brut');
+  const [month, setMonth] = useState(curMonth);
 
-  const availableYears = useMemo(()=>{
-    const s=new Set(tenants.map(t=>t.startDate?.slice(0,4)).filter(Boolean));
-    return Array.from(s).sort((a,b)=>b-a);
-  },[tenants]);
+  const { entries, stays } = useMemo(
+    () => buildEntries(tenants, chantiers, ownerFromProp, todayStr),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tenants, chantiers, properties, todayStr]
+  );
 
-  /* ── États filtres ── */
-  const [selYears,     setSelYears]     = useState([String(curYear)]);
-  const [selProps,     setSelProps]     = useState([]);          // vide = tous
-  const [selPlatforms, setSelPlatforms] = useState([]);          // vide = toutes
-  const [filterCharge, setFilterCharge] = useState('all');
+  const years = useMemo(() => {
+    const s = new Set([curYear, curYear - 1]);
+    entries.forEach(e => { const y = parseInt(e.date.slice(0, 4)); if (y >= 2015 && y <= curYear + 1) s.add(y); });
+    return [...s].sort((a, b) => a - b);
+  }, [entries, curYear]);
 
-  /* ── États graphique ── */
-  const [chartMode,  setChartMode]  = useState('years');
-  const [selMetric,  setSelMetric]  = useState('gross');
-  const [selMetrics, setSelMetrics] = useState(['gross','profit']);
+  const isNet = metric === 'net';
+  const val = e => isNet ? e.brut * e.netRatio : e.brut;
+  const propOwner = id => ownerFromProp(id);
+  const locProps = properties.filter(p => who === 'all' || propOwner(p.id) === who);
 
-  const tog = (list, setList, item, max=6) => {
-    if (list.includes(item)) { if (list.length>1) setList(list.filter(x=>x!==item)); }
-    else if (list.length<max) setList([...list,item]);
+  const keep = e => {
+    if (who !== 'all' && e.owner !== who) return false;
+    if (act !== 'all' && e.kind !== act) return false;
+    if (prop !== 'all') return e.kind === 'loc' && e.propertyId === prop;
+    return true;
   };
+  const sel = useMemo(() => entries.filter(keep), [entries, who, act, prop]); // eslint-disable-line react-hooks/exhaustive-deps
+  const showLoc = act !== 'trav';
+  const selStays = stays.filter(s => (who === 'all' || s.owner === who) && (prop === 'all' || s.propertyId === prop));
+  const nbProps = prop !== 'all' ? 1 : locProps.length || 1;
 
-  /* ── Séries graphique ── */
-  const chartSeries = useMemo(()=>{
-    const addYear = (acc, y, color, extraP, extraPl) => {
-      const yStr = String(y);
-      if (yStr > String(curYear)) {
-        // Année future : tout est prévisionnel, basé sur les dates de début
-        const fc = getForecast(tenants, yStr, extraP, extraPl, selMetric);
-        acc.push({ name:yStr, color, data: fc, dashed:true });
-      } else if (yStr === String(curYear) && curMonth < 11) {
-        const paid   = getMonthly(tenants,[yStr],extraP,extraPl,selMetric,filterCharge);
-        const fc     = getForecast(tenants,yStr,extraP,extraPl,selMetric);
-        const unpaid = getUnpaidForecast(tenants,yStr,extraP,extraPl,selMetric);
-        acc.push({ name:yStr, color, data: paid.map((v,m)=>m<curMonth?v:null) });
-        acc.push({ name:yStr, color, data: fc.map((v,m)=>{
-          if (m<curMonth-1) return unpaid[m] > 0 ? unpaid[m] : null;
-          if (m===curMonth-1) return paid[m]||0;
-          return v;
-        }), dashed:true, hideLegend:true });
-      } else {
-        acc.push({ name:yStr, color, data: getMonthly(tenants,[yStr],extraP,extraPl,selMetric,filterCharge) });
-      }
-    };
+  const monthly = y => {
+    const real = Array(12).fill(0), fut = Array(12).fill(0);
+    sel.forEach(e => { if (e.date.slice(0, 4) === String(y)) (e.fut ? fut : real)[parseInt(e.date.slice(5, 7)) - 1] += val(e); });
+    return { real, fut, tot: real.map((v, i) => v + fut[i]) };
+  };
+  const A = monthly(yA), B = monthly(yB);
+  const sum = a => a.reduce((s, v) => s + v, 0);
+  const totA = sum(A.tot), totB = sum(B.tot), realA = sum(A.real), futA = sum(A.fut);
+  const splitLoc = sel.filter(e => e.kind === 'loc' && e.date.startsWith(String(yA))).reduce((s, e) => s + val(e), 0);
+  const splitTrav = totA - splitLoc;
 
-    if (chartMode==='years') {
-      const r=[];
-      selYears.forEach((y,i)=>addYear(r,y,SC[i%SC.length],selProps,selPlatforms));
-      return r;
-    }
-    if (chartMode==='properties') {
-      const list=selProps.length>0?selProps:properties.slice(0,4).map(p=>p.id);
-      return list.map((pid,i)=>({
-        name:properties.find(p=>p.id===pid)?.name||pid,
-        color:SC[i%SC.length],
-        data:getMonthly(tenants,selYears,[pid],selPlatforms,selMetric,filterCharge),
-      }));
-    }
-    if (chartMode==='platforms') {
-      const list=selPlatforms.length>0?selPlatforms:availablePlatforms.slice(0,4);
-      return list.map((pl,i)=>({
-        name:pl, color:SC[i%SC.length],
-        data:getMonthly(tenants,selYears,selProps,[pl],selMetric,filterCharge),
-      }));
-    }
-    if (chartMode==='years_x_props') {
-      const pList=selProps.length>0?selProps.slice(0,3):properties.slice(0,2).map(p=>p.id);
-      const r=[]; let idx=0;
-      selYears.slice(0,3).forEach(y=>{
-        pList.forEach(pid=>{
-          r.push({
-            name:`${y} · ${properties.find(p=>p.id===pid)?.name?.split(' ')[0]||pid}`,
-            color:SC[idx%SC.length],
-            data:getMonthly(tenants,[y],[pid],selPlatforms,selMetric,filterCharge),
-          });
-          idx++;
-        });
-      });
-      return r;
-    }
-    if (chartMode==='years_x_platforms') {
-      const plList=selPlatforms.length>0?selPlatforms.slice(0,3):availablePlatforms.slice(0,2);
-      const r=[]; let idx=0;
-      selYears.slice(0,3).forEach(y=>{
-        plList.forEach(pl=>{
-          r.push({
-            name:`${y} · ${pl}`,
-            color:SC[idx%SC.length],
-            data:getMonthly(tenants,[y],selProps,[pl],selMetric,filterCharge),
-          });
-          idx++;
-        });
-      });
-      return r;
-    }
-    // metrics
-    return selMetrics.map((mid,i)=>({
-      name:METRICS.find(m=>m.id===mid)?.label||mid,
-      color:SC[i%SC.length],
-      data:getMonthly(tenants,selYears,selProps,selPlatforms,mid,filterCharge),
-    }));
-  },[chartMode,selYears,selProps,selPlatforms,selMetric,selMetrics,filterCharge,tenants,properties,availablePlatforms]);
+  const staysA = selStays.filter(s => s.startDate.startsWith(String(yA)));
+  const nightsA = staysA.reduce((s, x) => s + x.nights, 0);
+  const grossStaysA = staysA.reduce((s, x) => s + x.gross, 0);
+  const daysYear = (yA % 4 === 0 && (yA % 100 !== 0 || yA % 400 === 0)) ? 366 : 365;
+  const occA = Math.round(nightsA / (daysYear * nbProps) * 100);
 
-  const activeMetric = chartMode==='metrics' ? selMetrics[0] : selMetric;
-  const chartUnit = (activeMetric==='nights'||activeMetric==='count') ? '' : '€';
+  const max = Math.max(1, ...A.tot, ...B.tot);
+  const dMonth = pct(A.tot[month], B.tot[month]);
+  const monthIsFut = A.fut[month] > 0;
 
-  /* ── KPI ── */
-  const prevYears = useMemo(()=>selYears.map(y=>String(parseInt(y)-1)),[selYears]);
-  const kpis     = useMemo(()=>computeKPIs(tenants,selYears,selProps,selPlatforms,filterCharge),[tenants,selYears,selProps,selPlatforms,filterCharge]);
-  const kpisPrev = useMemo(()=>computeKPIs(tenants,prevYears,selProps,selPlatforms,filterCharge),[tenants,prevYears,selProps,selPlatforms,filterCharge]);
+  const upcoming = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(curYear, curMonth + 1 + i, 1);
+    const y = d.getFullYear(), m = d.getMonth();
+    const cur = monthly(y).tot[m], last = monthly(y - 1).tot[m];
+    const n = selStays.filter(s => s.startDate.slice(0, 7) === `${y}-${String(m + 1).padStart(2, '0')}`).reduce((s, x) => s + x.nights, 0);
+    return { key: `${y}-${m}`, label: `${MF[m]} ${y}`, cur, last, lastYear: y - 1, ratio: last > 0 ? cur / last : null, occ: Math.round(n / (daysIn(y, m) * nbProps) * 100) };
+  });
 
-  /* ── Donuts + bar ── */
-  const platData  = useMemo(()=>getPlatBreak(tenants,selYears,selProps),[tenants,selYears,selProps]);
-  const propData  = useMemo(()=>getPropBreak(tenants,properties,selYears,selPlatforms),[tenants,properties,selYears,selPlatforms]);
-  const nightData = useMemo(()=>getMonthly(tenants,selYears,selProps,selPlatforms,'nights'),[tenants,selYears,selProps,selPlatforms]);
+  const ranking = useMemo(() => {
+    const rows = [];
+    const inYear = (e, y) => e.date.startsWith(String(y));
+    const base = entries.filter(e => (who === 'all' || e.owner === who) && (act === 'all' || e.kind === act));
+    if (act !== 'trav') properties.forEach(p => {
+      const es = base.filter(e => e.kind === 'loc' && e.propertyId === p.id);
+      const a = es.filter(e => inYear(e, yA)).reduce((s, e) => s + val(e), 0), b = es.filter(e => inYear(e, yB)).reduce((s, e) => s + val(e), 0);
+      if (a > 0 || b > 0) rows.push({ id: p.id, kind: 'loc', name: p.name, owner: propOwner(p.id), a, b });
+    });
+    if (act !== 'loc') [['mo', 'Travaux · main d’œuvre'], ['mat', 'Travaux · matériaux']].forEach(([cat, name]) => {
+      const es = base.filter(e => e.kind === 'trav' && e.cat === cat);
+      const a = es.filter(e => inYear(e, yA)).reduce((s, e) => s + val(e), 0), b = es.filter(e => inYear(e, yB)).reduce((s, e) => s + val(e), 0);
+      if (a > 0 || b > 0) rows.push({ id: cat, kind: 'trav', name, owner: who === 'all' ? null : who, a, b });
+    });
+    return rows.sort((x, y) => y.a - x.a);
+  }, [entries, properties, who, act, yA, yB, metric]); // eslint-disable-line react-hooks/exhaustive-deps
+  const rankTotal = ranking.reduce((s, r) => s + r.a, 0) || 1;
 
-  /* ── Revenu moyen mensuel (encaissé + prévisionnel) / 12 ── */
-  const avgMonthlyRevenue = useMemo(() => {
-    if (chartUnit !== '€') return null;
-    let total = 0;
-    for (let mi = 0; mi < 12; mi++) {
-      let sum = 0, has = false;
-      chartSeries.filter(s => !s.hideLegend).forEach(s => { const v = s.data[mi]; if (v != null) { sum += v; has = true; } });
-      if (!has) chartSeries.forEach(s => { const v = s.data[mi]; if (v != null) { sum += v; has = true; } });
-      total += sum;
-    }
-    return total / 12;
-  }, [chartSeries, chartUnit]);
+  const platforms = useMemo(() => {
+    const m = {};
+    sel.filter(e => e.kind === 'loc' && e.date.startsWith(String(yA))).forEach(e => { m[e.platform] = (m[e.platform] || 0) + val(e); });
+    const t = Object.values(m).reduce((a, b) => a + b, 0) || 1;
+    return Object.entries(m).sort((a, b) => b[1] - a[1]).map(([name, v], i) => ({ name, v, pct: Math.round(v / t * 100), color: PLAT_COLORS[i % PLAT_COLORS.length] }));
+  }, [sel, yA, metric]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* ── Titre résumé sélection ── */
-  const yearLabel = selYears.length===1?selYears[0]:selYears.join(', ');
+  const pickYA = y => { setYA(y); if (y === yB) setYB(y - 1); };
+  const scopeLabel = prop !== 'all'
+    ? (properties.find(p => p.id === prop)?.name || '')
+    : `${who === 'all' ? '' : WHO[who].label + ' · '}${{ all: 'locations + travaux', loc: 'locations', trav: 'travaux' }[act]}`;
+  const metricDef = isNet
+    ? 'Locations : brut moins frais prestataires et URSSAF 7,7 %. Avant impôt sur le revenu. Travaux : en brut (achats et URSSAF travaux non suivis).'
+    : 'Ce que tu reçois : locations commissions déduites, options comprises ; travaux = main d’œuvre + matériaux. Avant charges et URSSAF.';
+  const metricShort = isNet ? 'net' : 'brut';
+  const label = { fontSize: 12, fontWeight: 700, color: MUTED, width: 76 };
 
   return (
-    <div className="space-y-5 px-2 md:px-0 pb-10">
+    <div style={{ maxWidth: 640, margin: '0 auto', padding: '0 12px 120px', fontFamily: 'Inter, sans-serif', color: INK, display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-      {/* ══ BARRE DE FILTRES ══ */}
-      <div className="bg-slate-900 rounded-[28px] p-5 space-y-4 border border-slate-800">
+      {/* QUI */}
+      <div style={{ display: 'flex', gap: 8 }} role="group" aria-label="Personne">
+        {[['all', 'Tous les deux'], ['anthony', 'Anthony'], ['camille', 'Camille']].map(([id, l]) => (
+          <Pill key={id} big on={who === id} onClick={() => { setWho(id); setProp('all'); }}>{id !== 'all' && <Dot owner={id} />}{l}</Pill>
+        ))}
+      </div>
 
-        {/* Années */}
-        <div className="space-y-2">
-          <p className="text-[7px] font-black uppercase text-slate-500 tracking-widest">Années</p>
-          <div className="flex flex-wrap gap-1.5">
-            {availableYears.map((y,i)=>(
-              <Pill key={y} label={y} active={selYears.includes(y)}
-                color={SC[selYears.includes(y)?selYears.indexOf(y):i%SC.length]}
-                onClick={()=>tog(selYears,setSelYears,y)}/>
+      {/* ACTIVITÉ */}
+      <div style={{ display: 'flex', gap: 6, background: '#ede8d8', borderRadius: 999, padding: 4 }} role="group" aria-label="Activité">
+        {[['all', 'Tout'], ['loc', 'Locations'], ['trav', 'Travaux']].map(([id, l]) => (
+          <button key={id} onClick={() => { setAct(id); if (id === 'trav') setProp('all'); }} style={{
+            flex: 1, minHeight: 40, border: 0, borderRadius: 999, fontSize: 13, fontWeight: 700,
+            background: act === id ? CARD : 'transparent', color: act === id ? INK : MUTED, boxShadow: act === id ? '0 1px 3px rgba(26,24,16,.15)' : 'none'
+          }}>{l}</button>
+        ))}
+      </div>
+
+      {/* LOGEMENTS */}
+      {showLoc && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} role="group" aria-label="Logement">
+          <Pill on={prop === 'all'} onClick={() => setProp('all')}>Tous logements</Pill>
+          {locProps.map(p => <Pill key={p.id} on={prop === p.id} onClick={() => setProp(p.id)}>{p.name}</Pill>)}
+        </div>
+      )}
+
+      {/* ANNÉES + MONTANT */}
+      <Card style={{ gap: 10, padding: '14px 16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={label}>Année</span>
+          {years.map(y => <Pill key={y} on={yA === y} onClick={() => pickYA(y)}>{y}</Pill>)}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={label}>Comparer à</span>
+          {years.filter(y => y !== yA).map(y => <Pill key={y} on={yB === y} onClick={() => setYB(y)}>{y}</Pill>)}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={label}>Montant</span>
+          <Pill on={!isNet} onClick={() => setMetric('brut')}>Brut</Pill>
+          <Pill on={isNet} onClick={() => setMetric('net')}>Net</Pill>
+        </div>
+      </Card>
+
+      {/* RÉSUMÉ */}
+      <div style={{ background: INK, color: '#f8f4e8', borderRadius: 26, padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#d8d0b8' }}>{isNet ? 'Net' : 'CA brut'} {yA} · {scopeLabel}</span>
+        <p style={{ margin: '-6px 0 0', fontSize: 12, lineHeight: 1.4, color: '#c8bc9e' }}>{metricDef}</p>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 40, fontWeight: 900, color: GOLD }}>{fmt(totA)}</span>
+          <DeltaChip d={pct(totA, totB)} dark />
+        </div>
+        <p style={{ margin: 0, fontSize: 13, color: '#d8d0b8' }}>contre {fmt(totB)} en {yB}</p>
+        {act === 'all' && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 8 }}>
+            {[[splitLoc, 'locations'], [splitTrav, 'travaux']].map(([v, l]) => (
+              <div key={l} style={{ background: '#2a261b', borderRadius: 14, padding: 10 }}><div style={{ fontSize: 16, fontWeight: 900 }}>{fmt(v)}</div><div style={{ fontSize: 11, color: '#d8d0b8' }}>{l}</div></div>
             ))}
           </div>
-        </div>
-
-        <div className="h-px bg-slate-800"/>
-
-        {/* Logements + Plateformes */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <p className="text-[7px] font-black uppercase text-slate-500 tracking-widest">Logements</p>
-              {selProps.length>0&&(
-                <button onClick={()=>setSelProps([])} className="text-[7px] text-slate-500 underline">Tous</button>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {properties.map((p,i)=>(
-                <Pill key={p.id} label={p.name.split(' ')[0]} active={selProps.includes(p.id)}
-                  color={SC[(i+1)%SC.length]}
-                  onClick={()=>{
-                    if (selProps.includes(p.id)) setSelProps(selProps.filter(x=>x!==p.id));
-                    else setSelProps([...selProps,p.id]);
-                  }}/>
-              ))}
-            </div>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <p className="text-[7px] font-black uppercase text-slate-500 tracking-widest">Plateformes</p>
-              {selPlatforms.length>0&&(
-                <button onClick={()=>setSelPlatforms([])} className="text-[7px] text-slate-500 underline">Toutes</button>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {availablePlatforms.map((pl,i)=>(
-                <Pill key={pl} label={pl} active={selPlatforms.includes(pl)}
-                  color={SC[(i+2)%SC.length]}
-                  onClick={()=>{
-                    if (selPlatforms.includes(pl)) setSelPlatforms(selPlatforms.filter(x=>x!==pl));
-                    else setSelPlatforms([...selPlatforms,pl]);
-                  }}/>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="h-px bg-slate-800"/>
-
-        {/* Type de charges */}
-        <div className="space-y-2">
-          <p className="text-[7px] font-black uppercase text-slate-500 tracking-widest">Type de charges</p>
-          <div className="flex gap-1.5 flex-wrap">
-            {[['all','Toutes'],['urssaf','URSSAF (7,7%)'],['prestataires','Prestataires']].map(([v,l])=>(
-              <button key={v} onClick={()=>setFilterCharge(v)}
-                className={`px-3 py-1.5 rounded-xl text-[8.5px] font-black uppercase transition-colors border ${filterCharge===v?'bg-rose-600 text-white border-rose-600':'bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-600'}`}>
-                {l}
-              </button>
+        )}
+        {showLoc && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 8 }}>
+            {[[nightsA, 'nuits'], [`${occA} %`, 'occupation'], [fmt(nightsA ? grossStaysA / nightsA : 0), 'brut / nuit']].map(([v, l]) => (
+              <div key={l} style={{ background: '#2a261b', borderRadius: 14, padding: 10 }}><div style={{ fontSize: 16, fontWeight: 900 }}>{v}</div><div style={{ fontSize: 11, color: '#d8d0b8' }}>{l}</div></div>
             ))}
           </div>
-        </div>
-
-        <div className="h-px bg-slate-800"/>
-
-        {/* Mode graphique */}
-        <div className="space-y-2">
-          <p className="text-[7px] font-black uppercase text-slate-500 tracking-widest">Mode graphique</p>
-          <div className="flex flex-wrap gap-1.5">
-            {[
-              ['years',            'Par années'],
-              ['properties',       'Par logements'],
-              ['platforms',        'Par plateformes'],
-              ['years_x_props',    'Années × Logements'],
-              ['years_x_platforms','Années × Plateformes'],
-              ['metrics',          'Métriques'],
-            ].map(([m,l])=>(
-              <button key={m} onClick={()=>setChartMode(m)}
-                className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-colors ${chartMode===m?'bg-blue-600 text-white':'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>
-                {l}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Métrique */}
-        {chartMode!=='metrics' ? (
-          <div className="space-y-2">
-            <p className="text-[7px] font-black uppercase text-slate-500 tracking-widest">Métrique affichée</p>
-            <div className="flex flex-wrap gap-1.5">
-              {METRICS.map((m,i)=>(
-                <button key={m.id} onClick={()=>setSelMetric(m.id)}
-                  className="px-3 py-1.5 rounded-xl text-[8.5px] font-black uppercase transition-all"
-                  style={{
-                    background: selMetric===m.id ? SC[i%SC.length] : '#1e293b',
-                    color: selMetric===m.id ? 'white' : '#64748b',
-                    border: `1.5px solid ${selMetric===m.id ? SC[i%SC.length] : '#334155'}`,
-                  }}>
-                  {m.label}
-                </button>
-              ))}
+        )}
+        {futA > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid #3a3426', paddingTop: 12 }}>
+            <div style={{ display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden', gap: 2 }}>
+              <span style={{ background: GOLD, flex: realA }} />
+              <span style={{ background: hatch(GOLD, 'transparent'), flex: futA }} />
             </div>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <p className="text-[7px] font-black uppercase text-slate-500 tracking-widest">Métriques à comparer</p>
-            <div className="flex flex-wrap gap-1.5">
-              {METRICS.map((m,i)=>(
-                <Pill key={m.id} label={m.label} active={selMetrics.includes(m.id)}
-                  color={SC[selMetrics.includes(m.id)?selMetrics.indexOf(m.id):i%SC.length]}
-                  onClick={()=>tog(selMetrics,setSelMetrics,m.id)}/>
-              ))}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 8, fontSize: 12, color: '#d8d0b8' }}>
+              <div><div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Swatch />Réalisé</div><div style={{ fontSize: 16, fontWeight: 900, color: '#f8f4e8' }}>{fmt(realA)}</div></div>
+              <div><div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Swatch kind="fut" />Prévisionnel</div><div style={{ fontSize: 16, fontWeight: 900, color: '#f8f4e8' }}>{fmt(futA)}</div></div>
             </div>
+            <p style={{ margin: 0, fontSize: 11, color: '#c8bc9e' }}>Prévisionnel = séjours et chantiers pas encore encaissés.</p>
           </div>
         )}
       </div>
 
-      {/* ══ KPI ══ */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <KPI label="CA Brut"      value={`${Math.round(kpis.gross).toLocaleString('fr-FR')}€`}
-          trend={trend(kpis.gross,kpisPrev.gross)} color="blue"/>
-        <KPI label="Profit Net"   value={`${Math.round(kpis.profit).toLocaleString('fr-FR')}€`}
-          trend={trend(kpis.profit,kpisPrev.profit)} color="emerald"/>
-        <KPI label="Charges"      value={`-${Math.round(kpis.charges).toLocaleString('fr-FR')}€`} color="rose"/>
-        <KPI label="Nuits totales" value={kpis.nights}
-          sub={`${kpis.count} réservation${kpis.count>1?'s':''}`}
-          trend={trend(kpis.nights,kpisPrev.nights)} color="violet"/>
-        <KPI label="Rev. / Nuit"  value={`${Math.round(kpis.rpn)}€`}
-          trend={trend(kpis.rpn,kpisPrev.rpn)} color="amber"/>
-        <KPI label="Taux charges" value={kpis.gross>0?`${Math.round((kpis.charges/kpis.gross)*100)}%`:'—'}
-          sub="Charges / CA" color="slate"/>
-      </div>
+      {/* MOIS PAR MOIS */}
+      <Card>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <H2>Mois par mois · {metricShort}</H2>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 11, fontWeight: 700, color: MUTED }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Swatch />{yA}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Swatch kind="b" />{yB}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Swatch kind="fut" />Prévisionnel</span>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'flex-end', height: 150, borderBottom: `1px solid ${LINE}` }}>
+          {MS.map((s, m) => {
+            const on = month === m;
+            const hR = Math.round(A.real[m] / max * 138), hF = Math.round(A.fut[m] / max * 138), hB = Math.max(2, Math.round(B.tot[m] / max * 138));
+            return (
+              <button key={m} onClick={() => setMonth(m)} aria-label={MF[m]} style={{ flex: 1, height: '100%', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 2, padding: '0 1px', border: 0, borderRadius: '6px 6px 0 0', background: on ? '#f3eddc' : 'transparent' }}>
+                <span style={{ width: 9, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                  {hF > 0 && <span style={{ height: hF, boxSizing: 'border-box', border: `1.5px dashed ${GOLD_DARK}`, borderBottom: hR > 0 ? 0 : undefined, borderRadius: '3px 3px 0 0', background: hatch(on ? GOLD_DARK : GOLD, '#fbf3dc') }} />}
+                  <span style={{ height: Math.max(hF > 0 ? 0 : 2, hR), background: on ? GOLD_DARK : GOLD, borderRadius: hF > 0 ? 0 : '3px 3px 0 0' }} />
+                </span>
+                <span style={{ width: 9, height: hB, borderRadius: '3px 3px 0 0', background: '#d8d0b8' }} />
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ display: 'flex', marginTop: -6 }}>
+          {MS.map((s, m) => <span key={m} style={{ flex: 1, textAlign: 'center', fontSize: 11, fontWeight: month === m ? 900 : 600, color: month === m ? INK : MUTED }}>{s}</span>)}
+        </div>
+        <div style={{ background: '#f3eddc', borderRadius: 16, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 15, fontWeight: 900 }}>{MF[month]} {monthIsFut && <PrevBadge />}</span>
+            <DeltaChip d={dMonth} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 8, fontSize: 12, color: MUTED }}>
+            <div><div style={{ fontSize: 15, fontWeight: 900, color: INK }}>{fmt(A.tot[month])}</div>{yA}{A.fut[month] > 0 && ` · dont ${fmt(A.fut[month])} prév.`}</div>
+            <div><div style={{ fontSize: 15, fontWeight: 900, color: INK }}>{fmt(B.tot[month])}</div>{yB}</div>
+          </div>
+          <p style={{ margin: 0, fontSize: 11, color: MUTED }}>Touche un mois pour voir son détail.</p>
+        </div>
+      </Card>
 
-      {/* ══ GRAPHIQUE ══ */}
-      <div className="bg-white rounded-[28px] shadow-lg p-5">
-        {/* Légende */}
-        <div className="flex flex-wrap items-center gap-3 mb-4">
-          {chartSeries.filter(s=>!s.hideLegend).map(s=>(
-            <div key={s.name+s.color} className="flex items-center gap-1.5">
-              <div className="w-6 h-1.5 rounded-full" style={{background:s.color}}/>
-              <span className="text-[8px] font-black text-slate-600 uppercase">{s.name}</span>
+      {/* MOIS À VENIR */}
+      <Card>
+        <H2 sub={`Déjà réservé ou en cours (${metricShort}), comparé au total de l'an dernier`}>Les mois à venir <PrevBadge /></H2>
+        {upcoming.map(u => (
+          <div key={u.key} style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '10px 0', borderTop: '1px solid #efe8d4' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <span style={{ fontSize: 14, fontWeight: 900 }}>{u.label}</span>
+              <span style={{ fontSize: 14, fontWeight: 900, color: GOLD_DARK }}>{fmt(u.cur)}</span>
             </div>
-          ))}
-          {chartSeries.some(s=>s.dashed)&&(
-            <div className="flex items-center gap-1.5">
-              <svg width="24" height="6"><line x1="0" y1="3" x2="24" y2="3" stroke="#94a3b8" strokeWidth="2" strokeDasharray="5 3"/></svg>
-              <span className="text-[8px] font-bold text-slate-400 uppercase">Prévisionnel</span>
+            <div style={{ height: 8, borderRadius: 4, background: '#ede8d8', overflow: 'hidden' }}>
+              <div style={{ height: '100%', borderRadius: 4, background: `repeating-linear-gradient(45deg, ${GOLD} 0 3px, #e9d49e 3px 6px)`, width: `${Math.min(100, Math.round((u.ratio || 0) * 100))}%` }} />
             </div>
-          )}
-        </div>
-
-        {/* Corps : totaux à gauche + courbe à droite */}
-        <div className="flex gap-3 items-center">
-
-          {/* ── TOTAUX ANNUELS ── */}
-          <div className="flex flex-col gap-2 shrink-0" style={{width:'96px'}}>
-            {chartSeries.filter(s=>!s.hideLegend).map(s=>{
-              const fmtT = v => chartUnit==='€'
-                ? (v>=1000?`${(v/1000).toFixed(v>=10000?0:1)}k€`:`${Math.round(v)}€`)
-                : Math.round(v).toString();
-
-              // Année future : toute la série est en pointillé (prévisionnel)
-              if (s.dashed) {
-                const total = s.data.reduce((a,v)=>a+(v||0), 0);
-                return (
-                  <div key={s.name+s.color} className="rounded-xl px-2 py-2"
-                    style={{background:s.color+'15', borderLeft:`3px solid ${s.color}`}}>
-                    <p className="text-[7px] font-black uppercase truncate leading-tight mb-1.5"
-                      style={{color:s.color}}>{s.name}</p>
-                    <p className="text-[6px] font-bold text-slate-400 uppercase leading-none mb-0.5">Prévisionnel</p>
-                    <p className="text-[14px] font-black leading-none" style={{color:s.color}}>{fmtT(total)}</p>
-                  </div>
-                );
-              }
-
-              const encaisse = s.data.reduce((a,v)=>a+(v||0), 0);
-              // Cherche la série pointillée associée (même nom + même couleur)
-              const dashed = chartSeries.find(d=>d.dashed&&d.hideLegend&&d.name===s.name&&d.color===s.color);
-              // Prévisionnel = mois passés non encaissés + mois futurs (skip curMonth-1 = pont visuel)
-              const prevFutur = dashed ? dashed.data.reduce((a,v,m)=>m===curMonth-1?a:a+(v||0),0) : 0;
-              const totalPrev = encaisse + prevFutur;
-
-              return (
-                <div key={s.name+s.color} className="rounded-xl px-2 py-2"
-                  style={{background:s.color+'15', borderLeft:`3px solid ${s.color}`}}>
-                  <p className="text-[7px] font-black uppercase truncate leading-tight mb-1.5"
-                    style={{color:s.color}}>{s.name}</p>
-
-                  {dashed ? (
-                    <>
-                      <p className="text-[6px] font-bold text-slate-400 uppercase leading-none mb-0.5">Encaissé</p>
-                      <p className="text-[14px] font-black leading-none mb-2"
-                        style={{color:s.color}}>{fmtT(encaisse)}</p>
-                      <div className="h-px mb-1.5" style={{background:s.color+'44'}}/>
-                      <p className="text-[6px] font-bold text-slate-400 uppercase leading-none mb-0.5">Encaissé + Prév.</p>
-                      <p className="text-[14px] font-black leading-none"
-                        style={{color:s.color}}>{fmtT(totalPrev)}</p>
-                    </>
-                  ) : (
-                    <p className="text-[15px] font-black leading-none"
-                      style={{color:s.color}}>{fmtT(encaisse)}</p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Graphique */}
-          <div className="flex-1 min-w-0">
-            <LineChart series={chartSeries} labels={MONTHS} unit={chartUnit}/>
-          </div>
-        </div>
-
-        {/* Revenu moyen mensuel */}
-        {avgMonthlyRevenue != null && (
-          <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
-            <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Revenu moyen mensuel</span>
-            <span className="text-[15px] font-black text-slate-700">
-              {avgMonthlyRevenue >= 1000
-                ? `${(avgMonthlyRevenue/1000).toFixed(avgMonthlyRevenue>=10000?0:1)}k€`
-                : `${Math.round(avgMonthlyRevenue)}€`}
-              <span className="text-[9px] font-bold text-slate-400 ml-1">/ mois</span>
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* ══ BAS DE PAGE ══ */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-[28px] shadow-lg p-5">
-          {platData.length>0
-            ? <Donut data={platData} colors={DC} title="Par plateforme"/>
-            : <p className="text-center text-[9px] text-slate-300 font-black py-8">Aucune donnée</p>}
-        </div>
-        <div className="bg-white rounded-[28px] shadow-lg p-5">
-          {propData.length>0
-            ? <Donut data={propData} colors={DC} title="Par logement"/>
-            : <p className="text-center text-[9px] text-slate-300 font-black py-8">Aucune donnée</p>}
-        </div>
-        <div className="bg-white rounded-[28px] shadow-lg p-5">
-          <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-3">Nuits / mois</p>
-          <MiniBar data={nightData} labels={MONTHS} color="#8b5cf6" unit="nuits"/>
-        </div>
-      </div>
-
-      {/* ══ TAUX D'OCCUPATION ══ */}
-      {(() => {
-        const year = selYears.length===1 ? parseInt(selYears[0]) : new Date().getFullYear();
-        const isLeap = (year%4===0&&year%100!==0)||(year%400===0);
-        const available = isLeap ? 366 : 365;
-        const propStats = (properties||[]).map(prop => {
-          const res = tenants.filter(t => t.propertyId===prop.id && t.startDate && t.startDate.startsWith(String(year)));
-          const nights = res.reduce((s,t)=>s+Math.max(0,Math.round((new Date(t.endDate)-new Date(t.startDate))/86400000)),0);
-          const revenue = res.reduce((s,t)=>s+(parseFloat(t.grossAmount)||0),0);
-          const rate = Math.round((nights/available)*100);
-          const rpn = nights>0 ? Math.round(revenue/nights) : 0;
-          return {name:prop.name, nights, rate, rpn, count:res.length};
-        }).filter(p=>p.count>0);
-        if (propStats.length===0) return null;
-        return (
-          <div className="bg-white rounded-[28px] shadow-lg overflow-hidden">
-            <div className="p-4 bg-slate-900 text-white font-black uppercase text-[10px] tracking-widest">Taux d'occupation {year}</div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left min-w-[400px]">
-                <thead className="bg-slate-50 text-slate-400 text-[9px] font-black uppercase border-b">
-                  <tr><th className="p-3">Logement</th><th className="p-3 text-right">Nuits</th><th className="p-3 text-right">Taux</th><th className="p-3 text-right">Rev. / nuit</th><th className="p-3 text-right">Réservations</th></tr>
-                </thead>
-                <tbody className="divide-y font-bold text-[10px]">
-                  {propStats.map(p=>(
-                    <tr key={p.name}>
-                      <td className="p-3 font-black uppercase text-slate-800">{p.name}</td>
-                      <td className="p-3 text-right">{p.nights}</td>
-                      <td className="p-3 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden"><div className="h-full rounded-full bg-blue-500" style={{width:`${Math.min(p.rate,100)}%`}}/></div>
-                          <span className={`font-black ${p.rate>=70?'text-emerald-600':p.rate>=40?'text-amber-600':'text-rose-500'}`}>{p.rate}%</span>
-                        </div>
-                      </td>
-                      <td className="p-3 text-right font-black text-slate-700">{p.rpn}€</td>
-                      <td className="p-3 text-right text-slate-500">{p.count}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: MUTED }}>
+              <span>{u.ratio === null ? `rien en ${u.lastYear}` : `${Math.round(u.ratio * 100)} % de ${fmt(u.last)} · total ${u.lastYear}`}</span>
+              {showLoc && <span>{u.occ} % occupé</span>}
             </div>
           </div>
-        );
-      })()}
+        ))}
+      </Card>
 
+      {/* RÉPARTITION */}
+      <Card style={{ gap: 10 }}>
+        <H2 sub="Touche un logement pour filtrer tout l'écran">Répartition · {metricShort} {yA}</H2>
+        {ranking.length === 0 && <p style={{ margin: 0, fontSize: 13, color: MUTED }}>Aucune donnée pour cette sélection.</p>}
+        {ranking.map(r => {
+          const on = r.kind === 'loc' ? prop === r.id : false;
+          const share = Math.round(r.a / rankTotal * 100);
+          return (
+            <button key={r.id} onClick={() => {
+              if (r.kind === 'loc') { setProp(prop === r.id ? 'all' : r.id); if (act === 'trav') setAct('loc'); }
+              else { setAct('trav'); setProp('all'); }
+            }} style={{ display: 'flex', flexDirection: 'column', gap: 6, textAlign: 'left', width: '100%', padding: '10px 12px', borderRadius: 16, color: INK, border: `1px solid ${on ? GOLD : '#efe8d4'}`, background: on ? '#fbf3dc' : CARD }}>
+              <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, width: '100%' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>{r.owner && <Dot owner={r.owner} size={20} />}{r.name}</span><span>{fmt(r.a)}</span>
+              </span>
+              <span style={{ display: 'block', width: '100%', height: 8, borderRadius: 4, background: '#ede8d8', overflow: 'hidden' }}><span style={{ display: 'block', height: '100%', borderRadius: 4, background: GOLD, width: `${share}%` }} /></span>
+              <span style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: MUTED, width: '100%' }}><span>{share} % du total</span><span>{deltaTxt(pct(r.a, r.b))} vs {yB}</span></span>
+            </button>
+          );
+        })}
+      </Card>
+
+      {/* PLATEFORMES */}
+      {showLoc && platforms.length > 0 && (
+        <Card style={{ gap: 10 }}>
+          <H2>Locations par plateforme · {yA}</H2>
+          <div style={{ display: 'flex', height: 14, borderRadius: 7, overflow: 'hidden', gap: 2 }}>
+            {platforms.map(p => <span key={p.name} style={{ background: p.color, flex: p.v }} />)}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: '6px 12px' }}>
+            {platforms.map(p => (
+              <span key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 3, background: p.color }} /><span style={{ fontWeight: 700 }}>{p.name}</span><span style={{ color: MUTED }}>{p.pct} %</span>
+              </span>
+            ))}
+          </div>
+        </Card>
+      )}
     </div>
   );
 };

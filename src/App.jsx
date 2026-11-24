@@ -103,6 +103,7 @@ const App = () => {
   const [fiscalParamsEdit, setFiscalParamsEdit] = useState(false);
   const [fiscalParamsForm, setFiscalParamsForm] = useState({});
   const [fiscalYear, setFiscalYear] = useState(new Date().getFullYear());
+  const [fiscalWho, setFiscalWho] = useState('all');
   const getFiscalParams = (year) => ({ ...FISCAL_DEFAULTS, ...(fiscalParams[String(year)] || {}) });
 
   const [googleConnected, setGoogleConnected] = useState(() => {
@@ -2894,7 +2895,7 @@ Retourne uniquement le JSON, sans texte autour.` }
                 <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mx-2 md:mx-0 mb-6">
                    <div><h2 className="text-3xl md:text-4xl font-black uppercase text-slate-900 tracking-tighter leading-none mb-2">Statistiques</h2><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tableau de bord interactif</p></div>
                 </div>
-                <Statistiques tenants={tenants} properties={properties} availablePlatforms={availablePlatforms}/>
+                <Statistiques tenants={tenants} properties={properties} chantiers={chantiers} ownerFromProp={ownerFromProp}/>
              </div>
           </div>
  
@@ -3193,30 +3194,30 @@ Retourne uniquement le JSON, sans texte autour.` }
 
                 const FiscalGauge = ({ label, enc, prev, soft, hard }) => {
                   const total = enc + prev;
-                  const ref = hard > 0 ? hard : soft;
-                  const pctEnc = ref > 0 ? Math.min(100, (enc/ref)*100) : 0;
-                  const pctTotal = ref > 0 ? Math.min(100, (total/ref)*100) : 0;
-                  const pctSoft = ref > 0 ? Math.min(100, (soft/ref)*100) : 0;
-                  const state = total >= hard ? 'crit' : total >= soft ? 'danger' : enc >= soft*0.85 ? 'warn' : 'ok';
-                  const barColor  = '#D4A000';
-                  const ghostColor= 'rgba(207,166,80,0.38)';
-                  const lblColor  = { ok:'#4a7c59', warn:'#a07830', danger:'#b54a3a', crit:'#8b1a1a' }[state];
+                  const hasHard = hard > 0 && hard !== soft;
+                  const ref = (hasHard ? hard : soft) * 1.08;
+                  const w = (v) => `${ref > 0 ? Math.min(100, (v / ref) * 100).toFixed(1) : 0}%`;
+                  const st = hasHard && total >= hard ? ['Dépassé', '#f8e3de', '#9c3522']
+                    : total >= soft ? [hasHard ? 'Seuil franchi' : 'Dépassé', hasHard ? '#fbe7cf' : '#f8e3de', hasHard ? '#8a4b0f' : '#9c3522']
+                    : total >= soft * 0.85 ? ['Proche du seuil', '#fbf0cf', '#6a4f1c'] : ['OK', '#e2f1e6', '#1f6b3d'];
+                  const eur = (v) => `${Math.round(v).toLocaleString('fr-FR')} €`;
                   return (
-                    <div className="space-y-1">
-                      <div className="flex justify-between items-baseline">
-                        <span className="text-[10px] font-black uppercase" style={{color:'#6a6050'}}>{label}</span>
-                        <span className="text-[10px] font-bold" style={{color:lblColor}}>
-                          <span style={{color:'#D4A000'}}>{fmt(enc)}</span>{prev > 0 ? <span style={{color:'#CFA650'}}> +{fmt(prev)}</span> : ''} <span style={{color:'#aa9e88'}}>/</span> {fmt(soft)}
-                        </span>
+                    <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+                        <span style={{fontSize:13,fontWeight:700,color:'#1a1810'}}>{label}</span>
+                        <span style={{fontSize:11,fontWeight:700,padding:'3px 9px',borderRadius:999,background:st[1],color:st[2]}}>{st[0]}</span>
                       </div>
-                      <div className="relative h-3 rounded-full overflow-hidden" style={{background:'#d8d0b8'}}>
-                        <div className="absolute inset-y-0 left-0 rounded-full transition-all" style={{width:`${pctTotal}%`,background:ghostColor}} />
-                        <div className="absolute inset-y-0 left-0 rounded-full transition-all" style={{width:`${pctEnc}%`,background:barColor}} />
-                        <div className="absolute inset-y-0 w-0.5" style={{left:`${pctSoft}%`,background:'#1a1810',opacity:0.85}} />
+                      <div style={{position:'relative',height:14,borderRadius:7,background:'#ede8d8',overflow:'hidden'}}>
+                        <span style={{position:'absolute',left:0,top:0,bottom:0,background:'#CFA650',width:w(enc)}} />
+                        <span style={{position:'absolute',top:0,bottom:0,left:w(enc),width:w(prev),background:'repeating-linear-gradient(45deg, #CFA650 0 2px, #fbf3dc 2px 5px)'}} />
+                        <span style={{position:'absolute',top:0,bottom:0,width:2,background:'#1a1810',left:w(soft)}} />
+                        {hasHard && <span style={{position:'absolute',top:0,bottom:0,width:2,background:'#9c3522',left:w(hard)}} />}
                       </div>
-                      <div className="flex justify-between text-[8px]" style={{color:'#aa9e88'}}>
-                        <span>0€</span><span>{fmt(soft)}{hard !== soft ? ` / ${fmt(hard)}` : ''}</span>
+                      <div style={{display:'flex',justifyContent:'space-between',gap:8,fontSize:11,color:'#6a6050'}}>
+                        <span><b style={{color:'#1a1810'}}>{eur(enc)}</b> + {eur(prev)} prév.</span>
+                        <span>{hasHard ? `seuil ${fmt(soft)} · majoré ${fmt(hard)}` : `plafond ${fmt(soft)}`}</span>
                       </div>
+                      <span style={{fontSize:11,color:'#6a6050'}}>{total < soft ? `Marge restante : ${eur(soft - total)}` : `Au-dessus de ${fmt(soft)} de ${eur(total - soft)}`}</span>
                     </div>
                   );
                 };
@@ -3316,49 +3317,60 @@ Retourne uniquement le JSON, sans texte autour.` }
                     </div>
 
                     {/* JAUGES PAR PERSONNE — toujours année courante */}
-                    {isCurrentYear && ['anthony','camille'].map(owner => {
-                      const d = fiscalCAByOwner[owner];
-                      const totalEnc = d.locEnc + d.prestaEnc + d.matEnc;
-                      const totalPrev = d.locPrev + d.prestaPrev + d.matPrev;
-                      const ownerColor = owner === 'anthony' ? 'bg-blue-600' : 'bg-emerald-600';
-                      return (
-                        <div key={owner} className="bg-white rounded-[32px] shadow-xl border border-slate-50 mx-2 md:mx-0 overflow-hidden">
-                          <div className="px-6 pt-5 pb-4 flex items-center gap-3 border-b border-slate-100">
-                            <span className={`w-8 h-8 rounded-full ${ownerColor} text-white flex items-center justify-center text-[11px] font-black`}>{owner === 'anthony' ? 'A' : 'C'}</span>
-                            <div>
-                              <div className="text-sm font-black capitalize">{owner === 'anthony' ? 'Anthony' : 'Camille'}</div>
-                              <div className="text-[10px] font-bold" style={{color:'#8a7e6a'}}>CA encaissé <span style={{color:'#D4A000'}}>{fmt(totalEnc)}</span> · Prévisionnel <span style={{color:'#CFA650'}}>+{fmt(totalPrev)}</span></div>
-                            </div>
-                          </div>
-                          <div className="p-6 grid md:grid-cols-2 gap-6">
-                            <div className="space-y-4">
-                              <div className="text-[9px] font-black uppercase tracking-widest flex items-center gap-2" style={{color:'#8a7e6a'}}><span className="w-4 h-0.5 inline-block" style={{background:'#c8bc9e'}}/> TVA Franchise</div>
-                              <FiscalGauge label="Location meublée" enc={d.locEnc} prev={d.locPrev} soft={p.tvaLocationSoft} hard={p.tvaLocationHard} />
-                              <FiscalGauge label="Rénovation MO" enc={d.prestaEnc} prev={d.prestaPrev} soft={p.tvaServicesSoft} hard={p.tvaServicesHard} />
-                              <FiscalGauge label="Matériaux achat-revente" enc={d.matEnc} prev={d.matPrev} soft={p.tvaVentesSoft} hard={p.tvaVentesHard} />
-                              <div className="text-[9px] rounded-xl p-2.5" style={{color:'#6a6050',background:'rgba(207,166,80,0.1)',border:'1px solid rgba(207,166,80,0.2)'}}>Dépassement du seuil = obligation TVA. La barre fantôme inclut le prévisionnel.</div>
-                            </div>
-                            <div className="space-y-4">
-                              <div className="text-[9px] font-black uppercase tracking-widest flex items-center gap-2" style={{color:'#8a7e6a'}}><span className="w-4 h-0.5 inline-block" style={{background:'#c8bc9e'}}/> Auto-Entrepreneur</div>
-                              <FiscalGauge label="Location meublée" enc={d.locEnc} prev={d.locPrev} soft={p.aeLocation} hard={p.aeLocation} />
-                              <FiscalGauge label="Rénovation MO" enc={d.prestaEnc} prev={d.prestaPrev} soft={p.aeRenovation} hard={p.aeRenovation} />
-                              <FiscalGauge label="Matériaux achat-revente" enc={d.matEnc} prev={d.matPrev} soft={p.aeMateriaux} hard={p.aeMateriaux} />
-                              <FiscalGauge label="CA Global" enc={totalEnc} prev={totalPrev} soft={p.aeGlobal} hard={p.aeGlobal} />
-                              <div className="text-[9px] rounded-xl p-2.5" style={{color:'#6a6050',background:'rgba(207,166,80,0.1)',border:'1px solid rgba(207,166,80,0.2)'}}>Services ≤ {p.aeRenovation.toLocaleString('fr-FR')} € ET global ≤ {p.aeGlobal.toLocaleString('fr-FR')} €.</div>
-                            </div>
-                          </div>
-                          <div className="px-6 pb-5 grid grid-cols-3 gap-3">
-                            {[['Location', d.locEnc, d.locPrev], ['Rénovation MO', d.prestaEnc, d.prestaPrev], ['Matériaux', d.matEnc, d.matPrev]].map(([label, enc, prev]) => (
-                              <div key={label} className="rounded-2xl p-3 text-center" style={{background:'rgba(207,166,80,0.08)',border:'1px solid rgba(207,166,80,0.2)'}}>
-                                <div className="text-[8px] font-black uppercase mb-1" style={{color:'#8a7e6a'}}>{label}</div>
-                                <div className="text-sm font-black" style={{color:'#D4A000'}}>{fmt(enc)}</div>
-                                {prev > 0 && <div className="text-[9px]" style={{color:'#CFA650'}}>+{fmt(prev)} prev.</div>}
-                              </div>
-                            ))}
-                          </div>
+                    {isCurrentYear && (
+                      <div className="mx-2 md:mx-0" style={{maxWidth:640,display:'flex',flexDirection:'column',gap:16,fontFamily:'Inter, sans-serif',color:'#1a1810'}}>
+                        <div style={{display:'flex',gap:8}} role="group" aria-label="Personne">
+                          {[['all','Tous les deux'],['anthony','Anthony'],['camille','Camille']].map(([id,l]) => (
+                            <button key={id} onClick={() => setFiscalWho(id)} style={{flex:1,minHeight:44,borderRadius:999,fontSize:13,fontWeight:700,display:'inline-flex',alignItems:'center',justifyContent:'center',gap:8,padding:'0 10px',border:`1px solid ${fiscalWho===id?'#1a1810':'#d8d0b8'}`,background:fiscalWho===id?'#1a1810':'#fffdf6',color:fiscalWho===id?'#f8f4e8':'#1a1810'}}>
+                              {id !== 'all' && <span style={{width:22,height:22,borderRadius:'50%',display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:900,color:'#fff',background:id==='anthony'?'#2f5fa8':'#1f7a55'}}>{id==='anthony'?'A':'C'}</span>}{l}
+                            </button>
+                          ))}
                         </div>
-                      );
-                    })}
+                        <div style={{display:'flex',gap:14,flexWrap:'wrap',fontSize:11,color:'#6a6050',padding:'0 4px'}}>
+                          <span style={{display:'flex',alignItems:'center',gap:4}}><span style={{width:10,height:10,borderRadius:3,background:'#CFA650'}} />encaissé</span>
+                          <span style={{display:'flex',alignItems:'center',gap:4}}><span style={{width:10,height:10,borderRadius:3,boxSizing:'border-box',border:'1.5px dashed #a07830',background:'repeating-linear-gradient(45deg, #CFA650 0 2px, #fbf3dc 2px 5px)'}} />prévisionnel</span>
+                          <span style={{display:'flex',alignItems:'center',gap:4}}><span style={{width:2,height:12,background:'#1a1810'}} />seuil</span>
+                          <span style={{display:'flex',alignItems:'center',gap:4}}><span style={{width:2,height:12,background:'#9c3522'}} />seuil majoré</span>
+                        </div>
+                        {(fiscalWho === 'all' ? ['anthony','camille'] : [fiscalWho]).map(owner => {
+                          const d = fiscalCAByOwner[owner];
+                          const cats = [
+                            ['loc', 'Location meublée', d.locEnc, d.locPrev, p.tvaLocationSoft, p.tvaLocationHard, p.aeLocation],
+                            ['mo', 'Rénovation · main d’œuvre', d.prestaEnc, d.prestaPrev, p.tvaServicesSoft, p.tvaServicesHard, p.aeRenovation],
+                            ['mat', 'Matériaux achat-revente', d.matEnc, d.matPrev, p.tvaVentesSoft, p.tvaVentesHard, p.aeMateriaux],
+                          ].filter(c => c[0] === 'loc' || c[2] + c[3] > 0);
+                          const totalEnc = d.locEnc + d.prestaEnc + d.matEnc;
+                          const totalPrev = d.locPrev + d.prestaPrev + d.matPrev;
+                          const eur = (v) => `${Math.round(v).toLocaleString('fr-FR')} €`;
+                          const groupTitle = (t, h) => (
+                            <div style={{display:'flex',flexDirection:'column',gap:2}}>
+                              <span style={{fontSize:12,fontWeight:900,letterSpacing:'.06em',textTransform:'uppercase',color:'#6a6050'}}>{t}</span>
+                              <span style={{fontSize:11,color:'#6a6050'}}>{h}</span>
+                            </div>
+                          );
+                          return (
+                            <div key={owner} style={{background:'#fffdf6',border:'1px solid #e6dfc8',borderRadius:22,padding:16,display:'flex',flexDirection:'column',gap:14}}>
+                              <div style={{display:'flex',alignItems:'center',gap:10}}>
+                                <span style={{width:32,height:32,borderRadius:'50%',display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:16,fontWeight:900,color:'#fff',background:owner==='anthony'?'#2f5fa8':'#1f7a55'}}>{owner==='anthony'?'A':'C'}</span>
+                                <div style={{display:'flex',flexDirection:'column',gap:2}}>
+                                  <span style={{fontSize:16,fontWeight:900}}>{owner==='anthony'?'Anthony':'Camille'}</span>
+                                  <span style={{fontSize:12,color:'#6a6050'}}>Encaissé <b style={{color:'#1a1810'}}>{eur(totalEnc)}</b> · prévisionnel +{eur(totalPrev)}</span>
+                                </div>
+                              </div>
+                              <div style={{display:'flex',flexDirection:'column',gap:12,paddingTop:12,borderTop:'1px solid #efe8d4'}}>
+                                {groupTitle('Franchise de TVA', 'Au-delà du seuil, la TVA s’applique.')}
+                                {cats.map(c => <FiscalGauge key={c[0]} label={c[1]} enc={c[2]} prev={c[3]} soft={c[4]} hard={c[5]} />)}
+                              </div>
+                              <div style={{display:'flex',flexDirection:'column',gap:12,paddingTop:12,borderTop:'1px solid #efe8d4'}}>
+                                {groupTitle('Plafonds auto-entrepreneur', `Par activité et au global (${p.aeGlobal.toLocaleString('fr-FR')} €).`)}
+                                {cats.map(c => <FiscalGauge key={c[0]} label={c[1]} enc={c[2]} prev={c[3]} soft={c[6]} hard={c[6]} />)}
+                                {cats.length > 1 && <FiscalGauge label="CA global" enc={totalEnc} prev={totalPrev} soft={p.aeGlobal} hard={p.aeGlobal} />}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </>
                 );
               })()}
